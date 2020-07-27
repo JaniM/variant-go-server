@@ -3,11 +3,17 @@ use actix::prelude::*;
 use rand::{self, rngs::ThreadRng, Rng};
 use std::collections::{HashMap, HashSet};
 
+use crate::message;
+
 /// Server sends this when a new room is created
 #[derive(Message, Clone)]
 #[rtype(result = "()")]
 pub enum Message {
-    AnnounceRoom(u32)
+    AnnounceRoom(u32),
+    GameStatus {
+        room_id: u32,
+        moves: Vec<(u32, u32)>
+    }
 }
 
 /// New chat session is created
@@ -49,8 +55,18 @@ pub struct CreateRoom {
     pub id: usize,
 }
 
+
+#[derive(Message)]
+#[rtype(result = "()")]
+pub struct GameAction {
+    pub id: usize,
+    pub room_id: u32,
+    pub action: message::GameAction
+}
+
 pub struct Room {
-    members: HashSet<usize>
+    members: HashSet<usize>,
+    moves: Vec<(u32, u32)>
 }
 
 /// `ChatServer` manages chat rooms and responsible for coordinating chat
@@ -77,6 +93,23 @@ impl ChatServer {
     /// Send message to all users
     fn send_global_message(&self, message: Message) {
         for addr in self.sessions.values() {
+            let _ = addr.do_send(message.clone());
+        }
+    }
+
+    /// Send message to all users in a room
+    fn send_room_message(&self, room: &Room, message: Message) {
+        for user in &room.members {
+            let addr = self.sessions.get(&user);
+            if let Some(addr) = addr {
+                let _ = addr.do_send(message.clone());
+            }
+        }
+    }
+
+    fn send_message(&self, user: usize, message: Message) {
+        let addr = self.sessions.get(&user);
+        if let Some(addr) = addr {
             let _ = addr.do_send(message.clone());
         }
     }
@@ -158,10 +191,19 @@ impl Handler<Join> for ChatServer {
             }
         }
 
-        match self.rooms.get_mut(&room_id) {
-            Some(room) => { room.members.insert(id); },
-            None => {}
+        let msg = match self.rooms.get_mut(&room_id) {
+            Some(room) => {
+                room.members.insert(id);
+                Some(Message::GameStatus {
+                    room_id,
+                    moves: room.moves.clone()
+                })
+            },
+            None => None
         };
+        if let Some(msg) = msg {
+            self.send_message(id, msg);
+        }
     }
 }
 
@@ -182,8 +224,13 @@ impl Handler<CreateRoom> for ChatServer {
 
         let room_id = self.rng.gen();
 
-        let mut room = Room { members: HashSet::new() };
+        let mut room = Room { members: HashSet::new(), moves: Vec::new() };
         room.members.insert(id);
+
+        self.send_message(id, Message::GameStatus {
+            room_id,
+            moves: room.moves.clone()
+        });
 
         self.rooms
             .insert(room_id, room);
@@ -191,5 +238,32 @@ impl Handler<CreateRoom> for ChatServer {
         self.send_global_message(Message::AnnounceRoom(room_id));
 
         MessageResult(room_id)
+    }
+}
+
+impl Handler<GameAction> for ChatServer {
+    type Result = ();
+
+    fn handle(&mut self, msg: GameAction, _: &mut Context<Self>) {
+        let GameAction { id, room_id, action } = msg;
+
+        match self.rooms.get_mut(&room_id) {
+            Some(room) => {
+                match action {
+                    message::GameAction::Place(x, y) => room.moves.push((x, y))
+                }
+            },
+            None => {}
+        };
+
+        match self.rooms.get(&room_id) {
+            Some(room) => {
+                self.send_room_message(&room, Message::GameStatus {
+                    room_id,
+                    moves: room.moves.clone()
+                });
+            },
+            None => {}
+        };
     }
 }

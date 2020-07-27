@@ -45,7 +45,7 @@ struct MyWebSocket {
     hb: Instant,
     id: usize,
     server_addr: Addr<ChatServer>,
-    room_id: Option<usize>
+    room_id: Option<u32>
 }
 
 impl Actor for MyWebSocket {
@@ -103,6 +103,10 @@ impl Handler<server::Message> for MyWebSocket {
                         fut::ready(())
                     })
                     .wait(ctx);
+            },
+            server::Message::GameStatus { room_id, moves } => {
+                self.room_id = Some(room_id);
+                ctx.binary(pack(ServerMessage::GameStatus { room_id, moves }));
             }
         };
     }
@@ -149,6 +153,21 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for MyWebSocket {
                         self.server_addr.do_send(server::CreateRoom {
                             id: self.id
                         });
+                    },
+                    Ok(ClientMessage::JoinGame(room_id)) => {
+                        self.server_addr.do_send(server::Join {
+                            id: self.id,
+                            room_id
+                        });
+                    },
+                    Ok(ClientMessage::GameAction(action)) => {
+                        if let Some(room_id) = self.room_id {
+                            self.server_addr.do_send(server::GameAction {
+                                id: self.id,
+                                room_id,
+                                action
+                            });
+                        }
                     },
                     Err(e) => ctx.binary(serde_cbor::to_vec(&ServerMessage::MsgError(format!("{}", e))).expect("cbor fail"))
                 };
