@@ -27,18 +27,25 @@ console_error_panic_hook = { version = "0.1.1", optional = true }
 [dependencies.web-sys]
 version = "0.3"
 features = [
+  "Attr",
+  "CanvasRenderingContext2d",
   'Document',
   'Element',
-  'HtmlElement',
-  'Node',
-  'Window',
+  "Event",
+  "EventTarget",
   "BinaryType",
   "Blob",
   "ErrorEvent",
-  "FileReader",
   "MessageEvent",
+  'MouseEvent',
+  "HtmlCanvasElement",
+  "HtmlElement",
+  "HtmlInputElement",
+  "Node",
   "ProgressEvent",
   "WebSocket",
+  "Text",
+  "Window"
 ]
 
 

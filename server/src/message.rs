@@ -9,7 +9,7 @@ pub enum ClientMessage {
 #[derive(Serialize, Deserialize, Debug)]
 pub enum ServerMessage {
     GameList {
-        games: Vec<i32>
+        games: Vec<u32>
     },
     MsgError(String)
 }

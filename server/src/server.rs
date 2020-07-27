@@ -7,7 +7,7 @@ use std::collections::{HashMap, HashSet};
 #[derive(Message, Clone)]
 #[rtype(result = "()")]
 pub enum Message {
-    AnnounceRoom(usize)
+    AnnounceRoom(u32)
 }
 
 /// New chat session is created
@@ -28,7 +28,7 @@ pub struct Disconnect {
 pub struct ListRooms;
 
 impl actix::Message for ListRooms {
-    type Result = Vec<usize>;
+    type Result = Vec<u32>;
 }
 
 /// Join room, if room does not exists create new one.
@@ -38,12 +38,12 @@ pub struct Join {
     /// Client id
     pub id: usize,
     /// Room name
-    pub room_id: usize,
+    pub room_id: u32,
 }
 
 /// Create room, announce to clients
 #[derive(Message)]
-#[rtype(usize)]
+#[rtype(u32)]
 pub struct CreateRoom {
     /// Client id
     pub id: usize,
@@ -57,7 +57,7 @@ pub struct Room {
 /// session. implementation is super primitive
 pub struct ChatServer {
     sessions: HashMap<usize, Recipient<Message>>,
-    rooms: HashMap<usize, Room>,
+    rooms: HashMap<u32, Room>,
     rng: ThreadRng,
 }
 
@@ -180,7 +180,7 @@ impl Handler<CreateRoom> for ChatServer {
             }
         }
 
-        let room_id = self.rng.gen::<usize>();
+        let room_id = self.rng.gen();
 
         let mut room = Room { members: HashSet::new() };
         room.members.insert(id);

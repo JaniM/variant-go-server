@@ -9,6 +9,7 @@ use actix_web::{middleware, web, App, Error, HttpRequest, HttpResponse, HttpServ
 use actix_web_actors::ws;
 
 use crate::message::{ClientMessage, ServerMessage};
+use crate::server::{ChatServer};
 
 /// How often heartbeat pings are sent
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
@@ -16,9 +17,19 @@ const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// do websocket handshake and start `MyWebSocket` actor
-async fn ws_index(r: HttpRequest, stream: web::Payload) -> Result<HttpResponse, Error> {
+async fn ws_index(
+    r: HttpRequest,
+    stream: web::Payload,
+    server_addr: web::Data<Addr<ChatServer>>
+) -> Result<HttpResponse, Error> {
     println!("{:?}", r);
-    let res = ws::start(MyWebSocket::new(), &r, stream);
+    let actor = MyWebSocket {
+        hb: Instant::now(),
+        id: 0,
+        server_addr: server_addr.get_ref().clone(),
+        room_id: None
+    };
+    let res = ws::start(actor, &r, stream);
     println!("{:?}", res);
     res
 }
@@ -32,6 +43,9 @@ struct MyWebSocket {
     /// Client must send ping at least once per 10 seconds (CLIENT_TIMEOUT),
     /// otherwise we drop connection.
     hb: Instant,
+    id: usize,
+    server_addr: Addr<ChatServer>,
+    room_id: Option<usize>
 }
 
 impl Actor for MyWebSocket {
@@ -40,7 +54,62 @@ impl Actor for MyWebSocket {
     /// Method is called on actor start. We start the heartbeat process here.
     fn started(&mut self, ctx: &mut Self::Context) {
         self.hb(ctx);
+
+        // register self in chat server. `AsyncContext::wait` register
+        // future within context, but context waits until this future resolves
+        // before processing any other events.
+        // HttpContext::state() is instance of WsChatSessionState, state is shared
+        // across all routes within application
+        let addr = ctx.address();
+        self.server_addr
+            .send(server::Connect {
+                addr: addr.recipient(),
+            })
+            .into_actor(self)
+            .then(|res, act, ctx| {
+                match res {
+                    Ok(res) => act.id = res,
+                    // something is wrong with chat server
+                    _ => ctx.stop(),
+                }
+                fut::ready(())
+            })
+            .wait(ctx);
     }
+
+    fn stopping(&mut self, _: &mut Self::Context) -> Running {
+        // notify chat server
+        self.server_addr.do_send(server::Disconnect { id: self.id });
+        Running::Stop
+    }
+}
+
+
+/// Handle messages from chat server, we simply send it to peer websocket
+impl Handler<server::Message> for MyWebSocket {
+    type Result = ();
+
+    fn handle(&mut self, msg: server::Message, ctx: &mut Self::Context) {
+        match msg {
+            server::Message::AnnounceRoom(_id) => {
+                self.server_addr
+                    .send(server::ListRooms)
+                    .into_actor(self)
+                    .then(|res, act, ctx| {
+                        match res {
+                            Ok(res) => ctx.binary(pack(ServerMessage::GameList { games: res })),
+                            _ => ctx.stop()
+                        }
+                        fut::ready(())
+                    })
+                    .wait(ctx);
+            }
+        };
+    }
+}
+
+fn pack(msg: ServerMessage) -> Vec<u8> {
+    serde_cbor::to_vec(&msg).expect("cbor fail")
 }
 
 /// Handler for `ws::Message`
@@ -63,10 +132,24 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for MyWebSocket {
             Ok(ws::Message::Text(text)) => ctx.text(text),
             Ok(ws::Message::Binary(bin)) => {
                 match serde_cbor::from_slice::<ClientMessage>(&bin) {
-                    Ok(ClientMessage::GetGameList) => ctx.binary(serde_cbor::to_vec(&ServerMessage::GameList {
-                        games: vec![]
-                    }).expect("cbor fail")),
-                    Ok(ClientMessage::StartGame) => {},
+                    Ok(ClientMessage::GetGameList) => {
+                        self.server_addr
+                            .send(server::ListRooms)
+                            .into_actor(self)
+                            .then(|res, act, ctx| {
+                                match res {
+                                    Ok(res) => ctx.binary(pack(ServerMessage::GameList { games: res })),
+                                    _ => ctx.stop()
+                                }
+                                fut::ready(())
+                            })
+                            .wait(ctx);
+                    },
+                    Ok(ClientMessage::StartGame) => {
+                        self.server_addr.do_send(server::CreateRoom {
+                            id: self.id
+                        });
+                    },
                     Err(e) => ctx.binary(serde_cbor::to_vec(&ServerMessage::MsgError(format!("{}", e))).expect("cbor fail"))
                 };
             },
@@ -80,10 +163,6 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for MyWebSocket {
 }
 
 impl MyWebSocket {
-    fn new() -> Self {
-        Self { hb: Instant::now() }
-    }
-
     /// helper method that sends ping to client every second.
     ///
     /// also this method checks heartbeats from client
@@ -111,10 +190,13 @@ async fn main() -> std::io::Result<()> {
     std::env::set_var("RUST_LOG", "actix_server=info,actix_web=info");
     env_logger::init();
 
-    HttpServer::new(|| {
+    let server = ChatServer::default().start();
+
+    HttpServer::new(move || {
         App::new()
             // enable logger
             .wrap(middleware::Logger::default())
+            .data(server.clone())
             // websocket route
             .service(web::resource("/ws/").route(web::get().to(ws_index)))
     })

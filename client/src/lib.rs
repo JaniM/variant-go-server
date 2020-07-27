@@ -1,6 +1,8 @@
 mod utils;
+#[path = "../../server/src/message.rs"]
 mod message;
 mod networking;
+mod board;
 
 use wasm_bindgen::prelude::*;
 
@@ -11,17 +13,28 @@ use yew::prelude::*;
 
 struct GameList {
     link: ComponentLink<Self>,
-    games: Vec<i32>
+    games: Vec<u32>
 }
 
 enum Msg {
     AddGame,
+    SetGameList(Vec<u32>)
 }
 
 impl Component for GameList {
     type Message = Msg;
     type Properties = ();
     fn create(_: Self::Properties, link: ComponentLink<Self>) -> Self {
+        let gamelist = link.callback(|v| Msg::SetGameList(v));
+        networking::start_websocket(move |msg| {
+            match msg {
+                ServerMessage::GameList { games } => {
+                    gamelist.emit(games);
+                },
+                _ => {}
+            };
+        });
+
         GameList {
             link,
             games: vec![]
@@ -30,7 +43,8 @@ impl Component for GameList {
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
-            Msg::AddGame => networking::send(ClientMessage::StartGame)
+            Msg::AddGame => networking::send(ClientMessage::StartGame),
+            Msg::SetGameList(games) => self.games = games
         }
         true
     }
@@ -43,7 +57,10 @@ impl Component for GameList {
         html! {
             <div>
                 <button onclick=self.link.callback(|_| Msg::AddGame)>{ "+1" }</button>
-                <p>{ self.games.iter().map(|g| html!{ <span> {g} </span>}).collect::<Vec<_>>() }</p>
+                <ul>{ self.games.iter().map(|g| html!{ <li> {g} </li>}).collect::<Html>() }</ul>
+                <div>
+                    <board::Board />
+                </div>
             </div>
         }
     }
@@ -53,21 +70,6 @@ impl Component for GameList {
 #[wasm_bindgen(start)]
 pub fn run() -> Result<(), JsValue> {
     utils::set_panic_hook();
-    let window = web_sys::window().expect("no global `window` exists");
-    let document = window.document().expect("should have a document on window");
-    let body = document.body().expect("document should have a body");
-
-    let val = document.create_element("p")?;
-    val.set_inner_html("Hello from Rust!");
-
-    body.append_child(&val)?;
-
-    networking::start_websocket(|msg| {
-        match msg {
-            ServerMessage::GameList { games } => {},
-            _ => {}
-        };
-    });
 
     yew::initialize();
     App::<GameList>::new().mount_to_body();
