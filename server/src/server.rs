@@ -305,6 +305,21 @@ impl Handler<Join> for GameServer {
                 moves: room.moves.clone()
             };
             self.send_room_message(room_id, msg);
+
+            // List room users' profiles
+            let room = self.rooms.get(&room_id)?;
+            for user_id in &room.users {
+                catch! {
+                    let profile = self.profiles.get(user_id)?;
+                    self.send_message(id, Message::UpdateProfile(profile.clone()));
+                };
+            }
+
+            // Announce the current user's profile to the room
+            catch! {
+                let profile = self.profiles.get(&user_id)?;
+                self.send_room_message(room_id, Message::UpdateProfile(profile.clone()));
+            };
         };
     }
 }
@@ -421,6 +436,17 @@ impl Handler<IdentifyAs> for GameServer {
         catch!{
             self.sessions.get_mut(&id)?.user_id = Some(user_id);
         };
+
+        // Announce profile update to rooms
+        let mut rooms = Vec::new();
+        for (room_id, room) in &self.rooms {
+            if room.users.contains(&user_id) {
+                rooms.push(*room_id);
+            }
+        }
+        for room_id in rooms {
+            self.send_room_message(room_id, Message::UpdateProfile(profile.clone()));
+        }
 
         MessageResult(profile)
     }

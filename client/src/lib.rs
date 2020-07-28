@@ -9,6 +9,7 @@ use wasm_bindgen::prelude::*;
 
 use crate::message::{ClientMessage, ServerMessage};
 use crate::game_view::{GameView, Profile};
+use std::collections::HashMap;
 
 use yew::prelude::*;
 
@@ -79,7 +80,8 @@ struct GameList {
     link: ComponentLink<Self>,
     games: Vec<u32>,
     game: Option<GameView>,
-    user: Option<Profile>
+    user: Option<Profile>,
+    profiles: HashMap<u64, Profile>,
 }
 
 enum Msg {
@@ -87,6 +89,7 @@ enum Msg {
     ChangeNick(String),
     JoinGame(u32),
     SetGameStatus(GameView),
+    SetOwnProfile(Profile),
     SetProfile(Profile),
     SetGameList(Vec<u32>)
 }
@@ -97,6 +100,7 @@ impl Component for GameList {
     fn create(_: Self::Properties, link: ComponentLink<Self>) -> Self {
         let gamelist = link.callback(Msg::SetGameList);
         let game = link.callback(Msg::SetGameStatus);
+        let set_own_profile = link.callback(Msg::SetOwnProfile);
         let set_profile = link.callback(Msg::SetProfile);
         networking::start_websocket(move |msg| {
             match msg {
@@ -105,9 +109,12 @@ impl Component for GameList {
                 },
                 ServerMessage::GameStatus { room_id, members, moves } => {
                     game.emit(GameView { members, moves });
-                }
+                },
                 ServerMessage::Identify { user_id, token, nick } => {
                     networking::set_token(&token);
+                    set_own_profile.emit(Profile { user_id, nick });
+                },
+                ServerMessage::Profile(message::Profile { user_id, nick }) => {
                     set_profile.emit(Profile { user_id, nick });
                 },
                 _ => {}
@@ -118,7 +125,8 @@ impl Component for GameList {
             link,
             games: vec![],
             game: None,
-            user: None
+            user: None,
+            profiles: HashMap::new(),
         }
     }
 
@@ -132,7 +140,10 @@ impl Component for GameList {
             Msg::JoinGame(id) => networking::send(ClientMessage::JoinGame(id)),
             Msg::SetGameStatus(game) => self.game = Some(game),
             Msg::SetGameList(games) => self.games = games,
-            Msg::SetProfile(profile) => self.user = Some(profile),
+            Msg::SetOwnProfile(profile) => self.user = Some(profile),
+            Msg::SetProfile(profile) => {
+                self.profiles.insert(profile.user_id, profile);
+            },
         }
         true
     }
@@ -150,17 +161,22 @@ impl Component for GameList {
         let nick = self.user.as_ref().and_then(|x| x.nick.as_ref()).map(|x| &**x).unwrap_or("");
         let nick_enter = self.link.callback(Msg::ChangeNick);
 
-        let userlist = if let Some(game) = &self.game {
-            game.members
-                .iter()
-                .map(|id|
-                    html!(<span style="padding: 0px 10px">{id}</span>))
-                .collect()
-        } else {
-            html!()
-        };
-
         let gameview = if let Some(game) = &self.game {
+            let userlist = game.members
+                .iter()
+                .map(|id| {
+                    let nick = self.profiles.get(id)
+                        .and_then(|p| p.nick.as_ref())
+                        .map(|n| &**n)
+                        .unwrap_or("no nick");
+                    html!(
+                        <span style="padding: 0px 10px">
+                            {format!("{} ({})", id, nick)}
+                        </span>
+                    )
+                })
+                .collect::<Html>();
+
             html!(
                 <div>
                     <p>{"Users:"} {userlist}</p>
