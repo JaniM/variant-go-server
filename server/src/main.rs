@@ -9,7 +9,7 @@ use actix_web::{middleware, web, App, Error, HttpRequest, HttpResponse, HttpServ
 use actix_web_actors::ws;
 
 use crate::message::{ClientMessage, ServerMessage};
-use crate::server::{ChatServer};
+use crate::server::{GameServer};
 
 /// How often heartbeat pings are sent
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
@@ -20,7 +20,7 @@ const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 async fn ws_index(
     r: HttpRequest,
     stream: web::Payload,
-    server_addr: web::Data<Addr<ChatServer>>
+    server_addr: web::Data<Addr<GameServer>>
 ) -> Result<HttpResponse, Error> {
     println!("{:?}", r);
     let actor = MyWebSocket {
@@ -44,7 +44,7 @@ struct MyWebSocket {
     /// otherwise we drop connection.
     hb: Instant,
     id: usize,
-    server_addr: Addr<ChatServer>,
+    server_addr: Addr<GameServer>,
     room_id: Option<u32>
 }
 
@@ -104,9 +104,22 @@ impl Handler<server::Message> for MyWebSocket {
                     })
                     .wait(ctx);
             },
-            server::Message::GameStatus { room_id, moves } => {
+            server::Message::GameStatus { room_id, members, moves } => {
                 self.room_id = Some(room_id);
-                ctx.binary(pack(ServerMessage::GameStatus { room_id, moves }));
+                ctx.binary(pack(ServerMessage::GameStatus { room_id, members, moves }));
+            },
+            server::Message::Identify(res) => {
+                ctx.binary(pack(ServerMessage::Identify {
+                    user_id: res.user_id,
+                    token: res.token.to_string(),
+                    nick: res.nick
+                }));
+            },
+            server::Message::UpdateProfile(res) => {
+                ctx.binary(pack(ServerMessage::Profile(message::Profile {
+                    user_id: res.user_id,
+                    nick: res.nick
+                })));
             }
         };
     }
@@ -169,6 +182,27 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for MyWebSocket {
                             });
                         }
                     },
+                    Ok(ClientMessage::Identify { token, nick }) => {
+                        self.server_addr
+                            .send(server::IdentifyAs {
+                                id: self.id,
+                                token,
+                                nick
+                            })
+                            .into_actor(self)
+                            .then(|res, act, ctx| {
+                                match res {
+                                    Ok(res) => ctx.binary(pack(ServerMessage::Identify {
+                                        user_id: res.user_id,
+                                        token: res.token.to_string(),
+                                        nick: res.nick
+                                    })),
+                                    _ => ctx.stop()
+                                }
+                                fut::ready(())
+                            })
+                            .wait(ctx);
+                    },
                     Err(e) => ctx.binary(serde_cbor::to_vec(&ServerMessage::MsgError(format!("{}", e))).expect("cbor fail"))
                 };
             },
@@ -209,7 +243,7 @@ async fn main() -> std::io::Result<()> {
     std::env::set_var("RUST_LOG", "actix_server=info,actix_web=info");
     env_logger::init();
 
-    let server = ChatServer::default().start();
+    let server = GameServer::default().start();
 
     HttpServer::new(move || {
         App::new()

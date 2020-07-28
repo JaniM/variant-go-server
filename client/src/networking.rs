@@ -28,6 +28,19 @@ thread_local! {
     });
 }
 
+pub fn local_storage() -> web_sys::Storage {
+    let window = web_sys::window().expect("Window not available");
+    window.local_storage().unwrap().unwrap()
+}
+
+pub fn get_token() -> Option<String> {
+    local_storage().get_item("token").unwrap()
+}
+
+pub fn set_token(token: &str) {
+    local_storage().set_item("token", token).unwrap();
+}
+
 pub fn start_websocket(on_msg: impl Fn(ServerMessage) -> () + 'static) -> Result<(), JsValue> {
     // Connect to an echo server
     let ws = WebSocket::new("ws://localhost:8088/ws/")?;
@@ -76,6 +89,10 @@ pub fn start_websocket(on_msg: impl Fn(ServerMessage) -> () + 'static) -> Result
     let onopen_callback = Closure::wrap(Box::new(move |_| {
         console_log!("socket opened");
         send(ClientMessage::GetGameList);
+        send(ClientMessage::Identify {
+            token: get_token(),
+            nick: None
+        });
     }) as Box<dyn FnMut(JsValue)>);
     ws.set_onopen(Some(onopen_callback.as_ref().unchecked_ref()));
     onopen_callback.forget();

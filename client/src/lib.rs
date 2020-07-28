@@ -8,20 +8,86 @@ mod game_view;
 use wasm_bindgen::prelude::*;
 
 use crate::message::{ClientMessage, ServerMessage};
-use crate::game_view::GameView;
+use crate::game_view::{GameView, Profile};
 
 use yew::prelude::*;
+
+struct TextInput {
+    link: ComponentLink<Self>,
+    text: String,
+    props: TextInputProperties
+}
+
+enum TextInputMsg {
+    SetText(String),
+    Submit,
+    None
+}
+
+#[derive(Properties, Clone, PartialEq)]
+struct TextInputProperties {
+    value: String,
+    onsubmit: Callback<String>
+}
+
+impl Component for TextInput {
+    type Message = TextInputMsg;
+    type Properties = TextInputProperties;
+
+    fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
+        TextInput {
+            link,
+            text: props.value.clone(),
+            props
+        }
+    }
+
+    fn update(&mut self, msg: Self::Message) -> ShouldRender {
+        match msg {
+            TextInputMsg::SetText(text) => self.text = text,
+            TextInputMsg::Submit => self.props.onsubmit.emit(self.text.clone()),
+            TextInputMsg::None => return false
+        }
+        true
+    }
+
+    fn change(&mut self, props: Self::Properties) -> ShouldRender {
+        if self.props != props {
+            self.props = props;
+            self.text = self.props.value.clone();
+            true
+        } else {
+            false
+        }
+    }
+
+    fn view(&self) -> Html {
+        html! {
+            <input
+                type="text"
+                value=&self.text
+                oninput=self.link.callback(|e: InputData| TextInputMsg::SetText(e.value))
+                onkeypress=self.link.callback(move |e: KeyboardEvent| {
+                    if e.key() == "Enter" { TextInputMsg::Submit } else { TextInputMsg::None }
+                })
+                />
+        }
+    }
+}
 
 struct GameList {
     link: ComponentLink<Self>,
     games: Vec<u32>,
-    game: Option<GameView>
+    game: Option<GameView>,
+    user: Option<Profile>
 }
 
 enum Msg {
     AddGame,
+    ChangeNick(String),
     JoinGame(u32),
     SetGameStatus(GameView),
+    SetProfile(Profile),
     SetGameList(Vec<u32>)
 }
 
@@ -31,14 +97,19 @@ impl Component for GameList {
     fn create(_: Self::Properties, link: ComponentLink<Self>) -> Self {
         let gamelist = link.callback(Msg::SetGameList);
         let game = link.callback(Msg::SetGameStatus);
+        let set_profile = link.callback(Msg::SetProfile);
         networking::start_websocket(move |msg| {
             match msg {
                 ServerMessage::GameList { games } => {
                     gamelist.emit(games);
                 },
-                ServerMessage::GameStatus { room_id, moves } => {
-                    game.emit(GameView { moves });
+                ServerMessage::GameStatus { room_id, members, moves } => {
+                    game.emit(GameView { members, moves });
                 }
+                ServerMessage::Identify { user_id, token, nick } => {
+                    networking::set_token(&token);
+                    set_profile.emit(Profile { user_id, nick });
+                },
                 _ => {}
             };
         }).unwrap();
@@ -46,16 +117,22 @@ impl Component for GameList {
         GameList {
             link,
             games: vec![],
-            game: None
+            game: None,
+            user: None
         }
     }
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
             Msg::AddGame => networking::send(ClientMessage::StartGame),
+            Msg::ChangeNick(nick) => networking::send(ClientMessage::Identify {
+                token: networking::get_token(),
+                nick: Some(nick)
+            }),
             Msg::JoinGame(id) => networking::send(ClientMessage::JoinGame(id)),
             Msg::SetGameStatus(game) => self.game = Some(game),
-            Msg::SetGameList(games) => self.games = games
+            Msg::SetGameList(games) => self.games = games,
+            Msg::SetProfile(profile) => self.user = Some(profile),
         }
         true
     }
@@ -70,21 +147,41 @@ impl Component for GameList {
                 {g}
             </li>
         }).collect::<Html>();
+        let nick = self.user.as_ref().and_then(|x| x.nick.as_ref()).map(|x| &**x).unwrap_or("");
+        let nick_enter = self.link.callback(Msg::ChangeNick);
+
+        let userlist = if let Some(game) = &self.game {
+            game.members
+                .iter()
+                .map(|id|
+                    html!(<span style="padding: 0px 10px">{id}</span>))
+                .collect()
+        } else {
+            html!()
+        };
+
+        let gameview = if let Some(game) = &self.game {
+            html!(
+                <div>
+                    <p>{"Users:"} {userlist}</p>
+                    <board::Board game=game/>
+                </div>
+            )
+        } else {
+            html!(<p>{"Join a game!"}</p>)
+        };
+
         html! {
             <div>
+                <div>
+                    {"Nick:"}
+                    <TextInput value=nick onsubmit=nick_enter />
+                </div>
                 <button onclick=self.link.callback(|_| Msg::AddGame)>{ "+1" }</button>
                 <ul>
                     {list}
                 </ul>
-                <div>
-                {
-                    if let Some(game) = &self.game {
-                        html!(<board::Board game=game/>)
-                    } else {
-                        html!(<p>{"Join a game!"}</p>)
-                    }
-                }
-                </div>
+                <div> {gameview} </div>
             </div>
         }
     }
