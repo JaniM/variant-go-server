@@ -87,6 +87,8 @@ struct GameList {
 enum Msg {
     AddGame,
     ChangeNick(String),
+    TakeSeat(u32),
+    LeaveSeat(u32),
     JoinGame(u32),
     SetGameStatus(GameView),
     SetOwnProfile(Profile),
@@ -107,8 +109,8 @@ impl Component for GameList {
                 ServerMessage::GameList { games } => {
                     gamelist.emit(games);
                 },
-                ServerMessage::GameStatus { room_id, members, moves } => {
-                    game.emit(GameView { members, moves });
+                ServerMessage::GameStatus { room_id, members, seats, board, turn } => {
+                    game.emit(GameView { members, seats, board, turn });
                 },
                 ServerMessage::Identify { user_id, token, nick } => {
                     networking::set_token(&token);
@@ -137,6 +139,8 @@ impl Component for GameList {
                 token: networking::get_token(),
                 nick: Some(nick)
             }),
+            Msg::TakeSeat(idx) => networking::send(ClientMessage::GameAction(message::GameAction::TakeSeat(idx))),
+            Msg::LeaveSeat(idx) => networking::send(ClientMessage::GameAction(message::GameAction::LeaveSeat(idx))),
             Msg::JoinGame(id) => networking::send(ClientMessage::JoinGame(id)),
             Msg::SetGameStatus(game) => self.game = Some(game),
             Msg::SetGameList(games) => self.games = games,
@@ -177,9 +181,51 @@ impl Component for GameList {
                 })
                 .collect::<Html>();
 
+            let seats = game.seats.iter().enumerate()
+                .map(|(idx, (occupant, color))| {
+                    let colorname = match color {
+                        1 => "Black",
+                        2 => "White",
+                        _ => "???",
+                    };
+
+                    if let Some(id) = occupant {
+                        let nick = self.profiles.get(id)
+                            .and_then(|p| p.nick.as_ref())
+                            .map(|n| &**n)
+                            .unwrap_or("no nick");
+                        let leave = if self.user.as_ref().map(|x| x.user_id) == Some(*id) {
+                            html!(<button onclick=self.link.callback(move |_| Msg::LeaveSeat(idx as _))>
+                                {"Leave seat"}
+                            </button>)
+                        } else {
+                            html!()
+                        };
+
+                        html!{
+                            <li>
+                                {format!("{}: {} ({})", colorname, id, nick)}
+                                {leave}
+                            </li>
+                        }
+                    } else {
+                        html!{
+                            <li>
+                                {format!("{}: unoccupied", colorname)}
+                                <button onclick=self.link.callback(move |_| Msg::TakeSeat(idx as _))>
+                                    {"Take seat"}
+                                </button>
+                            </li>
+                        }
+                    }
+                })
+                .collect::<Html>();
+
             html!(
                 <div>
                     <p>{"Users:"} {userlist}</p>
+                    <p>{"Seats"}</p>
+                    <ul>{seats}</ul>
                     <board::Board game=game/>
                 </div>
             )

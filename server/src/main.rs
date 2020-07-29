@@ -1,6 +1,7 @@
 
 mod message;
 mod server;
+mod game;
 
 use std::time::{Duration, Instant};
 
@@ -104,9 +105,25 @@ impl Handler<server::Message> for MyWebSocket {
                     })
                     .wait(ctx);
             },
-            server::Message::GameStatus { room_id, members, moves } => {
+            server::Message::GameStatus { room_id, members, view } => {
                 self.room_id = Some(room_id);
-                ctx.binary(pack(ServerMessage::GameStatus { room_id, members, moves }));
+                ctx.binary(pack(ServerMessage::GameStatus {
+                    room_id,
+                    members,
+                    seats: view.seats.into_iter().map(|x| (
+                        x.player,
+                        match x.team {
+                            game::Color::Black => 1,
+                            game::Color::White => 2,
+                        }
+                    )).collect(),
+                    turn: view.turn,
+                    board: view.board.into_iter().map(|x| match x {
+                        Some(game::Color::Black) => 1,
+                        Some(game::Color::White) => 2,
+                        None => 0,
+                    }).collect()
+                }));
             },
             server::Message::Identify(res) => {
                 ctx.binary(pack(ServerMessage::Identify {

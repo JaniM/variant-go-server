@@ -150,7 +150,7 @@ impl Board {
         context.set_fill_style(&JsValue::from_str("#d38139"));
         context.fill_rect(0.0, 0.0, canvas.width().into(), canvas.height().into());
 
-        context.set_fill_style(&JsValue::from_str("#bbbbbb"));
+        context.set_fill_style(&JsValue::from_str(["#555555", "#bbbbbb"][self.props.game.turn as usize]));
 
         let size = canvas.width() as f64 / 19.0;
         // create shape of radius 'size' around center point (size, size)
@@ -165,8 +165,13 @@ impl Board {
         context.fill();
         context.stroke();
 
-        for &(x, y) in &self.props.game.moves {
-            context.set_fill_style(&JsValue::from_str("#000000"));
+        for (idx, &color) in self.props.game.board.iter().enumerate() {
+            let x = idx % 19;
+            let y = idx / 19;
+
+            if color == 0 { continue; }
+
+            context.set_fill_style(&JsValue::from_str(["#000000", "#eeeeee"][color as usize - 1]));
 
             let size = canvas.width() as f64 / 19.0;
             // create shape of radius 'size' around center point (size, size)
