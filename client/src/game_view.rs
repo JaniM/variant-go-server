@@ -1,4 +1,3 @@
-
 #[derive(Clone, PartialEq)]
 pub struct GameView {
     pub members: Vec<u64>,
@@ -11,6 +10,5 @@ pub struct GameView {
 #[derive(Clone, PartialEq)]
 pub struct Profile {
     pub user_id: u64,
-    pub nick: Option<String>
+    pub nick: Option<String>,
 }
-

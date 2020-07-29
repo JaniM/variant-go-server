@@ -1,13 +1,13 @@
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
-use web_sys::HtmlCanvasElement;
 use web_sys::CanvasRenderingContext2d as Canvas2d;
+use web_sys::HtmlCanvasElement;
 use yew::services::{RenderService, Task};
-use yew::{html, Component, ComponentLink, Html, NodeRef, ShouldRender, Properties};
+use yew::{html, Component, ComponentLink, Html, NodeRef, Properties, ShouldRender};
 
+use crate::game_view::GameView;
 use crate::message::{ClientMessage, GameAction};
 use crate::networking;
-use crate::game_view::GameView;
 
 pub struct Board {
     props: Props,
@@ -17,12 +17,12 @@ pub struct Board {
     node_ref: NodeRef,
     render_loop: Option<Box<dyn Task>>,
     mouse_pos: (f64, f64),
-    selection_pos: (u32, u32)
+    selection_pos: (u32, u32),
 }
 
 #[derive(Properties, Clone, PartialEq)]
 pub struct Props {
-    pub game: GameView
+    pub game: GameView,
 }
 
 pub enum Msg {
@@ -67,7 +67,9 @@ impl Component for Board {
             let closure = Closure::wrap(Box::new(move |event: web_sys::MouseEvent| {
                 mouse_move.emit((event.offset_x() as f64, event.offset_y() as f64));
             }) as Box<dyn FnMut(_)>);
-            canvas.add_event_listener_with_callback("mousemove", closure.as_ref().unchecked_ref()).unwrap();
+            canvas
+                .add_event_listener_with_callback("mousemove", closure.as_ref().unchecked_ref())
+                .unwrap();
             closure.forget();
         }
 
@@ -76,7 +78,9 @@ impl Component for Board {
             let closure = Closure::wrap(Box::new(move |event: web_sys::MouseEvent| {
                 mouse_click.emit((event.offset_x() as f64, event.offset_y() as f64));
             }) as Box<dyn FnMut(_)>);
-            canvas.add_event_listener_with_callback("mousedown", closure.as_ref().unchecked_ref()).unwrap();
+            canvas
+                .add_event_listener_with_callback("mousedown", closure.as_ref().unchecked_ref())
+                .unwrap();
             closure.forget();
         }
 
@@ -114,19 +118,20 @@ impl Component for Board {
         match msg {
             Msg::Render(timestamp) => {
                 //self.render_gl(timestamp).unwrap();
-            },
+            }
             Msg::MouseMove(p) => {
                 let canvas = self.canvas.as_ref().expect("Canvas not initialized!");
                 self.mouse_pos = p;
                 self.selection_pos = (
                     (p.0 / (canvas.width() as f64 / 19.0)) as u32,
-                    (p.1 / (canvas.width() as f64 / 19.0)) as u32);
+                    (p.1 / (canvas.width() as f64 / 19.0)) as u32,
+                );
                 self.render_gl(0.0).unwrap();
-            },
+            }
             Msg::Click(_p) => {
                 networking::send(ClientMessage::GameAction(GameAction::Place(
                     self.selection_pos.0,
-                    self.selection_pos.1
+                    self.selection_pos.1,
                 )));
             }
         }
@@ -142,7 +147,10 @@ impl Component for Board {
 
 impl Board {
     fn render_gl(&mut self, timestamp: f64) -> Result<(), JsValue> {
-        let context = self.canvas2d.as_ref().expect("Canvas Context not initialized!");
+        let context = self
+            .canvas2d
+            .as_ref()
+            .expect("Canvas Context not initialized!");
         let canvas = self.canvas.as_ref().expect("Canvas not initialized!");
 
         context.clear_rect(0.0, 0.0, canvas.width().into(), canvas.height().into());
@@ -150,7 +158,9 @@ impl Board {
         context.set_fill_style(&JsValue::from_str("#d38139"));
         context.fill_rect(0.0, 0.0, canvas.width().into(), canvas.height().into());
 
-        context.set_fill_style(&JsValue::from_str(["#555555", "#bbbbbb"][self.props.game.turn as usize]));
+        context.set_fill_style(&JsValue::from_str(
+            ["#555555", "#bbbbbb"][self.props.game.turn as usize],
+        ));
 
         let size = canvas.width() as f64 / 19.0;
         // create shape of radius 'size' around center point (size, size)
@@ -169,9 +179,13 @@ impl Board {
             let x = idx % 19;
             let y = idx / 19;
 
-            if color == 0 { continue; }
+            if color == 0 {
+                continue;
+            }
 
-            context.set_fill_style(&JsValue::from_str(["#000000", "#eeeeee"][color as usize - 1]));
+            context.set_fill_style(&JsValue::from_str(
+                ["#000000", "#eeeeee"][color as usize - 1],
+            ));
 
             let size = canvas.width() as f64 / 19.0;
             // create shape of radius 'size' around center point (size, size)
@@ -186,7 +200,6 @@ impl Board {
             context.fill();
             context.stroke();
         }
-
 
         let render_frame = self.link.callback(Msg::Render);
         let handle = RenderService::request_animation_frame(render_frame);

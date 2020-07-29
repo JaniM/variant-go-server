@@ -1,11 +1,10 @@
-
 use actix::prelude::*;
 use rand::{self, rngs::ThreadRng, Rng};
-use uuid::Uuid;
 use std::collections::{HashMap, HashSet};
+use uuid::Uuid;
 
-use crate::message;
 use crate::game;
+use crate::message;
 
 macro_rules! catch {
     ($($code:tt)+) => {
@@ -73,7 +72,7 @@ impl actix::Message for CreateRoom {
 pub struct GameAction {
     pub id: usize,
     pub room_id: u32,
-    pub action: message::GameAction
+    pub action: message::GameAction,
 }
 
 #[derive(Message)]
@@ -81,19 +80,19 @@ pub struct GameAction {
 pub struct IdentifyAs {
     pub id: usize,
     pub token: Option<String>,
-    pub nick: Option<String>
+    pub nick: Option<String>,
 }
 
 #[derive(Clone)]
 pub struct Profile {
     pub user_id: u64,
     pub token: Uuid,
-    pub nick: Option<String>
+    pub nick: Option<String>,
 }
 
 pub struct Session {
     pub user_id: Option<u64>,
-    pub client: Recipient<Message>
+    pub client: Recipient<Message>,
 }
 
 pub struct Room {
@@ -176,8 +175,11 @@ impl GameServer {
                 if room.members.remove(&session_id) {
                     if let Some(user_id) = session.user_id {
                         let sessions = &self.sessions;
-                        if !room.members.iter()
-                            .any(|s| sessions.get(s).unwrap().user_id == Some(user_id)) {
+                        if !room
+                            .members
+                            .iter()
+                            .any(|s| sessions.get(s).unwrap().user_id == Some(user_id))
+                        {
                             room.users.remove(&user_id);
                             user_removed = true;
                         }
@@ -217,10 +219,13 @@ impl Handler<Connect> for GameServer {
 
         // register session with random id
         let id = self.rng.gen::<usize>();
-        self.sessions.insert(id, Session {
-            user_id: None,
-            client: msg.addr
-        });
+        self.sessions.insert(
+            id,
+            Session {
+                user_id: None,
+                client: msg.addr,
+            },
+        );
 
         // send id back
         id
@@ -249,8 +254,10 @@ impl Handler<Disconnect> for GameServer {
 
         // remove address
         if let Some(session) = self.sessions.remove(&msg.id) {
-            if let Some(sessions) = session.user_id
-                .and_then(|uid| self.sessions_by_user.get_mut(&uid)) {
+            if let Some(sessions) = session
+                .user_id
+                .and_then(|uid| self.sessions_by_user.get_mut(&uid))
+            {
                 sessions.retain(|&s| s != msg.id);
             }
         }
@@ -281,7 +288,7 @@ impl Handler<Join> for GameServer {
 
         let user_id = match catch!(self.sessions.get(&id)?.user_id?) {
             Some(x) => x,
-            None => return
+            None => return,
         };
 
         let mut rooms = Vec::new();
@@ -296,7 +303,7 @@ impl Handler<Join> for GameServer {
             self.leave_room(msg.id, room_id)
         }
 
-        catch!{
+        catch! {
             let room = self.rooms.get_mut(&room_id)?;
             room.members.insert(id);
             room.users.insert(user_id);
@@ -334,7 +341,7 @@ impl Handler<CreateRoom> for GameServer {
 
         let user_id = match catch!(self.sessions.get(&id)?.user_id?) {
             Some(x) => x,
-            None => return MessageResult(None)
+            None => return MessageResult(None),
         };
 
         let mut rooms = Vec::new();
@@ -359,14 +366,16 @@ impl Handler<CreateRoom> for GameServer {
         room.members.insert(id);
         room.users.insert(user_id);
 
-        self.send_message(id, Message::GameStatus {
-            room_id,
-            members: room.users.iter().copied().collect(),
-            view: room.game.get_view(),
-        });
+        self.send_message(
+            id,
+            Message::GameStatus {
+                room_id,
+                members: room.users.iter().copied().collect(),
+                view: room.game.get_view(),
+            },
+        );
 
-        self.rooms
-            .insert(room_id, room);
+        self.rooms.insert(room_id, room);
 
         self.send_global_message(Message::AnnounceRoom(room_id));
 
@@ -378,25 +387,28 @@ impl Handler<GameAction> for GameServer {
     type Result = ();
 
     fn handle(&mut self, msg: GameAction, _: &mut Context<Self>) {
-        let GameAction { id, room_id, action } = msg;
+        let GameAction {
+            id,
+            room_id,
+            action,
+        } = msg;
 
         let user_id = match catch!(self.sessions.get(&id)?.user_id?) {
             Some(x) => x,
-            None => return
+            None => return,
         };
 
         match self.rooms.get_mut(&room_id) {
-            Some(room) => {
-                match action {
-                    message::GameAction::Place(x, y) => {
-                        room.game.make_action(user_id, game::ActionKind::Place(x, y));
-                    },
-                    message::GameAction::TakeSeat(seat_id) => {
-                        room.game.take_seat(user_id, seat_id as _);
-                    },
-                    message::GameAction::LeaveSeat(seat_id) => {
-                        room.game.leave_seat(user_id, seat_id as _);
-                    }
+            Some(room) => match action {
+                message::GameAction::Place(x, y) => {
+                    room.game
+                        .make_action(user_id, game::ActionKind::Place(x, y));
+                }
+                message::GameAction::TakeSeat(seat_id) => {
+                    room.game.take_seat(user_id, seat_id as _);
+                }
+                message::GameAction::LeaveSeat(seat_id) => {
+                    room.game.leave_seat(user_id, seat_id as _);
                 }
             },
             None => {}
@@ -404,12 +416,15 @@ impl Handler<GameAction> for GameServer {
 
         match self.rooms.get(&room_id) {
             Some(room) => {
-                self.send_room_message(room_id, Message::GameStatus {
+                self.send_room_message(
                     room_id,
-                    members: room.users.iter().copied().collect(),
-                    view: room.game.get_view(),
-                });
-            },
+                    Message::GameStatus {
+                        room_id,
+                        members: room.users.iter().copied().collect(),
+                        view: room.game.get_view(),
+                    },
+                );
+            }
             None => {}
         };
     }
@@ -428,13 +443,11 @@ impl Handler<IdentifyAs> for GameServer {
             .unwrap_or_else(|| Uuid::from_bytes(rng.gen()));
         let user_id = *self.user_tokens.entry(token).or_insert_with(|| rng.gen());
 
-        let profile = self.profiles
-            .entry(user_id)
-            .or_insert_with(|| Profile {
-                user_id,
-                token,
-                nick: None
-            });
+        let profile = self.profiles.entry(user_id).or_insert_with(|| Profile {
+            user_id,
+            token,
+            nick: None,
+        });
 
         if let Some(nick) = nick {
             profile.nick = Some(nick);
@@ -444,10 +457,13 @@ impl Handler<IdentifyAs> for GameServer {
 
         self.send_user_message(user_id, Message::Identify(profile.clone()));
 
-        let sessions = self.sessions_by_user.entry(user_id).or_insert_with(|| Vec::new());
+        let sessions = self
+            .sessions_by_user
+            .entry(user_id)
+            .or_insert_with(|| Vec::new());
         sessions.push(id);
 
-        catch!{
+        catch! {
             self.sessions.get_mut(&id)?.user_id = Some(user_id);
         };
 
@@ -465,4 +481,3 @@ impl Handler<IdentifyAs> for GameServer {
         MessageResult(profile)
     }
 }
-

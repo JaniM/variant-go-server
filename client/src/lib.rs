@@ -1,14 +1,14 @@
-mod utils;
+mod board;
+mod game_view;
 #[path = "../../server/src/message.rs"]
 mod message;
 mod networking;
-mod board;
-mod game_view;
+mod utils;
 
 use wasm_bindgen::prelude::*;
 
-use crate::message::{ClientMessage, ServerMessage};
 use crate::game_view::{GameView, Profile};
+use crate::message::{ClientMessage, ServerMessage};
 use std::collections::HashMap;
 
 use yew::prelude::*;
@@ -16,19 +16,19 @@ use yew::prelude::*;
 struct TextInput {
     link: ComponentLink<Self>,
     text: String,
-    props: TextInputProperties
+    props: TextInputProperties,
 }
 
 enum TextInputMsg {
     SetText(String),
     Submit,
-    None
+    None,
 }
 
 #[derive(Properties, Clone, PartialEq)]
 struct TextInputProperties {
     value: String,
-    onsubmit: Callback<String>
+    onsubmit: Callback<String>,
 }
 
 impl Component for TextInput {
@@ -39,7 +39,7 @@ impl Component for TextInput {
         TextInput {
             link,
             text: props.value.clone(),
-            props
+            props,
         }
     }
 
@@ -47,7 +47,7 @@ impl Component for TextInput {
         match msg {
             TextInputMsg::SetText(text) => self.text = text,
             TextInputMsg::Submit => self.props.onsubmit.emit(self.text.clone()),
-            TextInputMsg::None => return false
+            TextInputMsg::None => return false,
         }
         true
     }
@@ -93,7 +93,7 @@ enum Msg {
     SetGameStatus(GameView),
     SetOwnProfile(Profile),
     SetProfile(Profile),
-    SetGameList(Vec<u32>)
+    SetGameList(Vec<u32>),
 }
 
 impl Component for GameList {
@@ -108,20 +108,36 @@ impl Component for GameList {
             match msg {
                 ServerMessage::GameList { games } => {
                     gamelist.emit(games);
-                },
-                ServerMessage::GameStatus { room_id, members, seats, board, turn } => {
-                    game.emit(GameView { members, seats, board, turn });
-                },
-                ServerMessage::Identify { user_id, token, nick } => {
+                }
+                ServerMessage::GameStatus {
+                    room_id,
+                    members,
+                    seats,
+                    board,
+                    turn,
+                } => {
+                    game.emit(GameView {
+                        members,
+                        seats,
+                        board,
+                        turn,
+                    });
+                }
+                ServerMessage::Identify {
+                    user_id,
+                    token,
+                    nick,
+                } => {
                     networking::set_token(&token);
                     set_own_profile.emit(Profile { user_id, nick });
-                },
+                }
                 ServerMessage::Profile(message::Profile { user_id, nick }) => {
                     set_profile.emit(Profile { user_id, nick });
-                },
+                }
                 _ => {}
             };
-        }).unwrap();
+        })
+        .unwrap();
 
         GameList {
             link,
@@ -137,17 +153,21 @@ impl Component for GameList {
             Msg::AddGame => networking::send(ClientMessage::StartGame),
             Msg::ChangeNick(nick) => networking::send(ClientMessage::Identify {
                 token: networking::get_token(),
-                nick: Some(nick)
+                nick: Some(nick),
             }),
-            Msg::TakeSeat(idx) => networking::send(ClientMessage::GameAction(message::GameAction::TakeSeat(idx))),
-            Msg::LeaveSeat(idx) => networking::send(ClientMessage::GameAction(message::GameAction::LeaveSeat(idx))),
+            Msg::TakeSeat(idx) => networking::send(ClientMessage::GameAction(
+                message::GameAction::TakeSeat(idx),
+            )),
+            Msg::LeaveSeat(idx) => networking::send(ClientMessage::GameAction(
+                message::GameAction::LeaveSeat(idx),
+            )),
             Msg::JoinGame(id) => networking::send(ClientMessage::JoinGame(id)),
             Msg::SetGameStatus(game) => self.game = Some(game),
             Msg::SetGameList(games) => self.games = games,
             Msg::SetOwnProfile(profile) => self.user = Some(profile),
             Msg::SetProfile(profile) => {
                 self.profiles.insert(profile.user_id, profile);
-            },
+            }
         }
         true
     }
@@ -157,19 +177,33 @@ impl Component for GameList {
     }
 
     fn view(&self) -> Html {
-        let list = self.games.iter().map(|&g| html!{
-            <li onclick=self.link.callback(move |_| Msg::JoinGame(g))>
-                {g}
-            </li>
-        }).collect::<Html>();
-        let nick = self.user.as_ref().and_then(|x| x.nick.as_ref()).map(|x| &**x).unwrap_or("");
+        let list = self
+            .games
+            .iter()
+            .map(|&g| {
+                html! {
+                    <li onclick=self.link.callback(move |_| Msg::JoinGame(g))>
+                        {g}
+                    </li>
+                }
+            })
+            .collect::<Html>();
+        let nick = self
+            .user
+            .as_ref()
+            .and_then(|x| x.nick.as_ref())
+            .map(|x| &**x)
+            .unwrap_or("");
         let nick_enter = self.link.callback(Msg::ChangeNick);
 
         let gameview = if let Some(game) = &self.game {
-            let userlist = game.members
+            let userlist = game
+                .members
                 .iter()
                 .map(|id| {
-                    let nick = self.profiles.get(id)
+                    let nick = self
+                        .profiles
+                        .get(id)
                         .and_then(|p| p.nick.as_ref())
                         .map(|n| &**n)
                         .unwrap_or("no nick");
@@ -248,7 +282,6 @@ impl Component for GameList {
         }
     }
 }
-
 
 #[wasm_bindgen(start)]
 pub fn run() -> Result<(), JsValue> {

@@ -1,4 +1,3 @@
-
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Color {
     Black,
@@ -43,7 +42,7 @@ pub struct GameAction {
 pub struct Game {
     pub seats: Vec<Seat>,
     pub turn: usize,
-    pub board: Vec<Option<Color>>
+    pub board: Vec<Option<Color>>,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -72,12 +71,15 @@ impl Game {
         Game {
             seats: vec![Seat::black(), Seat::white()],
             turn: 0,
-            board: vec![None; 19*19],
+            board: vec![None; 19 * 19],
         }
     }
 
     pub fn take_seat(&mut self, player_id: u64, seat_id: usize) -> Result<(), TakeSeatError> {
-        let seat = self.seats.get_mut(seat_id).ok_or(TakeSeatError::DoesNotExist)?;
+        let seat = self
+            .seats
+            .get_mut(seat_id)
+            .ok_or(TakeSeatError::DoesNotExist)?;
         if seat.player.is_some() {
             return Err(TakeSeatError::NotOpen);
         }
@@ -86,7 +88,10 @@ impl Game {
     }
 
     pub fn leave_seat(&mut self, player_id: u64, seat_id: usize) -> Result<(), TakeSeatError> {
-        let seat = self.seats.get_mut(seat_id).ok_or(TakeSeatError::DoesNotExist)?;
+        let seat = self
+            .seats
+            .get_mut(seat_id)
+            .ok_or(TakeSeatError::DoesNotExist)?;
         if seat.player != Some(player_id) {
             return Err(TakeSeatError::NotOpen);
         }
@@ -94,7 +99,11 @@ impl Game {
         Ok(())
     }
 
-    pub fn make_action(&mut self, player_id: u64, action: ActionKind) -> Result<(), MakeActionError> {
+    pub fn make_action(
+        &mut self,
+        player_id: u64,
+        action: ActionKind,
+    ) -> Result<(), MakeActionError> {
         let active_seat = self.seats.get(self.turn).expect("Game turn number invalid");
         if active_seat.player != Some(player_id) {
             return Err(MakeActionError::NotTurn);
@@ -130,4 +139,3 @@ impl Game {
         }
     }
 }
-

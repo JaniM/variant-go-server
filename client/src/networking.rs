@@ -19,7 +19,7 @@ macro_rules! console_log {
 
 #[derive(Debug, Clone)]
 struct WsHandler {
-    ws: Option<WebSocket>
+    ws: Option<WebSocket>,
 }
 
 thread_local! {
@@ -91,7 +91,7 @@ pub fn start_websocket(on_msg: impl Fn(ServerMessage) -> () + 'static) -> Result
         send(ClientMessage::GetGameList);
         send(ClientMessage::Identify {
             token: get_token(),
-            nick: None
+            nick: None,
         });
     }) as Box<dyn FnMut(JsValue)>);
     ws.set_onopen(Some(onopen_callback.as_ref().unchecked_ref()));
@@ -104,7 +104,12 @@ pub fn send(msg: ClientMessage) {
     HANDLER.with(|h| {
         let handler = h.borrow();
         let mut vec = serde_cbor::to_vec(&msg).expect("cbor serialization failed");
-        match handler.ws.as_ref().expect("ws not initialized").send_with_u8_array(&mut vec) {
+        match handler
+            .ws
+            .as_ref()
+            .expect("ws not initialized")
+            .send_with_u8_array(&mut vec)
+        {
             Ok(_) => console_log!("binary message successfully sent"),
             Err(err) => console_log!("error sending message: {:?}", err),
         };
