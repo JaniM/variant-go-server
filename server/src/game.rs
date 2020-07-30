@@ -39,10 +39,39 @@ pub struct GameAction {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct Board {
+    pub width: u32,
+    pub height: u32,
+    pub points: Vec<Option<Color>>,
+}
+
+impl Board {
+    fn empty(width: u32, height: u32) -> Board {
+        Board {
+            width,
+            height,
+            points: vec![None; (width * height) as usize],
+        }
+    }
+
+    fn point_within(&self, (x, y): (u32, u32)) -> bool {
+        !(0..self.width).contains(&x) || !(0..self.height).contains(&y)
+    }
+
+    fn get_point(&self, (x, y): (u32, u32)) -> Option<Color> {
+        self.points[(y * self.width + x) as usize]
+    }
+
+    fn point_mut(&mut self, (x, y): (u32, u32)) -> &mut Option<Color> {
+        &mut self.points[(y * self.width + x) as usize]
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct Game {
     pub seats: Vec<Seat>,
     pub turn: usize,
-    pub board: Vec<Option<Color>>,
+    pub board: Board,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -71,7 +100,11 @@ impl Game {
         Game {
             seats: vec![Seat::black(), Seat::white()],
             turn: 0,
-            board: vec![None; 19 * 19],
+            board: Board {
+                width: 19,
+                height: 19,
+                points: vec![None; 19 * 19],
+            },
         }
     }
 
@@ -111,16 +144,16 @@ impl Game {
 
         match action {
             ActionKind::Place(x, y) => {
-                if !(0..19).contains(&x) || !(0..19).contains(&y) {
+                if self.board.point_within((x, y)) {
                     return Err(MakeActionError::OutOfBounds);
                 }
 
-                let idx = (y * 19 + x) as usize;
-                if self.board[idx] != None {
+                let point = self.board.point_mut((x, y));
+                if *point != None {
                     return Err(MakeActionError::PointOccupied);
                 }
 
-                self.board[idx] = Some(active_seat.team);
+                *point = Some(active_seat.team);
                 self.turn += 1;
                 if self.turn >= self.seats.len() {
                     self.turn = 0;
@@ -135,7 +168,7 @@ impl Game {
         GameView {
             seats: self.seats.clone(),
             turn: self.turn as _,
-            board: self.board.clone(),
+            board: self.board.points.clone(),
         }
     }
 }
