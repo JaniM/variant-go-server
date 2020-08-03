@@ -11,4 +11,7 @@ module.exports = {
   plugins: [
     new CopyWebpackPlugin(['index.html'])
   ],
+  devServer: {
+    host: '0.0.0.0'
+  }
 };

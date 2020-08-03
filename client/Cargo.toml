@@ -36,6 +36,7 @@ features = [
   "BinaryType",
   "Blob",
   "ErrorEvent",
+  "Location",
   "MessageEvent",
   'MouseEvent',
   "HtmlCanvasElement",

@@ -42,8 +42,9 @@ pub fn set_token(token: &str) {
 }
 
 pub fn start_websocket(on_msg: impl Fn(ServerMessage) -> () + 'static) -> Result<(), JsValue> {
-    // Connect to an echo server
-    let ws = WebSocket::new("ws://localhost:8088/ws/")?;
+    let window = web_sys::window().expect("Window not available");
+    let host = window.location().hostname().expect("host not available");
+    let ws = WebSocket::new(&format!("ws://{}:8088/ws/", host))?;
     let cloned_ws = ws.clone();
     HANDLER.with(move |h| h.borrow_mut().ws = Some(cloned_ws));
 
