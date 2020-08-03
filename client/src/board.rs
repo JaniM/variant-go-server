@@ -5,10 +5,10 @@ use web_sys::HtmlCanvasElement;
 use yew::services::{RenderService, Task};
 use yew::{html, Component, ComponentLink, Html, NodeRef, Properties, ShouldRender};
 
+use crate::game::GameState;
 use crate::game_view::GameView;
 use crate::message::{ClientMessage, GameAction};
 use crate::networking;
-use crate::game::GameState;
 
 pub struct Board {
     props: Props,
@@ -188,30 +188,17 @@ impl Board {
 
         for y in 0..19 {
             context.begin_path();
-            context.move_to(
-                size * 0.5,
-                (y as f64 + 0.5) * size,
-            );
-            context.line_to(
-                size * 18.5,
-                (y as f64 + 0.5) * size,
-            );
+            context.move_to(size * 0.5, (y as f64 + 0.5) * size);
+            context.line_to(size * 18.5, (y as f64 + 0.5) * size);
             context.stroke();
         }
 
         for x in 0..19 {
             context.begin_path();
-            context.move_to(
-                (x as f64 + 0.5) * size,
-                size * 0.5,
-            );
-            context.line_to(
-                (x as f64 + 0.5) * size,
-                size * 18.5,
-            );
+            context.move_to((x as f64 + 0.5) * size, size * 0.5);
+            context.line_to((x as f64 + 0.5) * size, size * 18.5);
             context.stroke();
         }
-
 
         if let Some(selection_pos) = self.selection_pos {
             context.set_fill_style(&JsValue::from_str(
@@ -264,11 +251,12 @@ impl Board {
         }
 
         match &self.props.game.state {
-            GameState::Play | GameState::Done => {
-            },
+            GameState::Play | GameState::Done => {}
             GameState::Scoring(scoring) => {
                 for group in &scoring.groups {
-                    if group.alive { continue; }
+                    if group.alive {
+                        continue;
+                    }
 
                     for &(x, y) in &group.points {
                         context.set_stroke_style(&JsValue::from_str(
@@ -280,29 +268,17 @@ impl Board {
                         ));
 
                         context.begin_path();
-                        context.move_to(
-                            (x as f64 + 0.2) * size,
-                            (y as f64 + 0.2) * size,
-                        );
-                        context.line_to(
-                            (x as f64 + 0.8) * size,
-                            (y as f64 + 0.8) * size,
-                        );
+                        context.move_to((x as f64 + 0.2) * size, (y as f64 + 0.2) * size);
+                        context.line_to((x as f64 + 0.8) * size, (y as f64 + 0.8) * size);
                         context.stroke();
 
                         context.begin_path();
-                        context.move_to(
-                            (x as f64 + 0.8) * size,
-                            (y as f64 + 0.2) * size,
-                        );
-                        context.line_to(
-                            (x as f64 + 0.2) * size,
-                            (y as f64 + 0.8) * size,
-                        );
+                        context.move_to((x as f64 + 0.8) * size, (y as f64 + 0.2) * size);
+                        context.line_to((x as f64 + 0.2) * size, (y as f64 + 0.8) * size);
                         context.stroke();
                     }
                 }
-            },
+            }
         }
 
         let render_frame = self.link.callback(Msg::Render);

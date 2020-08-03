@@ -1,10 +1,10 @@
 mod board;
-mod game_view;
-#[path = "../../server/src/message.rs"]
-mod message;
 #[path = "../../server/src/game.rs"]
 #[allow(dead_code)]
 mod game;
+mod game_view;
+#[path = "../../server/src/message.rs"]
+mod message;
 mod networking;
 mod utils;
 
@@ -168,8 +168,7 @@ impl Component for GameList {
                 message::GameAction::LeaveSeat(idx),
             )),
             Msg::JoinGame(id) => networking::send(ClientMessage::JoinGame(id)),
-            Msg::Pass => networking::send(ClientMessage::GameAction(
-                message::GameAction::Pass)),
+            Msg::Pass => networking::send(ClientMessage::GameAction(message::GameAction::Pass)),
             Msg::SetGameStatus(game) => self.game = Some(game),
             Msg::SetGameList(games) => self.games = games,
             Msg::SetOwnProfile(profile) => self.user = Some(profile),
