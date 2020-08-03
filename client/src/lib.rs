@@ -2,6 +2,9 @@ mod board;
 mod game_view;
 #[path = "../../server/src/message.rs"]
 mod message;
+#[path = "../../server/src/game.rs"]
+#[allow(dead_code)]
+mod game;
 mod networking;
 mod utils;
 
@@ -90,6 +93,7 @@ enum Msg {
     TakeSeat(u32),
     LeaveSeat(u32),
     JoinGame(u32),
+    Pass,
     SetGameStatus(GameView),
     SetOwnProfile(Profile),
     SetProfile(Profile),
@@ -115,12 +119,14 @@ impl Component for GameList {
                     seats,
                     board,
                     turn,
+                    state,
                 } => {
                     game.emit(GameView {
                         members,
                         seats,
                         board,
                         turn,
+                        state,
                     });
                 }
                 ServerMessage::Identify {
@@ -162,6 +168,8 @@ impl Component for GameList {
                 message::GameAction::LeaveSeat(idx),
             )),
             Msg::JoinGame(id) => networking::send(ClientMessage::JoinGame(id)),
+            Msg::Pass => networking::send(ClientMessage::GameAction(
+                message::GameAction::Pass)),
             Msg::SetGameStatus(game) => self.game = Some(game),
             Msg::SetGameList(games) => self.games = games,
             Msg::SetOwnProfile(profile) => self.user = Some(profile),
@@ -182,8 +190,10 @@ impl Component for GameList {
             .iter()
             .map(|&g| {
                 html! {
-                    <li onclick=self.link.callback(move |_| Msg::JoinGame(g))>
-                        {g}
+                    <li>
+                        <a href="#" onclick=self.link.callback(move |_| Msg::JoinGame(g))>
+                            {g}
+                        </a>
                     </li>
                 }
             })
@@ -195,6 +205,7 @@ impl Component for GameList {
             .map(|x| &**x)
             .unwrap_or("");
         let nick_enter = self.link.callback(Msg::ChangeNick);
+        let pass = self.link.callback(|_| Msg::Pass);
 
         let gameview = if let Some(game) = &self.game {
             let userlist = game
@@ -236,8 +247,10 @@ impl Component for GameList {
                             html!()
                         };
 
+                        let style = if game.turn == idx as u32 { "background-color: #eeeeee;" } else { "" };
+
                         html!{
-                            <li>
+                            <li style=style>
                                 {format!("{}: {} ({})", colorname, id, nick)}
                                 {leave}
                             </li>
@@ -255,11 +268,18 @@ impl Component for GameList {
                 })
                 .collect::<Html>();
 
+            let status = match game.state {
+                game::GameState::Play => "Active",
+                game::GameState::Scoring(_) => "Scoring",
+                game::GameState::Done => "Game over!",
+            };
+
             html!(
                 <div>
                     <p>{"Users:"} {userlist}</p>
                     <p>{"Seats"}</p>
                     <ul>{seats}</ul>
+                    <div>{"Status:"} {status} <button onclick=pass>{"Pass"}</button></div>
                     <board::Board game=game/>
                 </div>
             )
@@ -268,15 +288,17 @@ impl Component for GameList {
         };
 
         html! {
-            <div>
-                <div>
-                    {"Nick:"}
-                    <TextInput value=nick onsubmit=nick_enter />
+            <div style="display: flex; flex-direction: row; min-height: 100vh;">
+                <div style="min-width: 300px; border-right: 2px solid black; margin: 10px;">
+                    <div>
+                        {"Nick:"}
+                        <TextInput value=nick onsubmit=nick_enter />
+                    </div>
+                    <button onclick=self.link.callback(|_| Msg::AddGame)>{ "+1" }</button>
+                    <ul>
+                        {list}
+                    </ul>
                 </div>
-                <button onclick=self.link.callback(|_| Msg::AddGame)>{ "+1" }</button>
-                <ul>
-                    {list}
-                </ul>
                 <div> {gameview} </div>
             </div>
         }

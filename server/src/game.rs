@@ -1,8 +1,10 @@
+use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
+#[repr(u8)]
 pub enum Color {
-    Black,
+    Black = 1,
     White,
 }
 
@@ -38,6 +40,7 @@ impl Seat {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ActionKind {
     Place(u32, u32),
+    Pass,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -102,10 +105,40 @@ impl Board {
     }
 }
 
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Group {
+    pub points: Vec<Point>,
+    pub liberties: i32,
+    pub team: Color,
+    pub alive: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+pub struct ScoringState {
+    pub groups: Vec<Group>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum GameState {
+    Play,
+    Scoring(ScoringState),
+    Done,
+}
+
+impl GameState {
+    fn scoring(board: &Board) -> Self {
+        GameState::Scoring(ScoringState {
+            groups: find_groups(board),
+        })
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Game {
+    pub state: GameState,
     pub seats: Vec<Seat>,
     pub turn: usize,
+    pub pass_count: usize,
     pub board: Board,
     pub ko_point: Option<Point>,
 }
@@ -124,10 +157,12 @@ pub enum MakeActionError {
     PointOccupied,
     Suicide,
     Ko,
+    GameDone,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct GameView {
+    pub state: GameState,
     pub seats: Vec<Seat>,
     pub turn: u32,
     pub board: Vec<Option<Color>>,
@@ -136,8 +171,10 @@ pub struct GameView {
 impl Game {
     pub fn standard() -> Game {
         Game {
+            state: GameState::Play,
             seats: vec![Seat::black(), Seat::white()],
             turn: 0,
+            pass_count: 0,
             board: Board {
                 width: 19,
                 height: 19,
@@ -176,11 +213,26 @@ impl Game {
         player_id: u64,
         action: ActionKind,
     ) -> Result<(), MakeActionError> {
+        if !self.seats.iter().any(|s| s.player == Some(player_id)) {
+            return Err(MakeActionError::NotPlayer);
+        }
+
+        match self.state {
+            GameState::Play => self.make_action_play(player_id, action),
+            GameState::Scoring(_) => self.make_action_scoring(player_id, action),
+            GameState::Done => Err(MakeActionError::GameDone),
+        }
+    }
+
+    pub fn make_action_play(
+        &mut self,
+        player_id: u64,
+        action: ActionKind,
+    ) -> Result<(), MakeActionError> {
         let active_seat = self.seats.get(self.turn).expect("Game turn number invalid");
         if active_seat.player != Some(player_id) {
             return Err(MakeActionError::NotTurn);
         }
-
         match action {
             ActionKind::Place(x, y) => {
                 if self.board.point_within((x, y)) {
@@ -233,6 +285,57 @@ impl Game {
                 if self.turn >= self.seats.len() {
                     self.turn = 0;
                 }
+                self.pass_count = 0;
+            }
+            ActionKind::Pass => {
+                self.turn += 1;
+                if self.turn >= self.seats.len() {
+                    self.turn = 0;
+                }
+                self.pass_count += 1;
+                if self.pass_count == self.seats.len() {
+                    self.pass_count = 0;
+                    self.state = GameState::scoring(&self.board);
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn make_action_scoring(
+        &mut self,
+        player_id: u64,
+        action: ActionKind,
+    ) -> Result<(), MakeActionError> {
+        match action {
+            ActionKind::Place(x, y) => {
+                let state = match &mut self.state {
+                    GameState::Scoring(state) => state,
+                    _ => unreachable!(),
+                };
+
+                let group = state.groups.iter_mut().find(|g| g.points.contains(&(x, y)));
+
+                let group = match group {
+                    Some(g) => g,
+                    None => return Ok(()),
+                };
+
+                group.alive = !group.alive;
+
+                self.pass_count = 0;
+            }
+            ActionKind::Pass => {
+                self.turn += 1;
+                if self.turn >= self.seats.len() {
+                    self.turn = 0;
+                }
+                self.pass_count += 1;
+                if self.pass_count == self.seats.len() {
+                    self.pass_count = 0;
+                    self.state = GameState::Done;
+                }
             }
         }
 
@@ -241,18 +344,12 @@ impl Game {
 
     pub fn get_view(&self) -> GameView {
         GameView {
+            state: self.state.clone(),
             seats: self.seats.clone(),
             turn: self.turn as _,
             board: self.board.points.clone(),
         }
     }
-}
-
-#[derive(Default)]
-pub struct Group {
-    pub points: Vec<Point>,
-    pub liberties: i32,
-    pub team: Color,
 }
 
 fn find_groups(board: &Board) -> Vec<Group> {
@@ -269,6 +366,7 @@ fn find_groups(board: &Board) -> Vec<Group> {
 
     while let Some(point) = legal_points.pop() {
         let mut group = Group::default();
+        group.alive = true;
         group.team = board.get_point(point).expect("scanned an empty point");
 
         stack.push(point);

@@ -1,8 +1,10 @@
+use crate::game;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum GameAction {
     Place(u32, u32),
+    Pass,
     TakeSeat(u32),
     LeaveSeat(u32),
 }
@@ -42,6 +44,7 @@ pub enum ServerMessage {
         turn: u32,
         // 19x19 vec, 0 = empty, 1 = black, 2 = white
         board: Vec<u8>,
+        state: game::GameState,
     },
     Profile(Profile),
     MsgError(String),

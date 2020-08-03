@@ -8,6 +8,7 @@ use yew::{html, Component, ComponentLink, Html, NodeRef, Properties, ShouldRende
 use crate::game_view::GameView;
 use crate::message::{ClientMessage, GameAction};
 use crate::networking;
+use crate::game::GameState;
 
 pub struct Board {
     props: Props,
@@ -16,8 +17,8 @@ pub struct Board {
     link: ComponentLink<Self>,
     node_ref: NodeRef,
     render_loop: Option<Box<dyn Task>>,
-    mouse_pos: (f64, f64),
-    selection_pos: (u32, u32),
+    mouse_pos: Option<(f64, f64)>,
+    selection_pos: Option<(u32, u32)>,
 }
 
 #[derive(Properties, Clone, PartialEq)]
@@ -29,6 +30,7 @@ pub enum Msg {
     Render(f64),
     MouseMove((f64, f64)),
     Click((f64, f64)),
+    MouseLeave,
 }
 
 impl Component for Board {
@@ -43,8 +45,8 @@ impl Component for Board {
             link,
             node_ref: NodeRef::default(),
             render_loop: None,
-            mouse_pos: (0.0, 0.0),
-            selection_pos: (0, 0),
+            mouse_pos: None,
+            selection_pos: None,
         }
     }
 
@@ -80,6 +82,17 @@ impl Component for Board {
             }) as Box<dyn FnMut(_)>);
             canvas
                 .add_event_listener_with_callback("mousedown", closure.as_ref().unchecked_ref())
+                .unwrap();
+            closure.forget();
+        }
+
+        {
+            let mouse_leave = self.link.callback(|_| Msg::MouseLeave);
+            let closure = Closure::wrap(Box::new(move |_event: web_sys::MouseEvent| {
+                mouse_leave.emit(());
+            }) as Box<dyn FnMut(_)>);
+            canvas
+                .add_event_listener_with_callback("mouseleave", closure.as_ref().unchecked_ref())
                 .unwrap();
             closure.forget();
         }
@@ -121,18 +134,29 @@ impl Component for Board {
             }
             Msg::MouseMove(p) => {
                 let canvas = self.canvas.as_ref().expect("Canvas not initialized!");
-                self.mouse_pos = p;
-                self.selection_pos = (
+                self.mouse_pos = Some(p);
+                self.selection_pos = Some((
                     (p.0 / (canvas.width() as f64 / 19.0)) as u32,
                     (p.1 / (canvas.width() as f64 / 19.0)) as u32,
-                );
+                ));
                 self.render_gl(0.0).unwrap();
             }
-            Msg::Click(_p) => {
+            Msg::Click(p) => {
+                let canvas = self.canvas.as_ref().expect("Canvas not initialized!");
+                self.mouse_pos = Some(p);
+                self.selection_pos = Some((
+                    (p.0 / (canvas.width() as f64 / 19.0)) as u32,
+                    (p.1 / (canvas.width() as f64 / 19.0)) as u32,
+                ));
                 networking::send(ClientMessage::GameAction(GameAction::Place(
-                    self.selection_pos.0,
-                    self.selection_pos.1,
+                    self.selection_pos.unwrap().0,
+                    self.selection_pos.unwrap().1,
                 )));
+            }
+            Msg::MouseLeave => {
+                self.mouse_pos = None;
+                self.selection_pos = None;
+                self.render_gl(0.0).unwrap();
             }
         }
         false
@@ -158,22 +182,56 @@ impl Board {
         context.set_fill_style(&JsValue::from_str("#d38139"));
         context.fill_rect(0.0, 0.0, canvas.width().into(), canvas.height().into());
 
-        context.set_fill_style(&JsValue::from_str(
-            ["#555555", "#bbbbbb"][self.props.game.turn as usize],
-        ));
+        context.set_stroke_style(&JsValue::from_str("#000000"));
 
         let size = canvas.width() as f64 / 19.0;
-        // create shape of radius 'size' around center point (size, size)
-        context.begin_path();
-        context.arc(
-            (self.selection_pos.0 as f64 + 0.5) * size,
-            (self.selection_pos.1 as f64 + 0.5) * size,
-            size / 2.,
-            0.0,
-            2.0 * std::f64::consts::PI,
-        )?;
-        context.fill();
-        context.stroke();
+
+        for y in 0..19 {
+            context.begin_path();
+            context.move_to(
+                size * 0.5,
+                (y as f64 + 0.5) * size,
+            );
+            context.line_to(
+                size * 18.5,
+                (y as f64 + 0.5) * size,
+            );
+            context.stroke();
+        }
+
+        for x in 0..19 {
+            context.begin_path();
+            context.move_to(
+                (x as f64 + 0.5) * size,
+                size * 0.5,
+            );
+            context.line_to(
+                (x as f64 + 0.5) * size,
+                size * 18.5,
+            );
+            context.stroke();
+        }
+
+
+        if let Some(selection_pos) = self.selection_pos {
+            context.set_fill_style(&JsValue::from_str(
+                ["#555555", "#bbbbbb"][self.props.game.turn as usize],
+            ));
+            context.set_stroke_style(&JsValue::from_str(
+                ["#bbbbbb", "#555555"][self.props.game.turn as usize],
+            ));
+            // create shape of radius 'size' around center point (size, size)
+            context.begin_path();
+            context.arc(
+                (selection_pos.0 as f64 + 0.5) * size,
+                (selection_pos.1 as f64 + 0.5) * size,
+                size / 2.,
+                0.0,
+                2.0 * std::f64::consts::PI,
+            )?;
+            context.fill();
+            context.stroke();
+        }
 
         for (idx, &color) in self.props.game.board.iter().enumerate() {
             let x = idx % 19;
@@ -185,6 +243,10 @@ impl Board {
 
             context.set_fill_style(&JsValue::from_str(
                 ["#000000", "#eeeeee"][color as usize - 1],
+            ));
+
+            context.set_stroke_style(&JsValue::from_str(
+                ["#eeeeee", "#000000"][color as usize - 1],
             ));
 
             let size = canvas.width() as f64 / 19.0;
@@ -199,6 +261,48 @@ impl Board {
             )?;
             context.fill();
             context.stroke();
+        }
+
+        match &self.props.game.state {
+            GameState::Play | GameState::Done => {
+            },
+            GameState::Scoring(scoring) => {
+                for group in &scoring.groups {
+                    if group.alive { continue; }
+
+                    for &(x, y) in &group.points {
+                        context.set_stroke_style(&JsValue::from_str(
+                            ["#eeeeee", "#000000"][group.team as usize - 1],
+                        ));
+
+                        context.set_stroke_style(&JsValue::from_str(
+                            ["#eeeeee", "#000000"][group.team as usize - 1],
+                        ));
+
+                        context.begin_path();
+                        context.move_to(
+                            (x as f64 + 0.2) * size,
+                            (y as f64 + 0.2) * size,
+                        );
+                        context.line_to(
+                            (x as f64 + 0.8) * size,
+                            (y as f64 + 0.8) * size,
+                        );
+                        context.stroke();
+
+                        context.begin_path();
+                        context.move_to(
+                            (x as f64 + 0.8) * size,
+                            (y as f64 + 0.2) * size,
+                        );
+                        context.line_to(
+                            (x as f64 + 0.2) * size,
+                            (y as f64 + 0.8) * size,
+                        );
+                        context.stroke();
+                    }
+                }
+            },
         }
 
         let render_frame = self.link.callback(Msg::Render);

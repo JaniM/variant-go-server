@@ -404,6 +404,9 @@ impl Handler<GameAction> for GameServer {
                     room.game
                         .make_action(user_id, game::ActionKind::Place(x, y));
                 }
+                message::GameAction::Pass => {
+                    room.game.make_action(user_id, game::ActionKind::Pass);
+                }
                 message::GameAction::TakeSeat(seat_id) => {
                     room.game.take_seat(user_id, seat_id as _);
                 }

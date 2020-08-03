@@ -135,6 +135,7 @@ impl Handler<server::Message> for MyWebSocket {
                             None => 0,
                         })
                         .collect(),
+                    state: view.state,
                 }));
             }
             server::Message::Identify(res) => {
