@@ -90,18 +90,8 @@ impl Handler<server::Message> for MyWebSocket {
 
     fn handle(&mut self, msg: server::Message, ctx: &mut Self::Context) {
         match msg {
-            server::Message::AnnounceRoom(_id) => {
-                self.server_addr
-                    .send(server::ListRooms)
-                    .into_actor(self)
-                    .then(|res, act, ctx| {
-                        match res {
-                            Ok(res) => ctx.binary(pack(ServerMessage::GameList { games: res })),
-                            _ => ctx.stop(),
-                        }
-                        fut::ready(())
-                    })
-                    .wait(ctx);
+            server::Message::AnnounceRoom(room_id, name) => {
+                ctx.binary(pack(ServerMessage::AnnounceGame { room_id, name }));
             }
             server::Message::GameStatus {
                 room_id,
@@ -163,7 +153,6 @@ fn pack(msg: ServerMessage) -> Vec<u8> {
 impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for MyWebSocket {
     fn handle(&mut self, msg: Result<ws::Message, ws::ProtocolError>, ctx: &mut Self::Context) {
         // process websocket messages
-        println!("WS: {:?}", msg);
         match msg {
             Ok(ws::Message::Ping(msg)) => {
                 self.hb = Instant::now();
@@ -174,15 +163,24 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for MyWebSocket {
             }
             Ok(ws::Message::Text(text)) => ctx.text(text),
             Ok(ws::Message::Binary(bin)) => {
-                match serde_cbor::from_slice::<ClientMessage>(&bin) {
+                let data = serde_cbor::from_slice::<ClientMessage>(&bin);
+                println!("WS: {:?}", data);
+                match data {
                     Ok(ClientMessage::GetGameList) => {
                         self.server_addr
                             .send(server::ListRooms)
                             .into_actor(self)
                             .then(|res, act, ctx| {
                                 match res {
-                                    Ok(res) => {
-                                        ctx.binary(pack(ServerMessage::GameList { games: res }))
+                                    Ok(mut res) => {
+                                        // Sort newest first
+                                        res.sort_unstable_by_key(|x| -(x.0 as i32));
+                                        for (room_id, name) in res {
+                                            ctx.binary(pack(ServerMessage::AnnounceGame {
+                                                room_id,
+                                                name,
+                                            }));
+                                        }
                                     }
                                     _ => ctx.stop(),
                                 }
@@ -190,8 +188,9 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for MyWebSocket {
                             })
                             .wait(ctx);
                     }
-                    Ok(ClientMessage::StartGame) => {
-                        self.server_addr.do_send(server::CreateRoom { id: self.id });
+                    Ok(ClientMessage::StartGame { name }) => {
+                        self.server_addr
+                            .do_send(server::CreateRoom { id: self.id, name });
                     }
                     Ok(ClientMessage::JoinGame(room_id)) => {
                         self.server_addr.do_send(server::Join {

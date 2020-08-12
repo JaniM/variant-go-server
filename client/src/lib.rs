@@ -14,7 +14,9 @@ use crate::game_view::{GameView, Profile};
 use crate::message::{ClientMessage, ServerMessage};
 use std::collections::HashMap;
 
+use std::time::Duration;
 use yew::prelude::*;
+use yew::services::TimeoutService;
 
 struct TextInput {
     link: ComponentLink<Self>,
@@ -81,14 +83,16 @@ impl Component for TextInput {
 
 struct GameList {
     link: ComponentLink<Self>,
-    games: Vec<u32>,
+    // TODO: Use a proper struct, not magic tuples
+    games: Vec<(u32, String)>,
     game: Option<GameView>,
     user: Option<Profile>,
     profiles: HashMap<u64, Profile>,
+    debounce_job: Option<Box<dyn yew::services::Task>>,
 }
 
 enum Msg {
-    AddGame,
+    StartGame,
     ChangeNick(String),
     TakeSeat(u32),
     LeaveSeat(u32),
@@ -97,21 +101,22 @@ enum Msg {
     SetGameStatus(GameView),
     SetOwnProfile(Profile),
     SetProfile(Profile),
-    SetGameList(Vec<u32>),
+    AddGame((u32, String)),
+    Render,
 }
 
 impl Component for GameList {
     type Message = Msg;
     type Properties = ();
     fn create(_: Self::Properties, link: ComponentLink<Self>) -> Self {
-        let gamelist = link.callback(Msg::SetGameList);
+        let addgame = link.callback(Msg::AddGame);
         let game = link.callback(Msg::SetGameStatus);
         let set_own_profile = link.callback(Msg::SetOwnProfile);
         let set_profile = link.callback(Msg::SetProfile);
         networking::start_websocket(move |msg| {
             match msg {
-                ServerMessage::GameList { games } => {
-                    gamelist.emit(games);
+                ServerMessage::AnnounceGame { room_id, name } => {
+                    addgame.emit((room_id, name));
                 }
                 ServerMessage::GameStatus {
                     room_id,
@@ -151,12 +156,19 @@ impl Component for GameList {
             game: None,
             user: None,
             profiles: HashMap::new(),
+            debounce_job: None,
         }
     }
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
-            Msg::AddGame => networking::send(ClientMessage::StartGame),
+            Msg::StartGame => networking::send(ClientMessage::StartGame {
+                name: self
+                    .user
+                    .as_ref()
+                    .and_then(|p| p.nick.clone())
+                    .unwrap_or_else(|| "No nick".to_owned()),
+            }),
             Msg::ChangeNick(nick) => networking::send(ClientMessage::Identify {
                 token: networking::get_token(),
                 nick: Some(nick),
@@ -170,10 +182,20 @@ impl Component for GameList {
             Msg::JoinGame(id) => networking::send(ClientMessage::JoinGame(id)),
             Msg::Pass => networking::send(ClientMessage::GameAction(message::GameAction::Pass)),
             Msg::SetGameStatus(game) => self.game = Some(game),
-            Msg::SetGameList(games) => self.games = games,
+            Msg::AddGame(game) => {
+                self.games.push(game);
+                self.debounce_job = Some(Box::new(TimeoutService::spawn(
+                    Duration::from_millis(100),
+                    self.link.callback(|_| Msg::Render),
+                )));
+                return false;
+            }
             Msg::SetOwnProfile(profile) => self.user = Some(profile),
             Msg::SetProfile(profile) => {
                 self.profiles.insert(profile.user_id, profile);
+            }
+            Msg::Render => {
+                self.games.sort_unstable_by_key(|x| -(x.0 as i32));
             }
         }
         true
@@ -187,11 +209,11 @@ impl Component for GameList {
         let list = self
             .games
             .iter()
-            .map(|&g| {
+            .map(|&(id, ref name)| {
                 html! {
-                    <li>
-                        <a href="#" onclick=self.link.callback(move |_| Msg::JoinGame(g))>
-                            {g}
+                    <li key={id}>
+                        <a href="#" onclick=self.link.callback(move |_| Msg::JoinGame(id))>
+                            {format!("{} - {}", id, name)}
                         </a>
                     </li>
                 }
@@ -226,46 +248,46 @@ impl Component for GameList {
                 .collect::<Html>();
 
             let seats = game.seats.iter().enumerate()
-                .map(|(idx, (occupant, color))| {
-                    let colorname = match color {
-                        1 => "Black",
-                        2 => "White",
-                        _ => "???",
+            .map(|(idx, (occupant, color))| {
+                let colorname = match color {
+                    1 => "Black",
+                    2 => "White",
+                    _ => "???",
+                };
+
+                if let Some(id) = occupant {
+                    let nick = self.profiles.get(id)
+                        .and_then(|p| p.nick.as_ref())
+                        .map(|n| &**n)
+                        .unwrap_or("no nick");
+                    let leave = if self.user.as_ref().map(|x| x.user_id) == Some(*id) {
+                        html!(<button onclick=self.link.callback(move |_| Msg::LeaveSeat(idx as _))>
+                            {"Leave seat"}
+                        </button>)
+                    } else {
+                        html!()
                     };
 
-                    if let Some(id) = occupant {
-                        let nick = self.profiles.get(id)
-                            .and_then(|p| p.nick.as_ref())
-                            .map(|n| &**n)
-                            .unwrap_or("no nick");
-                        let leave = if self.user.as_ref().map(|x| x.user_id) == Some(*id) {
-                            html!(<button onclick=self.link.callback(move |_| Msg::LeaveSeat(idx as _))>
-                                {"Leave seat"}
-                            </button>)
-                        } else {
-                            html!()
-                        };
+                    let style = if game.turn == idx as u32 { "background-color: #eeeeee;" } else { "" };
 
-                        let style = if game.turn == idx as u32 { "background-color: #eeeeee;" } else { "" };
-
-                        html!{
-                            <li style=style>
-                                {format!("{}: {} ({})", colorname, id, nick)}
-                                {leave}
-                            </li>
-                        }
-                    } else {
-                        html!{
-                            <li>
-                                {format!("{}: unoccupied", colorname)}
-                                <button onclick=self.link.callback(move |_| Msg::TakeSeat(idx as _))>
-                                    {"Take seat"}
-                                </button>
-                            </li>
-                        }
+                    html!{
+                        <li style=style>
+                            {format!("{}: {} ({})", colorname, id, nick)}
+                            {leave}
+                        </li>
                     }
-                })
-                .collect::<Html>();
+                } else {
+                    html!{
+                        <li>
+                            {format!("{}: unoccupied", colorname)}
+                            <button onclick=self.link.callback(move |_| Msg::TakeSeat(idx as _))>
+                                {"Take seat"}
+                            </button>
+                        </li>
+                    }
+                }
+            })
+            .collect::<Html>();
 
             let status = match game.state {
                 game::GameState::Play => "Active",
@@ -287,19 +309,20 @@ impl Component for GameList {
         };
 
         html! {
-            <div style="display: flex; flex-direction: row; min-height: 100vh;">
-                <div style="min-width: 300px; border-right: 2px solid black; margin: 10px;">
-                    <div>
-                        {"Nick:"}
-                        <TextInput value=nick onsubmit=nick_enter />
-                    </div>
-                    <button onclick=self.link.callback(|_| Msg::AddGame)>{ "+1" }</button>
-                    <ul>
-                        {list}
-                    </ul>
+        <div style="display: flex; flex-direction: row; min-height: 100vh;">
+            <div style="min-width: 300px; border-right: 2px solid black; margin: 10px;">
+                <div>
+                    {"Nick:"}
+                    <TextInput value=nick onsubmit=nick_enter />
                 </div>
-                <div> {gameview} </div>
+                <button onclick=self.link.callback(|_| Msg::StartGame)>{ "Start game" }</button>
+                {"Games live: "}{self.games.len()}
+                <ul>
+                    {list}
+                </ul>
             </div>
+            <div> {gameview} </div>
+        </div>
         }
     }
 }

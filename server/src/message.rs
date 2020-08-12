@@ -18,7 +18,9 @@ pub enum ClientMessage {
     GetGameList,
     JoinGame(u32),
     GameAction(GameAction),
-    StartGame,
+    StartGame {
+        name: String,
+    },
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -34,8 +36,9 @@ pub enum ServerMessage {
         nick: Option<String>,
         user_id: u64,
     },
-    GameList {
-        games: Vec<u32>,
+    AnnounceGame {
+        room_id: u32,
+        name: String,
     },
     GameStatus {
         room_id: u32,

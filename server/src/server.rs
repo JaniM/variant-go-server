@@ -16,7 +16,8 @@ macro_rules! catch {
 #[derive(Message, Clone)]
 #[rtype(result = "()")]
 pub enum Message {
-    AnnounceRoom(u32),
+    // TODO: Use a proper struct, not magic tuples
+    AnnounceRoom(u32, String),
     GameStatus {
         room_id: u32,
         members: Vec<u64>,
@@ -44,7 +45,8 @@ pub struct Disconnect {
 pub struct ListRooms;
 
 impl actix::Message for ListRooms {
-    type Result = Vec<u32>;
+    // TODO: Use a proper struct, not magic tuples
+    type Result = Vec<(u32, String)>;
 }
 
 /// Join room, if room does not exists create new one.
@@ -53,7 +55,6 @@ impl actix::Message for ListRooms {
 pub struct Join {
     /// Client id
     pub id: usize,
-    /// Room name
     pub room_id: u32,
 }
 
@@ -61,6 +62,8 @@ pub struct Join {
 pub struct CreateRoom {
     /// Client id
     pub id: usize,
+    /// Room name
+    pub name: String,
 }
 
 impl actix::Message for CreateRoom {
@@ -98,6 +101,7 @@ pub struct Session {
 pub struct Room {
     members: HashSet<usize>,
     users: HashSet<u64>,
+    name: String,
     game: game::Game,
 }
 
@@ -110,6 +114,7 @@ pub struct GameServer {
     user_tokens: HashMap<Uuid, u64>,
     rooms: HashMap<u32, Room>,
     rng: ThreadRng,
+    game_counter: u32,
 }
 
 impl Default for GameServer {
@@ -123,6 +128,7 @@ impl Default for GameServer {
             user_tokens: HashMap::new(),
             rooms,
             rng: rand::thread_rng(),
+            game_counter: 0,
         }
     }
 }
@@ -271,8 +277,8 @@ impl Handler<ListRooms> for GameServer {
     fn handle(&mut self, _: ListRooms, _: &mut Context<Self>) -> Self::Result {
         let mut rooms = Vec::new();
 
-        for key in self.rooms.keys() {
-            rooms.push(key.to_owned())
+        for (&key, room) in &self.rooms {
+            rooms.push((key, room.name.clone()));
         }
 
         MessageResult(rooms)
@@ -337,7 +343,10 @@ impl Handler<CreateRoom> for GameServer {
     type Result = MessageResult<CreateRoom>;
 
     fn handle(&mut self, msg: CreateRoom, _: &mut Context<Self>) -> Self::Result {
-        let CreateRoom { id } = msg;
+        let CreateRoom { id, name } = msg;
+
+        // TODO: sanitize name
+        // TODO: prevent spamming rooms (allow only one?)
 
         let user_id = match catch!(self.sessions.get(&id)?.user_id?) {
             Some(x) => x,
@@ -356,11 +365,14 @@ impl Handler<CreateRoom> for GameServer {
             self.leave_room(id, room_id)
         }
 
-        let room_id = self.rng.gen();
+        // TODO: room ids are currently sequential as a hack for ordering..
+        let room_id = self.game_counter;
+        self.game_counter += 1;
 
         let mut room = Room {
             members: HashSet::new(),
             users: HashSet::new(),
+            name: name.clone(),
             game: game::Game::standard(),
         };
         room.members.insert(id);
@@ -377,7 +389,7 @@ impl Handler<CreateRoom> for GameServer {
 
         self.rooms.insert(room_id, room);
 
-        self.send_global_message(Message::AnnounceRoom(room_id));
+        self.send_global_message(Message::AnnounceRoom(room_id, name));
 
         MessageResult(Some(room_id))
     }
