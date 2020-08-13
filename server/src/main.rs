@@ -55,11 +55,7 @@ impl Actor for MyWebSocket {
     fn started(&mut self, ctx: &mut Self::Context) {
         self.hb(ctx);
 
-        // register self in chat server. `AsyncContext::wait` register
-        // future within context, but context waits until this future resolves
-        // before processing any other events.
-        // HttpContext::state() is instance of WsChatSessionState, state is shared
-        // across all routes within application
+        // register self in game server.
         let addr = ctx.address();
         self.server_addr
             .send(server::Connect {
@@ -92,6 +88,9 @@ impl Handler<server::Message> for MyWebSocket {
         match msg {
             server::Message::AnnounceRoom(room_id, name) => {
                 ctx.binary(pack(ServerMessage::AnnounceGame { room_id, name }));
+            }
+            server::Message::CloseRoom(room_id) => {
+                ctx.binary(pack(ServerMessage::CloseGame { room_id }));
             }
             server::Message::GameStatus {
                 room_id,
@@ -149,10 +148,8 @@ fn pack(msg: ServerMessage) -> Vec<u8> {
     serde_cbor::to_vec(&msg).expect("cbor fail")
 }
 
-/// Handler for `ws::Message`
 impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for MyWebSocket {
     fn handle(&mut self, msg: Result<ws::Message, ws::ProtocolError>, ctx: &mut Self::Context) {
-        // process websocket messages
         match msg {
             Ok(ws::Message::Ping(msg)) => {
                 self.hb = Instant::now();
@@ -170,7 +167,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for MyWebSocket {
                         self.server_addr
                             .send(server::ListRooms)
                             .into_actor(self)
-                            .then(|res, act, ctx| {
+                            .then(|res, _act, ctx| {
                                 match res {
                                     Ok(mut res) => {
                                         // Sort newest first
@@ -215,7 +212,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for MyWebSocket {
                                 nick,
                             })
                             .into_actor(self)
-                            .then(|res, act, ctx| {
+                            .then(|res, _act, ctx| {
                                 match res {
                                     Ok(res) => ctx.binary(pack(ServerMessage::Identify {
                                         user_id: res.user_id,

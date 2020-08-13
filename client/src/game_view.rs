@@ -1,5 +1,6 @@
 #[derive(Clone, PartialEq)]
 pub struct GameView {
+    pub room_id: u32,
     pub members: Vec<u64>,
     pub seats: Vec<(Option<u64>, u8)>,
     pub turn: u32,

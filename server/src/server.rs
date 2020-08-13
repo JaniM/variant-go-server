@@ -1,6 +1,7 @@
 use actix::prelude::*;
 use rand::{self, rngs::ThreadRng, Rng};
 use std::collections::{HashMap, HashSet};
+use std::time::{Duration, Instant};
 use uuid::Uuid;
 
 use crate::game;
@@ -12,12 +13,15 @@ macro_rules! catch {
     };
 }
 
+// TODO: separate game rooms to their own actors to deal with load
+
 /// Server sends this when a new room is created
 #[derive(Message, Clone)]
 #[rtype(result = "()")]
 pub enum Message {
     // TODO: Use a proper struct, not magic tuples
     AnnounceRoom(u32, String),
+    CloseRoom(u32),
     GameStatus {
         room_id: u32,
         members: Vec<u64>,
@@ -102,6 +106,7 @@ pub struct Room {
     members: HashSet<usize>,
     users: HashSet<u64>,
     name: String,
+    last_action: Instant,
     game: game::Game,
 }
 
@@ -205,13 +210,33 @@ impl GameServer {
             }
         }
     }
+
+    fn clear_timer(&self, ctx: &mut <Self as Actor>::Context) {
+        // Magic number: prune games every 10 minutes
+        ctx.run_interval(Duration::from_secs(60), |act, _ctx| {
+            let mut killed_games = Vec::new();
+            let now = Instant::now();
+            for (&id, room) in &act.rooms {
+                // if older than 1h
+                if now - room.last_action > Duration::from_secs(60 * 60) {
+                    killed_games.push(id);
+                }
+            }
+            for id in killed_games {
+                println!("Killed game: {}", id);
+                act.rooms.remove(&id);
+                act.send_global_message(Message::CloseRoom(id));
+            }
+        });
+    }
 }
 
-/// Make actor from `ChatServer`
 impl Actor for GameServer {
-    /// We are going to use simple Context, we just need ability to communicate
-    /// with other actors.
     type Context = Context<Self>;
+
+    fn started(&mut self, ctx: &mut Self::Context) {
+        self.clear_timer(ctx);
+    }
 }
 
 /// Handler for Connect message.
@@ -373,6 +398,7 @@ impl Handler<CreateRoom> for GameServer {
             members: HashSet::new(),
             users: HashSet::new(),
             name: name.clone(),
+            last_action: Instant::now(),
             game: game::Game::standard(),
         };
         room.members.insert(id);
@@ -411,21 +437,26 @@ impl Handler<GameAction> for GameServer {
         };
 
         match self.rooms.get_mut(&room_id) {
-            Some(room) => match action {
-                message::GameAction::Place(x, y) => {
-                    room.game
-                        .make_action(user_id, game::ActionKind::Place(x, y));
+            Some(room) => {
+                room.last_action = Instant::now();
+                // TODO: Handle errors in game actions - currently they fail quietly
+                match action {
+                    message::GameAction::Place(x, y) => {
+                        let _ = room
+                            .game
+                            .make_action(user_id, game::ActionKind::Place(x, y));
+                    }
+                    message::GameAction::Pass => {
+                        let _ = room.game.make_action(user_id, game::ActionKind::Pass);
+                    }
+                    message::GameAction::TakeSeat(seat_id) => {
+                        let _ = room.game.take_seat(user_id, seat_id as _);
+                    }
+                    message::GameAction::LeaveSeat(seat_id) => {
+                        let _ = room.game.leave_seat(user_id, seat_id as _);
+                    }
                 }
-                message::GameAction::Pass => {
-                    room.game.make_action(user_id, game::ActionKind::Pass);
-                }
-                message::GameAction::TakeSeat(seat_id) => {
-                    room.game.take_seat(user_id, seat_id as _);
-                }
-                message::GameAction::LeaveSeat(seat_id) => {
-                    room.game.leave_seat(user_id, seat_id as _);
-                }
-            },
+            }
             None => {}
         };
 

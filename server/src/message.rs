@@ -40,6 +40,9 @@ pub enum ServerMessage {
         room_id: u32,
         name: String,
     },
+    CloseGame {
+        room_id: u32,
+    },
     GameStatus {
         room_id: u32,
         members: Vec<u64>,

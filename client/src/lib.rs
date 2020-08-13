@@ -16,7 +16,7 @@ use std::collections::HashMap;
 
 use std::time::Duration;
 use yew::prelude::*;
-use yew::services::TimeoutService;
+use yew::services::timeout::{TimeoutService, TimeoutTask};
 
 struct TextInput {
     link: ComponentLink<Self>,
@@ -88,7 +88,7 @@ struct GameList {
     game: Option<GameView>,
     user: Option<Profile>,
     profiles: HashMap<u64, Profile>,
-    debounce_job: Option<Box<dyn yew::services::Task>>,
+    debounce_job: Option<TimeoutTask>,
 }
 
 enum Msg {
@@ -102,6 +102,7 @@ enum Msg {
     SetOwnProfile(Profile),
     SetProfile(Profile),
     AddGame((u32, String)),
+    RemoveGame(u32),
     Render,
 }
 
@@ -110,6 +111,7 @@ impl Component for GameList {
     type Properties = ();
     fn create(_: Self::Properties, link: ComponentLink<Self>) -> Self {
         let addgame = link.callback(Msg::AddGame);
+        let remove_game = link.callback(Msg::RemoveGame);
         let game = link.callback(Msg::SetGameStatus);
         let set_own_profile = link.callback(Msg::SetOwnProfile);
         let set_profile = link.callback(Msg::SetProfile);
@@ -117,6 +119,9 @@ impl Component for GameList {
             match msg {
                 ServerMessage::AnnounceGame { room_id, name } => {
                     addgame.emit((room_id, name));
+                }
+                ServerMessage::CloseGame { room_id } => {
+                    remove_game.emit(room_id);
                 }
                 ServerMessage::GameStatus {
                     room_id,
@@ -127,6 +132,7 @@ impl Component for GameList {
                     state,
                 } => {
                     game.emit(GameView {
+                        room_id,
                         members,
                         seats,
                         board,
@@ -184,17 +190,29 @@ impl Component for GameList {
             Msg::SetGameStatus(game) => self.game = Some(game),
             Msg::AddGame(game) => {
                 self.games.push(game);
-                self.debounce_job = Some(Box::new(TimeoutService::spawn(
-                    Duration::from_millis(100),
-                    self.link.callback(|_| Msg::Render),
-                )));
+                if self.debounce_job.is_none() {
+                    self.debounce_job = Some(TimeoutService::spawn(
+                        Duration::from_millis(100),
+                        self.link.callback(|_| Msg::Render),
+                    ));
+                }
                 return false;
+            }
+            Msg::RemoveGame(room_id) => {
+                self.games.retain(|g| g.0 != room_id);
+                if let Some(game) = &self.game {
+                    if game.room_id == room_id {
+                        // TODO: show something sensible when a game is closed
+                        self.game = None;
+                    }
+                }
             }
             Msg::SetOwnProfile(profile) => self.user = Some(profile),
             Msg::SetProfile(profile) => {
                 self.profiles.insert(profile.user_id, profile);
             }
             Msg::Render => {
+                self.debounce_job = None;
                 self.games.sort_unstable_by_key(|x| -(x.0 as i32));
             }
         }
