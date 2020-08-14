@@ -104,26 +104,10 @@ impl Handler<server::Message> for MyWebSocket {
                     seats: view
                         .seats
                         .into_iter()
-                        .map(|x| {
-                            (
-                                x.player,
-                                match x.team {
-                                    game::Color::Black => 1,
-                                    game::Color::White => 2,
-                                },
-                            )
-                        })
+                        .map(|x| (x.player, x.team.0))
                         .collect(),
                     turn: view.turn,
-                    board: view
-                        .board
-                        .into_iter()
-                        .map(|x| match x {
-                            Some(game::Color::Black) => 1,
-                            Some(game::Color::White) => 2,
-                            None => 0,
-                        })
-                        .collect(),
+                    board: view.board.into_iter().map(|x| x.0).collect(),
                     state: view.state,
                 }));
             }

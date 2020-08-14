@@ -171,6 +171,12 @@ impl Component for Board {
 
 impl Board {
     fn render_gl(&mut self, timestamp: f64) -> Result<(), JsValue> {
+        let shadow_stone_colors = ["#555555", "#bbbbbb"];
+        let shadow_border_colors = ["#bbbbbb", "#555555"];
+        let stone_colors = ["#000000", "#eeeeee"];
+        let border_colors = ["#555555", "#000000"];
+        let dead_mark_color = ["#eeeeee", "#000000"];
+
         let context = self
             .canvas2d
             .as_ref()
@@ -201,12 +207,10 @@ impl Board {
         }
 
         if let Some(selection_pos) = self.selection_pos {
-            context.set_fill_style(&JsValue::from_str(
-                ["#555555", "#bbbbbb"][self.props.game.turn as usize],
-            ));
-            context.set_stroke_style(&JsValue::from_str(
-                ["#bbbbbb", "#555555"][self.props.game.turn as usize],
-            ));
+            let color = self.props.game.seats[self.props.game.turn as usize].1;
+            // Teams start from 1
+            context.set_fill_style(&JsValue::from_str(shadow_stone_colors[color as usize - 1]));
+            context.set_stroke_style(&JsValue::from_str(shadow_border_colors[color as usize - 1]));
             // create shape of radius 'size' around center point (size, size)
             context.begin_path();
             context.arc(
@@ -228,13 +232,9 @@ impl Board {
                 continue;
             }
 
-            context.set_fill_style(&JsValue::from_str(
-                ["#000000", "#eeeeee"][color as usize - 1],
-            ));
+            context.set_fill_style(&JsValue::from_str(stone_colors[color as usize - 1]));
 
-            context.set_stroke_style(&JsValue::from_str(
-                ["#eeeeee", "#000000"][color as usize - 1],
-            ));
+            context.set_stroke_style(&JsValue::from_str(border_colors[color as usize - 1]));
 
             let size = canvas.width() as f64 / 19.0;
             // create shape of radius 'size' around center point (size, size)
@@ -251,8 +251,8 @@ impl Board {
         }
 
         match &self.props.game.state {
-            GameState::Play | GameState::Done => {}
-            GameState::Scoring(scoring) => {
+            GameState::Play(_) => {}
+            GameState::Scoring(scoring) | GameState::Done(scoring) => {
                 for group in &scoring.groups {
                     if group.alive {
                         continue;
@@ -260,11 +260,11 @@ impl Board {
 
                     for &(x, y) in &group.points {
                         context.set_stroke_style(&JsValue::from_str(
-                            ["#eeeeee", "#000000"][group.team as usize - 1],
+                            dead_mark_color[group.team.0 as usize - 1],
                         ));
 
                         context.set_stroke_style(&JsValue::from_str(
-                            ["#eeeeee", "#000000"][group.team as usize - 1],
+                            dead_mark_color[group.team.0 as usize - 1],
                         ));
 
                         context.begin_path();
@@ -277,6 +277,27 @@ impl Board {
                         context.line_to((x as f64 + 0.2) * size, (y as f64 + 0.8) * size);
                         context.stroke();
                     }
+                }
+
+                for (idx, &color) in scoring.points.points.iter().enumerate() {
+                    let x = (idx % 19) as f64;
+                    let y = (idx / 19) as f64;
+
+                    if color.is_empty() {
+                        continue;
+                    }
+
+                    context.set_fill_style(&JsValue::from_str(stone_colors[color.0 as usize - 1]));
+
+                    context
+                        .set_stroke_style(&JsValue::from_str(border_colors[color.0 as usize - 1]));
+
+                    context.fill_rect(
+                        (x + 1. / 3.) * size,
+                        (y + 1. / 3.) * size,
+                        (1. / 3.) * size,
+                        (1. / 3.) * size,
+                    );
                 }
             }
         }

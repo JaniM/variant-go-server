@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 pub enum GameAction {
     Place(u32, u32),
     Pass,
+    Cancel,
     TakeSeat(u32),
     LeaveSeat(u32),
 }

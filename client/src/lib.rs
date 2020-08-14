@@ -6,15 +6,17 @@ mod game_view;
 #[path = "../../server/src/message.rs"]
 mod message;
 mod networking;
+mod seats;
 mod utils;
 
+use std::collections::HashMap;
+use std::time::Duration;
 use wasm_bindgen::prelude::*;
 
 use crate::game_view::{GameView, Profile};
 use crate::message::{ClientMessage, ServerMessage};
-use std::collections::HashMap;
+use crate::seats::SeatList;
 
-use std::time::Duration;
 use yew::prelude::*;
 use yew::services::timeout::{TimeoutService, TimeoutTask};
 
@@ -94,10 +96,9 @@ struct GameList {
 enum Msg {
     StartGame,
     ChangeNick(String),
-    TakeSeat(u32),
-    LeaveSeat(u32),
     JoinGame(u32),
     Pass,
+    Cancel,
     SetGameStatus(GameView),
     SetOwnProfile(Profile),
     SetProfile(Profile),
@@ -179,14 +180,9 @@ impl Component for GameList {
                 token: networking::get_token(),
                 nick: Some(nick),
             }),
-            Msg::TakeSeat(idx) => networking::send(ClientMessage::GameAction(
-                message::GameAction::TakeSeat(idx),
-            )),
-            Msg::LeaveSeat(idx) => networking::send(ClientMessage::GameAction(
-                message::GameAction::LeaveSeat(idx),
-            )),
             Msg::JoinGame(id) => networking::send(ClientMessage::JoinGame(id)),
             Msg::Pass => networking::send(ClientMessage::GameAction(message::GameAction::Pass)),
+            Msg::Cancel => networking::send(ClientMessage::GameAction(message::GameAction::Cancel)),
             Msg::SetGameStatus(game) => self.game = Some(game),
             Msg::AddGame(game) => {
                 self.games.push(game);
@@ -224,6 +220,7 @@ impl Component for GameList {
     }
 
     fn view(&self) -> Html {
+        // TODO: separate out .. everything
         let list = self
             .games
             .iter()
@@ -245,6 +242,7 @@ impl Component for GameList {
             .unwrap_or("");
         let nick_enter = self.link.callback(Msg::ChangeNick);
         let pass = self.link.callback(|_| Msg::Pass);
+        let cancel = self.link.callback(|_| Msg::Cancel);
 
         let gameview = if let Some(game) = &self.game {
             let userlist = game
@@ -265,60 +263,29 @@ impl Component for GameList {
                 })
                 .collect::<Html>();
 
-            let seats = game.seats.iter().enumerate()
-            .map(|(idx, (occupant, color))| {
-                let colorname = match color {
-                    1 => "Black",
-                    2 => "White",
-                    _ => "???",
-                };
-
-                if let Some(id) = occupant {
-                    let nick = self.profiles.get(id)
-                        .and_then(|p| p.nick.as_ref())
-                        .map(|n| &**n)
-                        .unwrap_or("no nick");
-                    let leave = if self.user.as_ref().map(|x| x.user_id) == Some(*id) {
-                        html!(<button onclick=self.link.callback(move |_| Msg::LeaveSeat(idx as _))>
-                            {"Leave seat"}
-                        </button>)
-                    } else {
-                        html!()
-                    };
-
-                    let style = if game.turn == idx as u32 { "background-color: #eeeeee;" } else { "" };
-
-                    html!{
-                        <li style=style>
-                            {format!("{}: {} ({})", colorname, id, nick)}
-                            {leave}
-                        </li>
-                    }
-                } else {
-                    html!{
-                        <li>
-                            {format!("{}: unoccupied", colorname)}
-                            <button onclick=self.link.callback(move |_| Msg::TakeSeat(idx as _))>
-                                {"Take seat"}
-                            </button>
-                        </li>
-                    }
-                }
-            })
-            .collect::<Html>();
-
             let status = match game.state {
-                game::GameState::Play => "Active",
+                game::GameState::Play(_) => "Active",
                 game::GameState::Scoring(_) => "Scoring",
-                game::GameState::Done => "Game over!",
+                game::GameState::Done(_) => "Game over!",
+            };
+
+            let pass_button = match game.state {
+                game::GameState::Play(_) => html!(<button onclick=pass>{"Pass"}</button>),
+                game::GameState::Scoring(_) => html!(<button onclick=pass>{"Accept"}</button>),
+                game::GameState::Done(_) => html!(),
+            };
+
+            let cancel_button = match game.state {
+                game::GameState::Scoring(_) => html!(<button onclick=cancel>{"Cancel"}</button>),
+                _ => html!(),
             };
 
             html!(
                 <div>
                     <p>{"Users:"} {userlist}</p>
                     <p>{"Seats"}</p>
-                    <ul>{seats}</ul>
-                    <div>{"Status:"} {status} <button onclick=pass>{"Pass"}</button></div>
+                    <SeatList game=game profiles=&self.profiles user=&self.user />
+                    <div>{"Status:"} {status} {pass_button} {cancel_button}</div>
                     <board::Board game=game/>
                 </div>
             )

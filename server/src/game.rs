@@ -1,16 +1,31 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 
 #[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
-#[repr(u8)]
-pub enum Color {
-    Black = 1,
-    White,
+#[repr(transparent)]
+pub struct Color(pub u8);
+
+impl Color {
+    pub const fn empty() -> Color {
+        Color(0)
+    }
+
+    pub const fn black() -> Color {
+        Color(1)
+    }
+
+    pub const fn white() -> Color {
+        Color(2)
+    }
+
+    pub const fn is_empty(&self) -> bool {
+        self.0 == 0
+    }
 }
 
 impl Default for Color {
     fn default() -> Self {
-        Color::Black
+        Color::empty()
     }
 }
 
@@ -29,11 +44,11 @@ impl Seat {
     }
 
     fn black() -> Seat {
-        Seat::new(Color::Black)
+        Seat::new(Color::black())
     }
 
     fn white() -> Seat {
-        Seat::new(Color::White)
+        Seat::new(Color::white())
     }
 }
 
@@ -41,6 +56,7 @@ impl Seat {
 pub enum ActionKind {
     Place(u32, u32),
     Pass,
+    Cancel,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -49,21 +65,21 @@ pub struct GameAction {
     pub action: ActionKind,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct Board {
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Board<T = Color> {
     pub width: u32,
     pub height: u32,
-    pub points: Vec<Option<Color>>,
+    pub points: Vec<T>,
 }
 
 type Point = (u32, u32);
 
-impl Board {
-    fn empty(width: u32, height: u32) -> Board {
+impl<T: Copy + Default> Board<T> {
+    fn empty(width: u32, height: u32) -> Self {
         Board {
             width,
             height,
-            points: vec![None; (width * height) as usize],
+            points: vec![T::default(); (width * height) as usize],
         }
     }
 
@@ -71,11 +87,11 @@ impl Board {
         !(0..self.width).contains(&x) || !(0..self.height).contains(&y)
     }
 
-    fn get_point(&self, (x, y): Point) -> Option<Color> {
+    fn get_point(&self, (x, y): Point) -> T {
         self.points[(y * self.width + x) as usize]
     }
 
-    fn point_mut(&mut self, (x, y): Point) -> &mut Option<Color> {
+    fn point_mut(&mut self, (x, y): Point) -> &mut T {
         &mut self.points[(y * self.width + x) as usize]
     }
 
@@ -113,29 +129,64 @@ pub struct Group {
     pub alive: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PlayState {
+    // TODO: use smallvec?
+    pub players_passed: Vec<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ScoringState {
     pub groups: Vec<Group>,
+    /// Vector of the board, marking who owns a point
+    pub points: Board,
+    // TODO: use smallvec?
+    pub players_accepted: Vec<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum GameState {
-    Play,
+    Play(PlayState),
     Scoring(ScoringState),
-    Done,
+    Done(ScoringState),
 }
 
 impl GameState {
-    fn scoring(board: &Board) -> Self {
-        GameState::Scoring(ScoringState {
-            groups: find_groups(board),
+    fn play(seat_count: usize) -> Self {
+        GameState::Play(PlayState {
+            players_passed: vec![false; seat_count],
         })
+    }
+
+    fn scoring(board: &Board, seat_count: usize) -> Self {
+        let groups = find_groups(board);
+        let points = score_board(board.width, board.height, &groups);
+        GameState::Scoring(ScoringState {
+            groups,
+            points,
+            players_accepted: vec![false; seat_count],
+        })
+    }
+
+    pub fn assume_play_mut(&mut self) -> &mut PlayState {
+        match self {
+            GameState::Play(state) => state,
+            _ => panic!("Assumed play state but was in {:?}", self),
+        }
+    }
+
+    pub fn assume_scoring_mut(&mut self) -> &mut ScoringState {
+        match self {
+            GameState::Scoring(state) => state,
+            _ => panic!("Assumed scoring state but was in {:?}", self),
+        }
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Game {
     pub state: GameState,
+    // TODO: use smallvec?
     pub seats: Vec<Seat>,
     pub turn: usize,
     pub pass_count: usize,
@@ -162,24 +213,21 @@ pub enum MakeActionError {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct GameView {
+    // TODO: we need a separate state view once we have hidden information
     pub state: GameState,
     pub seats: Vec<Seat>,
     pub turn: u32,
-    pub board: Vec<Option<Color>>,
+    pub board: Vec<Color>,
 }
 
 impl Game {
     pub fn standard() -> Game {
         Game {
-            state: GameState::Play,
+            state: GameState::play(2),
             seats: vec![Seat::black(), Seat::white()],
             turn: 0,
             pass_count: 0,
-            board: Board {
-                width: 19,
-                height: 19,
-                points: vec![None; 19 * 19],
-            },
+            board: Board::empty(19, 19),
             ko_point: None,
         }
     }
@@ -218,9 +266,9 @@ impl Game {
         }
 
         match self.state {
-            GameState::Play => self.make_action_play(player_id, action),
+            GameState::Play(_) => self.make_action_play(player_id, action),
             GameState::Scoring(_) => self.make_action_scoring(player_id, action),
-            GameState::Done => Err(MakeActionError::GameDone),
+            GameState::Done(_) => Err(MakeActionError::GameDone),
         }
     }
 
@@ -240,7 +288,7 @@ impl Game {
                 }
 
                 let point = self.board.point_mut((x, y));
-                if *point != None {
+                if !point.is_empty() {
                     return Err(MakeActionError::PointOccupied);
                 }
 
@@ -248,7 +296,7 @@ impl Game {
                     return Err(MakeActionError::Ko);
                 }
 
-                *point = Some(active_seat.team);
+                *point = active_seat.team;
 
                 let groups = find_groups(&self.board);
                 let dead = groups.iter().filter(|g| g.liberties == 0);
@@ -265,7 +313,7 @@ impl Game {
 
                     // Suicide is illegal, bail out
                     if !opp_died {
-                        *self.board.point_mut((x, y)) = None;
+                        *self.board.point_mut((x, y)) = Color::empty();
                         return Err(MakeActionError::Suicide);
                     }
 
@@ -275,7 +323,7 @@ impl Game {
                     }
 
                     for &point in &group.points {
-                        *self.board.point_mut(point) = None;
+                        *self.board.point_mut(point) = Color::empty();
                     }
                 }
 
@@ -285,18 +333,28 @@ impl Game {
                 if self.turn >= self.seats.len() {
                     self.turn = 0;
                 }
-                self.pass_count = 0;
+
+                let state = self.state.assume_play_mut();
+                for passed in &mut state.players_passed {
+                    *passed = false;
+                }
             }
             ActionKind::Pass => {
+                let seat_idx = self.turn;
+                let state = self.state.assume_play_mut();
+                state.players_passed[seat_idx] = true;
+
+                if state.players_passed.iter().all(|x| *x) {
+                    self.state = GameState::scoring(&self.board, self.seats.len());
+                }
+
                 self.turn += 1;
                 if self.turn >= self.seats.len() {
                     self.turn = 0;
                 }
-                self.pass_count += 1;
-                if self.pass_count == self.seats.len() {
-                    self.pass_count = 0;
-                    self.state = GameState::scoring(&self.board);
-                }
+            }
+            unknown => {
+                println!("Play state got unexpected action {:?}", unknown);
             }
         }
 
@@ -310,10 +368,7 @@ impl Game {
     ) -> Result<(), MakeActionError> {
         match action {
             ActionKind::Place(x, y) => {
-                let state = match &mut self.state {
-                    GameState::Scoring(state) => state,
-                    _ => unreachable!(),
-                };
+                let state = self.state.assume_scoring_mut();
 
                 let group = state.groups.iter_mut().find(|g| g.points.contains(&(x, y)));
 
@@ -324,18 +379,30 @@ impl Game {
 
                 group.alive = !group.alive;
 
-                self.pass_count = 0;
+                state.points = score_board(self.board.width, self.board.height, &state.groups);
+
+                for accept in &mut state.players_accepted {
+                    *accept = false;
+                }
             }
             ActionKind::Pass => {
-                self.turn += 1;
-                if self.turn >= self.seats.len() {
-                    self.turn = 0;
+                // A single player can hold multiple seats so we have to mark every seat they hold
+                let seats = self
+                    .seats
+                    .iter()
+                    .enumerate()
+                    .filter(|x| x.1.player == Some(player_id));
+
+                let state = self.state.assume_scoring_mut();
+                for (seat_idx, _) in seats {
+                    state.players_accepted[seat_idx] = true;
                 }
-                self.pass_count += 1;
-                if self.pass_count == self.seats.len() {
-                    self.pass_count = 0;
-                    self.state = GameState::Done;
+                if state.players_accepted.iter().all(|x| *x) {
+                    self.state = GameState::Done(state.clone());
                 }
+            }
+            ActionKind::Cancel => {
+                self.state = GameState::play(self.seats.len());
             }
         }
 
@@ -357,7 +424,13 @@ fn find_groups(board: &Board) -> Vec<Group> {
         .points
         .iter()
         .enumerate()
-        .filter_map(|(idx, c)| c.and_then(|_| board.idx_to_coord(idx)))
+        .filter_map(|(idx, c)| {
+            if !c.is_empty() {
+                board.idx_to_coord(idx)
+            } else {
+                None
+            }
+        })
         .collect::<Vec<_>>();
 
     let mut seen = HashSet::new();
@@ -367,10 +440,14 @@ fn find_groups(board: &Board) -> Vec<Group> {
     while let Some(point) = legal_points.pop() {
         let mut group = Group::default();
         group.alive = true;
-        group.team = board.get_point(point).expect("scanned an empty point");
+        group.team = board.get_point(point);
+        if group.team.is_empty() {
+            unreachable!("scanned an empty point");
+        }
 
         stack.push(point);
 
+        // TODO: change stack to VecDeque so we can pop_left .. more efficient walk
         while let Some(point) = stack.pop() {
             group.points.push(point);
             for point in board.surrounding_points(point) {
@@ -379,11 +456,11 @@ fn find_groups(board: &Board) -> Vec<Group> {
                 }
 
                 match board.get_point(point) {
-                    Some(x) if x == group.team => {
+                    x if x == group.team => {
                         stack.push(point);
                         legal_points.retain(|x| *x != point);
                     }
-                    None => group.liberties += 1,
+                    Color(0) => group.liberties += 1,
                     _ => {}
                 }
             }
@@ -394,4 +471,87 @@ fn find_groups(board: &Board) -> Vec<Group> {
     }
 
     groups
+}
+
+/// Scores a board by filling in fully surrounded empty spaces based on chinese rules
+fn score_board(width: u32, height: u32, groups: &[Group]) -> Board {
+    let mut board = Board::empty(width, height);
+
+    // Fill living groups to the board
+    for group in groups {
+        if !group.alive {
+            continue;
+        }
+        for point in &group.points {
+            *board.point_mut(*point) = group.team;
+        }
+    }
+
+    // Find empty points
+    let mut legal_points = board
+        .points
+        .iter()
+        .enumerate()
+        .filter_map(|(idx, c)| {
+            if c.is_empty() {
+                board.idx_to_coord(idx)
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+
+    #[derive(Copy, Clone)]
+    enum SeenTeams {
+        Zero,
+        One(Color),
+        Many,
+    }
+    use SeenTeams::*;
+
+    let mut seen = HashSet::new();
+    let mut stack = VecDeque::new();
+    let mut marked = Vec::new();
+
+    while let Some(point) = legal_points.pop() {
+        stack.push_back(point);
+
+        let mut collisions = SeenTeams::Zero;
+
+        while let Some(point) = stack.pop_front() {
+            marked.push(point);
+            for point in board.surrounding_points(point) {
+                if !seen.insert(point) {
+                    continue;
+                }
+
+                match board.get_point(point) {
+                    Color(0) => {
+                        stack.push_back(point);
+                        legal_points.retain(|x| *x != point);
+                    }
+                    c => {
+                        collisions = match collisions {
+                            Zero => One(c),
+                            One(x) if x == c => One(x),
+                            One(_) => Many,
+                            Many => Many,
+                        }
+                    }
+                }
+            }
+        }
+
+        // The floodfill touched only a single color -> this must be their territory
+        if let One(color) = collisions {
+            for point in marked.drain(..) {
+                *board.point_mut(point) = color;
+            }
+        }
+
+        seen.clear();
+        marked.clear();
+    }
+
+    board
 }

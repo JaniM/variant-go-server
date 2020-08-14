@@ -449,6 +449,9 @@ impl Handler<GameAction> for GameServer {
                     message::GameAction::Pass => {
                         let _ = room.game.make_action(user_id, game::ActionKind::Pass);
                     }
+                    message::GameAction::Cancel => {
+                        let _ = room.game.make_action(user_id, game::ActionKind::Cancel);
+                    }
                     message::GameAction::TakeSeat(seat_id) => {
                         let _ = room.game.take_seat(user_id, seat_id as _);
                     }
@@ -496,6 +499,7 @@ impl Handler<IdentifyAs> for GameServer {
         });
 
         if let Some(nick) = nick {
+            // TODO: sanitize nick
             profile.nick = Some(nick);
         }
 
