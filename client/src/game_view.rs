@@ -14,3 +14,9 @@ pub struct Profile {
     pub user_id: u64,
     pub nick: Option<String>,
 }
+
+impl Profile {
+    pub fn nick_or<'a>(&'a self, default: &'a str) -> &'a str {
+        self.nick.as_ref().map(|x| &**x).unwrap_or(default)
+    }
+}

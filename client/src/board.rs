@@ -171,11 +171,12 @@ impl Component for Board {
 
 impl Board {
     fn render_gl(&mut self, timestamp: f64) -> Result<(), JsValue> {
-        let shadow_stone_colors = ["#555555", "#bbbbbb"];
-        let shadow_border_colors = ["#bbbbbb", "#555555"];
-        let stone_colors = ["#000000", "#eeeeee"];
-        let border_colors = ["#555555", "#000000"];
-        let dead_mark_color = ["#eeeeee", "#000000"];
+        // TODO: remove hardcoding for 19x19
+        let shadow_stone_colors = ["#555555", "#bbbbbb", "#86abbf"];
+        let shadow_border_colors = ["#bbbbbb", "#555555", "#555555"];
+        let stone_colors = ["#000000", "#eeeeee", "#64a0c0"];
+        let border_colors = ["#555555", "#000000", "#000000"];
+        let dead_mark_color = ["#eeeeee", "#000000", "#000000"];
 
         let context = self
             .canvas2d
@@ -185,13 +186,16 @@ impl Board {
 
         context.clear_rect(0.0, 0.0, canvas.width().into(), canvas.height().into());
 
-        context.set_fill_style(&JsValue::from_str("#d38139"));
+        context.set_fill_style(&JsValue::from_str("#e0bb6c"));
         context.fill_rect(0.0, 0.0, canvas.width().into(), canvas.height().into());
 
         context.set_stroke_style(&JsValue::from_str("#000000"));
+        context.set_fill_style(&JsValue::from_str("#000000"));
 
         let size = canvas.width() as f64 / 19.0;
+        let turn = self.props.game.seats[self.props.game.turn as usize].1;
 
+        // Lines
         for y in 0..19 {
             context.begin_path();
             context.move_to(size * 0.5, (y as f64 + 0.5) * size);
@@ -206,8 +210,31 @@ impl Board {
             context.stroke();
         }
 
+        // Starpoints - by popular demand
+        for &(x, y) in &[
+            (3, 3),
+            (9, 3),
+            (15, 3),
+            (3, 9),
+            (9, 9),
+            (15, 9),
+            (3, 15),
+            (9, 15),
+            (15, 15),
+        ] {
+            context.begin_path();
+            context.arc(
+                (x as f64 + 0.5) * size,
+                (y as f64 + 0.5) * size,
+                size / 8.,
+                0.0,
+                2.0 * std::f64::consts::PI,
+            )?;
+            context.fill();
+        }
+
         if let Some(selection_pos) = self.selection_pos {
-            let color = self.props.game.seats[self.props.game.turn as usize].1;
+            let color = turn;
             // Teams start from 1
             context.set_fill_style(&JsValue::from_str(shadow_stone_colors[color as usize - 1]));
             context.set_stroke_style(&JsValue::from_str(shadow_border_colors[color as usize - 1]));

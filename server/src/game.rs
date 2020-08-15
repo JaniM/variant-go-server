@@ -1,7 +1,10 @@
 use serde::{Deserialize, Serialize};
 use std::collections::{HashSet, VecDeque};
 
-#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
+
+#[derive(Debug, Copy, Clone, PartialEq, Hash, Serialize, Deserialize)]
 #[repr(transparent)]
 pub struct Color(pub u8);
 
@@ -42,14 +45,6 @@ impl Seat {
             team: color,
         }
     }
-
-    fn black() -> Seat {
-        Seat::new(Color::black())
-    }
-
-    fn white() -> Seat {
-        Seat::new(Color::white())
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -65,7 +60,7 @@ pub struct GameAction {
     pub action: ActionKind,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Hash, Serialize, Deserialize)]
 pub struct Board<T = Color> {
     pub width: u32,
     pub height: u32,
@@ -74,7 +69,7 @@ pub struct Board<T = Color> {
 
 type Point = (u32, u32);
 
-impl<T: Copy + Default> Board<T> {
+impl<T: Copy + Default + Hash> Board<T> {
     fn empty(width: u32, height: u32) -> Self {
         Board {
             width,
@@ -119,6 +114,12 @@ impl<T: Copy + Default> Board<T> {
                 }
             })
     }
+
+    fn hash(&self) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        Hash::hash(&self, &mut hasher);
+        hasher.finish()
+    }
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -140,6 +141,7 @@ pub struct ScoringState {
     pub groups: Vec<Group>,
     /// Vector of the board, marking who owns a point
     pub points: Board,
+    pub scores: Vec<i32>,
     // TODO: use smallvec?
     pub players_accepted: Vec<bool>,
 }
@@ -158,12 +160,19 @@ impl GameState {
         })
     }
 
-    fn scoring(board: &Board, seat_count: usize) -> Self {
+    fn scoring(board: &Board, seat_count: usize, komis: &[i32]) -> Self {
         let groups = find_groups(board);
         let points = score_board(board.width, board.height, &groups);
+        let mut scores = komis.to_vec();
+        for color in &points.points {
+            if !color.is_empty() {
+                scores[color.0 as usize - 1] += 2;
+            }
+        }
         GameState::Scoring(ScoringState {
             groups,
             points,
+            scores,
             players_accepted: vec![false; seat_count],
         })
     }
@@ -191,7 +200,10 @@ pub struct Game {
     pub turn: usize,
     pub pass_count: usize,
     pub board: Board,
-    pub ko_point: Option<Point>,
+    pub board_history: Vec<(u64, Board)>,
+    /// Optimization for superko
+    pub capture_count: usize,
+    pub komis: Vec<i32>,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -221,15 +233,21 @@ pub struct GameView {
 }
 
 impl Game {
-    pub fn standard() -> Game {
-        Game {
-            state: GameState::play(2),
-            seats: vec![Seat::black(), Seat::white()],
+    pub fn standard(seats: &[u8], komis: Vec<i32>) -> Option<Game> {
+        if !seats.iter().all(|&t| t > 0 && t <= 3) {
+            return None;
+        }
+
+        Some(Game {
+            state: GameState::play(seats.len()),
+            seats: seats.into_iter().map(|&t| Seat::new(Color(t))).collect(),
             turn: 0,
             pass_count: 0,
             board: Board::empty(19, 19),
-            ko_point: None,
-        }
+            board_history: Vec::new(),
+            capture_count: 0,
+            komis,
+        })
     }
 
     pub fn take_seat(&mut self, player_id: u64, seat_id: usize) -> Result<(), TakeSeatError> {
@@ -292,18 +310,13 @@ impl Game {
                     return Err(MakeActionError::PointOccupied);
                 }
 
-                if self.ko_point == Some((x, y)) {
-                    return Err(MakeActionError::Ko);
-                }
-
                 *point = active_seat.team;
 
                 let groups = find_groups(&self.board);
                 let dead = groups.iter().filter(|g| g.liberties == 0);
                 let opp_died = dead.clone().any(|g| g.team != active_seat.team);
-                let mut dead_count = 0;
 
-                let mut ko_point = None;
+                let mut captures = 0;
 
                 for group in dead {
                     // If the opponent died, suicide is ignored
@@ -317,17 +330,36 @@ impl Game {
                         return Err(MakeActionError::Suicide);
                     }
 
-                    dead_count += 1;
-                    if dead_count == 1 && group.points.len() == 1 {
-                        ko_point = Some(group.points[0]);
-                    }
-
                     for &point in &group.points {
+                        captures += 1;
                         *self.board.point_mut(point) = Color::empty();
                     }
                 }
 
-                self.ko_point = if dead_count == 1 { ko_point } else { None };
+                let hash = self.board.hash();
+
+                // Superko
+                // We only need to scan back capture_count boards, as per Ten 1p's clever idea.
+                // The board can't possibly repeat further back than the number of removed stones.
+                for (old_hash, old_board) in self
+                    .board_history
+                    .iter()
+                    .rev()
+                    .take(self.capture_count + captures)
+                {
+                    if *old_hash == hash && old_board == &self.board {
+                        self.board = self
+                            .board_history
+                            .last()
+                            .expect("board_history.last() shouldn't be None")
+                            .1
+                            .clone();
+                        return Err(MakeActionError::Ko);
+                    }
+                }
+
+                self.board_history.push((hash, self.board.clone()));
+                self.capture_count += captures;
 
                 self.turn += 1;
                 if self.turn >= self.seats.len() {
@@ -345,7 +377,7 @@ impl Game {
                 state.players_passed[seat_idx] = true;
 
                 if state.players_passed.iter().all(|x| *x) {
-                    self.state = GameState::scoring(&self.board, self.seats.len());
+                    self.state = GameState::scoring(&self.board, self.seats.len(), &self.komis);
                 }
 
                 self.turn += 1;
@@ -380,6 +412,12 @@ impl Game {
                 group.alive = !group.alive;
 
                 state.points = score_board(self.board.width, self.board.height, &state.groups);
+                state.scores = self.komis.clone();
+                for color in &state.points.points {
+                    if !color.is_empty() {
+                        state.scores[color.0 as usize - 1] += 2;
+                    }
+                }
 
                 for accept in &mut state.players_accepted {
                     *accept = false;

@@ -68,6 +68,8 @@ pub struct CreateRoom {
     pub id: usize,
     /// Room name
     pub name: String,
+    pub seats: Vec<u8>,
+    pub komis: Vec<i32>,
 }
 
 impl actix::Message for CreateRoom {
@@ -368,13 +370,23 @@ impl Handler<CreateRoom> for GameServer {
     type Result = MessageResult<CreateRoom>;
 
     fn handle(&mut self, msg: CreateRoom, _: &mut Context<Self>) -> Self::Result {
-        let CreateRoom { id, name } = msg;
+        let CreateRoom {
+            id,
+            name,
+            seats,
+            komis,
+        } = msg;
 
         // TODO: sanitize name
         // TODO: prevent spamming rooms (allow only one?)
 
         let user_id = match catch!(self.sessions.get(&id)?.user_id?) {
             Some(x) => x,
+            None => return MessageResult(None),
+        };
+
+        let game = match game::Game::standard(&seats, komis) {
+            Some(g) => g,
             None => return MessageResult(None),
         };
 
@@ -399,7 +411,7 @@ impl Handler<CreateRoom> for GameServer {
             users: HashSet::new(),
             name: name.clone(),
             last_action: Instant::now(),
-            game: game::Game::standard(),
+            game,
         };
         room.members.insert(id);
         room.users.insert(user_id);
@@ -442,21 +454,36 @@ impl Handler<GameAction> for GameServer {
                 // TODO: Handle errors in game actions - currently they fail quietly
                 match action {
                     message::GameAction::Place(x, y) => {
-                        let _ = room
+                        let res = room
                             .game
                             .make_action(user_id, game::ActionKind::Place(x, y));
+                        if res.is_err() {
+                            return;
+                        }
                     }
                     message::GameAction::Pass => {
-                        let _ = room.game.make_action(user_id, game::ActionKind::Pass);
+                        let res = room.game.make_action(user_id, game::ActionKind::Pass);
+                        if res.is_err() {
+                            return;
+                        }
                     }
                     message::GameAction::Cancel => {
-                        let _ = room.game.make_action(user_id, game::ActionKind::Cancel);
+                        let res = room.game.make_action(user_id, game::ActionKind::Cancel);
+                        if res.is_err() {
+                            return;
+                        }
                     }
                     message::GameAction::TakeSeat(seat_id) => {
-                        let _ = room.game.take_seat(user_id, seat_id as _);
+                        let res = room.game.take_seat(user_id, seat_id as _);
+                        if res.is_err() {
+                            return;
+                        }
                     }
                     message::GameAction::LeaveSeat(seat_id) => {
-                        let _ = room.game.leave_seat(user_id, seat_id as _);
+                        let res = room.game.leave_seat(user_id, seat_id as _);
+                        if res.is_err() {
+                            return;
+                        }
                     }
                 }
             }

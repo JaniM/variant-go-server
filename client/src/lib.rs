@@ -1,4 +1,5 @@
 mod board;
+mod create_game;
 #[path = "../../server/src/game.rs"]
 #[allow(dead_code)]
 mod game;
@@ -7,80 +8,25 @@ mod game_view;
 mod message;
 mod networking;
 mod seats;
+mod text_input;
 mod utils;
 
 use std::collections::HashMap;
 use std::time::Duration;
 use wasm_bindgen::prelude::*;
 
+use crate::create_game::CreateGameView;
 use crate::game_view::{GameView, Profile};
 use crate::message::{ClientMessage, ServerMessage};
 use crate::seats::SeatList;
+use crate::text_input::TextInput;
 
 use yew::prelude::*;
 use yew::services::timeout::{TimeoutService, TimeoutTask};
 
-struct TextInput {
-    link: ComponentLink<Self>,
-    text: String,
-    props: TextInputProperties,
-}
-
-enum TextInputMsg {
-    SetText(String),
-    Submit,
-    None,
-}
-
-#[derive(Properties, Clone, PartialEq)]
-struct TextInputProperties {
-    value: String,
-    onsubmit: Callback<String>,
-}
-
-impl Component for TextInput {
-    type Message = TextInputMsg;
-    type Properties = TextInputProperties;
-
-    fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
-        TextInput {
-            link,
-            text: props.value.clone(),
-            props,
-        }
-    }
-
-    fn update(&mut self, msg: Self::Message) -> ShouldRender {
-        match msg {
-            TextInputMsg::SetText(text) => self.text = text,
-            TextInputMsg::Submit => self.props.onsubmit.emit(self.text.clone()),
-            TextInputMsg::None => return false,
-        }
-        true
-    }
-
-    fn change(&mut self, props: Self::Properties) -> ShouldRender {
-        if self.props != props {
-            self.props = props;
-            self.text = self.props.value.clone();
-            true
-        } else {
-            false
-        }
-    }
-
-    fn view(&self) -> Html {
-        html! {
-            <input
-                type="text"
-                value=&self.text
-                oninput=self.link.callback(|e: InputData| TextInputMsg::SetText(e.value))
-                onkeypress=self.link.callback(move |e: KeyboardEvent| {
-                    if e.key() == "Enter" { TextInputMsg::Submit } else { TextInputMsg::None }
-                })
-                />
-        }
-    }
+enum Pane {
+    CreateGame,
+    Board,
 }
 
 struct GameList {
@@ -90,6 +36,7 @@ struct GameList {
     game: Option<GameView>,
     user: Option<Profile>,
     profiles: HashMap<u64, Profile>,
+    pane: Pane,
     debounce_job: Option<TimeoutTask>,
 }
 
@@ -104,6 +51,7 @@ enum Msg {
     SetProfile(Profile),
     AddGame((u32, String)),
     RemoveGame(u32),
+    SetPane(Pane),
     Render,
 }
 
@@ -163,24 +111,22 @@ impl Component for GameList {
             game: None,
             user: None,
             profiles: HashMap::new(),
+            pane: Pane::Board,
             debounce_job: None,
         }
     }
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
-            Msg::StartGame => networking::send(ClientMessage::StartGame {
-                name: self
-                    .user
-                    .as_ref()
-                    .and_then(|p| p.nick.clone())
-                    .unwrap_or_else(|| "No nick".to_owned()),
-            }),
+            Msg::StartGame => self.pane = Pane::CreateGame,
             Msg::ChangeNick(nick) => networking::send(ClientMessage::Identify {
                 token: networking::get_token(),
                 nick: Some(nick),
             }),
-            Msg::JoinGame(id) => networking::send(ClientMessage::JoinGame(id)),
+            Msg::JoinGame(id) => {
+                networking::send(ClientMessage::JoinGame(id));
+                self.pane = Pane::Board;
+            }
             Msg::Pass => networking::send(ClientMessage::GameAction(message::GameAction::Pass)),
             Msg::Cancel => networking::send(ClientMessage::GameAction(message::GameAction::Cancel)),
             Msg::SetGameStatus(game) => self.game = Some(game),
@@ -207,6 +153,7 @@ impl Component for GameList {
             Msg::SetProfile(profile) => {
                 self.profiles.insert(profile.user_id, profile);
             }
+            Msg::SetPane(pane) => self.pane = pane,
             Msg::Render => {
                 self.debounce_job = None;
                 self.games.sort_unstable_by_key(|x| -(x.0 as i32));
@@ -293,6 +240,13 @@ impl Component for GameList {
             html!(<p>{"Join a game!"}</p>)
         };
 
+        let right_panel = match self.pane {
+            Pane::Board => gameview,
+            Pane::CreateGame => html!(<CreateGameView
+                user=self.user.as_ref().unwrap()
+                oncreate=self.link.callback(|_| Msg::SetPane(Pane::Board)) />),
+        };
+
         html! {
         <div style="display: flex; flex-direction: row; min-height: 100vh;">
             <div style="min-width: 300px; border-right: 2px solid black; margin: 10px;">
@@ -306,7 +260,7 @@ impl Component for GameList {
                     {list}
                 </ul>
             </div>
-            <div> {gameview} </div>
+            <div> {right_panel} </div>
         </div>
         }
     }

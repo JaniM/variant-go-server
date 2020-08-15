@@ -54,6 +54,11 @@ impl Component for SeatList {
 
     fn view(&self) -> Html {
         let game = &self.props.game;
+        let scores = match &self.props.game.state {
+            GameState::Scoring(state) | GameState::Done(state) => Some(&state.scores),
+            _ => None,
+        };
+
         let list = game
             .seats
             .iter()
@@ -63,6 +68,13 @@ impl Component for SeatList {
                     1 => "Black",
                     2 => "White",
                     _ => "???",
+                };
+
+                let scoretext = match scores {
+                    Some(scores) => {
+                        format!(" - Score: {:.1}", scores[*color as usize - 1] as f32 / 2.)
+                    }
+                    None => "".to_owned(),
                 };
 
                 if let Some(id) = occupant {
@@ -94,14 +106,14 @@ impl Component for SeatList {
 
                     html! {
                         <li style=style>
-                            {format!("{}: {} ({}){}", colorname, nick, id, passed)}
+                            {format!("{}: {} {}{}", colorname, nick, scoretext, passed)}
                             {leave}
                         </li>
                     }
                 } else {
                     html! {
                         <li>
-                            {format!("{}: unoccupied", colorname)}
+                            {format!("{}: unoccupied{}", colorname, scoretext)}
                             <button onclick=self.link.callback(move |_| Msg::TakeSeat(idx as _))>
                                 {"Take seat"}
                             </button>

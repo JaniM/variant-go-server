@@ -21,6 +21,8 @@ pub enum ClientMessage {
     GameAction(GameAction),
     StartGame {
         name: String,
+        seats: Vec<u8>,
+        komis: Vec<i32>,
     },
 }
 

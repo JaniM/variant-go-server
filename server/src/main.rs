@@ -169,9 +169,13 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for MyWebSocket {
                             })
                             .wait(ctx);
                     }
-                    Ok(ClientMessage::StartGame { name }) => {
-                        self.server_addr
-                            .do_send(server::CreateRoom { id: self.id, name });
+                    Ok(ClientMessage::StartGame { name, seats, komis }) => {
+                        self.server_addr.do_send(server::CreateRoom {
+                            id: self.id,
+                            name,
+                            seats,
+                            komis,
+                        });
                     }
                     Ok(ClientMessage::JoinGame(room_id)) => {
                         self.server_addr.do_send(server::Join {
