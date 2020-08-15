@@ -129,7 +129,10 @@ impl Component for GameList {
             }
             Msg::Pass => networking::send(ClientMessage::GameAction(message::GameAction::Pass)),
             Msg::Cancel => networking::send(ClientMessage::GameAction(message::GameAction::Cancel)),
-            Msg::SetGameStatus(game) => self.game = Some(game),
+            Msg::SetGameStatus(game) => {
+                utils::set_hash(&game.room_id.to_string());
+                self.game = Some(game);
+            }
             Msg::AddGame(game) => {
                 self.games.push(game);
                 if self.debounce_job.is_none() {
@@ -174,7 +177,7 @@ impl Component for GameList {
             .map(|&(id, ref name)| {
                 html! {
                     <li key={id}>
-                        <a href="#" onclick=self.link.callback(move |_| Msg::JoinGame(id))>
+                        <a href=format!("#{}", id) onclick=self.link.callback(move |_| Msg::JoinGame(id))>
                             {format!("{} - {}", id, name)}
                         </a>
                     </li>

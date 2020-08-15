@@ -89,11 +89,23 @@ pub fn start_websocket(on_msg: impl Fn(ServerMessage) -> () + 'static) -> Result
 
     let onopen_callback = Closure::wrap(Box::new(move |_| {
         console_log!("socket opened");
+
+        // TODO: these should not be here
         send(ClientMessage::GetGameList);
         send(ClientMessage::Identify {
             token: get_token(),
             nick: None,
         });
+
+        // TODO: use a proper router?
+
+        let window = web_sys::window().expect("Window not available");
+        let hash = window.location().hash().expect("url hash not available");
+        if hash.chars().next() == Some('#') {
+            if let Ok(id) = hash[1..].parse::<u32>() {
+                send(ClientMessage::JoinGame(id));
+            }
+        }
     }) as Box<dyn FnMut(JsValue)>);
     ws.set_onopen(Some(onopen_callback.as_ref().unchecked_ref()));
     onopen_callback.forget();

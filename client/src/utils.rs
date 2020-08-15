@@ -8,3 +8,11 @@ pub fn set_panic_hook() {
     #[cfg(feature = "console_error_panic_hook")]
     console_error_panic_hook::set_once();
 }
+
+pub fn set_hash(hash: &str) {
+    let window = web_sys::window().expect("Window not available");
+    window
+        .location()
+        .set_hash(hash)
+        .expect("url hash not available");
+}
