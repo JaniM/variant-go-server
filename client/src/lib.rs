@@ -154,7 +154,10 @@ impl Component for GameList {
                     }
                 }
             }
-            Msg::SetOwnProfile(profile) => self.user = Some(profile),
+            Msg::SetOwnProfile(profile) => {
+                self.profiles.insert(profile.user_id, profile.clone());
+                self.user = Some(profile);
+            }
             Msg::SetProfile(profile) => {
                 self.profiles.insert(profile.user_id, profile);
             }
