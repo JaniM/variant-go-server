@@ -108,6 +108,7 @@ impl Handler<server::Message> for MyWebSocket {
                         .collect(),
                     turn: view.turn,
                     board: view.board.into_iter().map(|x| x.0).collect(),
+                    size: view.size,
                     state: view.state,
                 }));
             }
@@ -169,12 +170,18 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for MyWebSocket {
                             })
                             .wait(ctx);
                     }
-                    Ok(ClientMessage::StartGame { name, seats, komis }) => {
+                    Ok(ClientMessage::StartGame {
+                        name,
+                        seats,
+                        komis,
+                        size,
+                    }) => {
                         self.server_addr.do_send(server::CreateRoom {
                             id: self.id,
                             name,
                             seats,
                             komis,
+                            size,
                         });
                     }
                     Ok(ClientMessage::JoinGame(room_id)) => {

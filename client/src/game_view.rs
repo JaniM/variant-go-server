@@ -6,6 +6,7 @@ pub struct GameView {
     pub turn: u32,
     // 19x19 vec, 0 = empty, 1 = black, 2 = white
     pub board: Vec<u8>,
+    pub size: (u8, u8),
     pub state: crate::game::GameState,
 }
 

@@ -79,7 +79,7 @@ impl<T: Copy + Default + Hash> Board<T> {
     }
 
     fn point_within(&self, (x, y): Point) -> bool {
-        !(0..self.width).contains(&x) || !(0..self.height).contains(&y)
+        !(0..self.width).contains(&x) && !(0..self.height).contains(&y)
     }
 
     fn get_point(&self, (x, y): Point) -> T {
@@ -233,11 +233,17 @@ pub struct GameView {
     pub seats: Vec<Seat>,
     pub turn: u32,
     pub board: Vec<Color>,
+    pub size: (u8, u8),
 }
 
 impl Game {
-    pub fn standard(seats: &[u8], komis: Vec<i32>) -> Option<Game> {
+    pub fn standard(seats: &[u8], komis: Vec<i32>, size: (u8, u8)) -> Option<Game> {
         if !seats.iter().all(|&t| t > 0 && t <= 3) {
+            return None;
+        }
+
+        // Don't allow huge boards
+        if size.0 > 19 || size.1 > 19 {
             return None;
         }
 
@@ -247,7 +253,7 @@ impl Game {
             seats: seats.into_iter().map(|&t| Seat::new(Color(t))).collect(),
             turn: 0,
             pass_count: 0,
-            board: Board::empty(19, 19),
+            board: Board::empty(size.0 as _, size.1 as _),
             board_history: Vec::new(),
             capture_count: 0,
             komis,
@@ -469,6 +475,7 @@ impl Game {
             seats: self.seats.clone(),
             turn: self.turn as _,
             board: self.board.points.clone(),
+            size: (self.board.width as u8, self.board.height as u8),
         }
     }
 }

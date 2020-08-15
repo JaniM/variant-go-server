@@ -70,6 +70,7 @@ pub struct CreateRoom {
     pub name: String,
     pub seats: Vec<u8>,
     pub komis: Vec<i32>,
+    pub size: (u8, u8),
 }
 
 impl actix::Message for CreateRoom {
@@ -375,6 +376,7 @@ impl Handler<CreateRoom> for GameServer {
             name,
             seats,
             komis,
+            size,
         } = msg;
 
         // TODO: sanitize name
@@ -385,7 +387,7 @@ impl Handler<CreateRoom> for GameServer {
             None => return MessageResult(None),
         };
 
-        let game = match game::Game::standard(&seats, komis) {
+        let game = match game::Game::standard(&seats, komis, size) {
             Some(g) => g,
             None => return MessageResult(None),
         };

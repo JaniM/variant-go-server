@@ -128,16 +128,17 @@ impl Component for Board {
     }
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
+        let game = &self.props.game;
         match msg {
-            Msg::Render(timestamp) => {
+            Msg::Render(_timestamp) => {
                 //self.render_gl(timestamp).unwrap();
             }
             Msg::MouseMove(p) => {
                 let canvas = self.canvas.as_ref().expect("Canvas not initialized!");
                 self.mouse_pos = Some(p);
                 self.selection_pos = Some((
-                    (p.0 / (canvas.width() as f64 / 19.0)) as u32,
-                    (p.1 / (canvas.width() as f64 / 19.0)) as u32,
+                    (p.0 / (canvas.width() as f64 / game.size.0 as f64)) as u32,
+                    (p.1 / (canvas.width() as f64 / game.size.1 as f64)) as u32,
                 ));
                 self.render_gl(0.0).unwrap();
             }
@@ -145,8 +146,8 @@ impl Component for Board {
                 let canvas = self.canvas.as_ref().expect("Canvas not initialized!");
                 self.mouse_pos = Some(p);
                 self.selection_pos = Some((
-                    (p.0 / (canvas.width() as f64 / 19.0)) as u32,
-                    (p.1 / (canvas.width() as f64 / 19.0)) as u32,
+                    (p.0 / (canvas.width() as f64 / game.size.0 as f64)) as u32,
+                    (p.1 / (canvas.width() as f64 / game.size.1 as f64)) as u32,
                 ));
                 networking::send(ClientMessage::GameAction(GameAction::Place(
                     self.selection_pos.unwrap().0,
@@ -194,36 +195,43 @@ impl Board {
         context.set_fill_style(&JsValue::from_str("#000000"));
 
         let game = &self.props.game;
-        let size = canvas.width() as f64 / 19.0;
+        // TODO: actually handle non-square boards
+        let board_size = game.size.0 as usize;
+        let size = canvas.width() as f64 / board_size as f64;
         let turn = game.seats[game.turn as usize].1;
 
         // Lines
-        for y in 0..19 {
+        for y in 0..game.size.1 {
             context.begin_path();
             context.move_to(size * 0.5, (y as f64 + 0.5) * size);
-            context.line_to(size * 18.5, (y as f64 + 0.5) * size);
+            context.line_to(size * (board_size as f64 - 0.5), (y as f64 + 0.5) * size);
             context.stroke();
         }
 
-        for x in 0..19 {
+        for x in 0..game.size.0 {
             context.begin_path();
             context.move_to((x as f64 + 0.5) * size, size * 0.5);
-            context.line_to((x as f64 + 0.5) * size, size * 18.5);
+            context.line_to((x as f64 + 0.5) * size, size * (board_size as f64 - 0.5));
             context.stroke();
         }
 
         // Starpoints - by popular demand
-        for &(x, y) in &[
-            (3, 3),
-            (9, 3),
-            (15, 3),
-            (3, 9),
-            (9, 9),
-            (15, 9),
-            (3, 15),
-            (9, 15),
-            (15, 15),
-        ] {
+        let points: &[(u8, u8)] = match game.size.0 {
+            19 => &[
+                (3, 3),
+                (9, 3),
+                (15, 3),
+                (3, 9),
+                (9, 9),
+                (15, 9),
+                (3, 15),
+                (9, 15),
+                (15, 15),
+            ],
+            13 => &[(3, 3), (9, 3), (6, 6), (3, 9), (9, 9)],
+            _ => &[],
+        };
+        for &(x, y) in points {
             context.begin_path();
             context.arc(
                 (x as f64 + 0.5) * size,
@@ -254,8 +262,8 @@ impl Board {
         }
 
         for (idx, &color) in self.props.game.board.iter().enumerate() {
-            let x = idx % 19;
-            let y = idx / 19;
+            let x = idx % board_size;
+            let y = idx / board_size;
 
             if color == 0 {
                 continue;
@@ -265,7 +273,7 @@ impl Board {
 
             context.set_stroke_style(&JsValue::from_str(border_colors[color as usize - 1]));
 
-            let size = canvas.width() as f64 / 19.0;
+            let size = canvas.width() as f64 / board_size as f64;
             // create shape of radius 'size' around center point (size, size)
             context.begin_path();
             context.arc(
@@ -282,14 +290,14 @@ impl Board {
         match &self.props.game.state {
             GameState::Play(state) => {
                 if let Some((x, y)) = state.last_stone {
-                    let color = game.board[y as usize * 19 + x as usize];
+                    let color = game.board[y as usize * game.size.0 as usize + x as usize];
                     assert!(color > 0);
 
                     context
                         .set_stroke_style(&JsValue::from_str(dead_mark_color[color as usize - 1]));
                     context.set_line_width(2.0);
 
-                    let size = canvas.width() as f64 / 19.0;
+                    let size = canvas.width() as f64 / board_size as f64;
                     // create shape of radius 'size' around center point (size, size)
                     context.begin_path();
                     context.arc(
@@ -331,8 +339,8 @@ impl Board {
                 }
 
                 for (idx, &color) in scoring.points.points.iter().enumerate() {
-                    let x = (idx % 19) as f64;
-                    let y = (idx / 19) as f64;
+                    let x = (idx % board_size) as f64;
+                    let y = (idx / board_size) as f64;
 
                     if color.is_empty() {
                         continue;

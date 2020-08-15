@@ -1,3 +1,4 @@
+use web_sys::HtmlSelectElement;
 use yew::prelude::*;
 
 use crate::game_view::Profile;
@@ -6,7 +7,7 @@ use crate::networking;
 use crate::text_input::TextInput;
 
 #[derive(Copy, Clone, PartialEq, Debug)]
-enum Preset {
+pub enum Preset {
     Standard,
     Rengo2v2,
     ThreeColor,
@@ -19,11 +20,14 @@ pub struct CreateGameView {
     seats: Vec<u8>,
     /// komi = amount/2 (for half)
     komis: Vec<i32>,
+    size: u8,
+    size_select_ref: NodeRef,
     oncreate: Callback<()>,
 }
 
 pub enum Msg {
     LoadPreset(Preset),
+    SelectSize(u8),
     SetName(String),
     OnCreate,
 }
@@ -45,6 +49,8 @@ impl Component for CreateGameView {
             user: props.user,
             seats: vec![],
             komis: vec![],
+            size: 19,
+            size_select_ref: NodeRef::default(),
             oncreate: props.oncreate,
         }
     }
@@ -52,13 +58,21 @@ impl Component for CreateGameView {
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
             Msg::LoadPreset(preset) => {
-                let (seats, komi) = match preset {
-                    Preset::Standard => (vec![1, 2], vec![0, 15]),
-                    Preset::Rengo2v2 => (vec![1, 2, 1, 2], vec![0, 15]),
-                    Preset::ThreeColor => (vec![1, 2, 3], vec![0, 0, 0]),
+                let (seats, komi, size) = match preset {
+                    Preset::Standard => (vec![1, 2], vec![0, 15], 19),
+                    Preset::Rengo2v2 => (vec![1, 2, 1, 2], vec![0, 15], 19),
+                    Preset::ThreeColor => (vec![1, 2, 3], vec![0, 0, 0], 13),
                 };
                 self.seats = seats;
                 self.komis = komi;
+                self.size = size;
+                if let Some(select) = self.size_select_ref.cast::<HtmlSelectElement>() {
+                    select.set_value(&size.to_string());
+                }
+                true
+            }
+            Msg::SelectSize(size) => {
+                self.size = size;
                 true
             }
             Msg::SetName(name) => {
@@ -70,6 +84,7 @@ impl Component for CreateGameView {
                     name: self.name.clone(),
                     seats: self.seats.clone(),
                     komis: self.komis.clone(),
+                    size: (self.size, self.size),
                 });
                 self.oncreate.emit(());
                 false
@@ -137,6 +152,28 @@ impl Component for CreateGameView {
             </ul>
         };
 
+        let select_size = self.link.callback(|event| match event {
+            ChangeData::Select(elem) => {
+                let value = elem.selected_index();
+                Msg::SelectSize(match value {
+                    0 => 13,
+                    1 => 19,
+                    _ => unreachable!(),
+                })
+            }
+            _ => unreachable!(),
+        });
+
+        let size_selection = html! {
+            <select
+                ref=self.size_select_ref.clone()
+                onchange=select_size
+            >
+                <option value=13 selected=self.size == 13>{ "13" }</option>
+                <option value=19 selected=self.size == 19>{ "19" }</option>
+            </select>
+        };
+
         let oncreate = self.link.callback(|_| Msg::OnCreate);
 
         html! {
@@ -148,6 +185,7 @@ impl Component for CreateGameView {
                 </span>
                 <div>
                     {"Presets:"} {presets}
+                    <span>{"Size:"} {size_selection}</span>
                 </div>
                 <div>
                     {"Seats:"}

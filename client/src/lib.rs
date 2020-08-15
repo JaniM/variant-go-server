@@ -79,6 +79,7 @@ impl Component for GameList {
                     board,
                     turn,
                     state,
+                    size,
                 } => {
                     game.emit(GameView {
                         room_id,
@@ -87,6 +88,7 @@ impl Component for GameList {
                         board,
                         turn,
                         state,
+                        size,
                     });
                 }
                 ServerMessage::Identify {

@@ -23,6 +23,7 @@ pub enum ClientMessage {
         name: String,
         seats: Vec<u8>,
         komis: Vec<i32>,
+        size: (u8, u8),
     },
 }
 
@@ -53,6 +54,7 @@ pub enum ServerMessage {
         turn: u32,
         // 19x19 vec, 0 = empty, 1 = black, 2 = white
         board: Vec<u8>,
+        size: (u8, u8),
         state: game::GameState,
     },
     Profile(Profile),
