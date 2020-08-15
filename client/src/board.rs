@@ -174,7 +174,7 @@ impl Board {
         // TODO: remove hardcoding for 19x19
         let shadow_stone_colors = ["#555555", "#bbbbbb", "#86abbf"];
         let shadow_border_colors = ["#bbbbbb", "#555555", "#555555"];
-        let stone_colors = ["#000000", "#eeeeee", "#64a0c0"];
+        let stone_colors = ["#000000", "#eeeeee", "#4d97bf"];
         let border_colors = ["#555555", "#000000", "#000000"];
         let dead_mark_color = ["#eeeeee", "#000000", "#000000"];
 
@@ -189,11 +189,13 @@ impl Board {
         context.set_fill_style(&JsValue::from_str("#e0bb6c"));
         context.fill_rect(0.0, 0.0, canvas.width().into(), canvas.height().into());
 
+        context.set_line_width(1.0);
         context.set_stroke_style(&JsValue::from_str("#000000"));
         context.set_fill_style(&JsValue::from_str("#000000"));
 
+        let game = &self.props.game;
         let size = canvas.width() as f64 / 19.0;
-        let turn = self.props.game.seats[self.props.game.turn as usize].1;
+        let turn = game.seats[game.turn as usize].1;
 
         // Lines
         for y in 0..19 {
@@ -278,7 +280,28 @@ impl Board {
         }
 
         match &self.props.game.state {
-            GameState::Play(_) => {}
+            GameState::Play(state) => {
+                if let Some((x, y)) = state.last_stone {
+                    let color = game.board[y as usize * 19 + x as usize];
+                    assert!(color > 0);
+
+                    context
+                        .set_stroke_style(&JsValue::from_str(dead_mark_color[color as usize - 1]));
+                    context.set_line_width(2.0);
+
+                    let size = canvas.width() as f64 / 19.0;
+                    // create shape of radius 'size' around center point (size, size)
+                    context.begin_path();
+                    context.arc(
+                        (x as f64 + 0.5) * size,
+                        (y as f64 + 0.5) * size,
+                        size / 4.,
+                        0.0,
+                        2.0 * std::f64::consts::PI,
+                    )?;
+                    context.stroke();
+                }
+            }
             GameState::Scoring(scoring) | GameState::Done(scoring) => {
                 for group in &scoring.groups {
                     if group.alive {
@@ -286,6 +309,7 @@ impl Board {
                     }
 
                     for &(x, y) in &group.points {
+                        context.set_line_width(2.0);
                         context.set_stroke_style(&JsValue::from_str(
                             dead_mark_color[group.team.0 as usize - 1],
                         ));

@@ -134,6 +134,7 @@ pub struct Group {
 pub struct PlayState {
     // TODO: use smallvec?
     pub players_passed: Vec<bool>,
+    pub last_stone: Option<(u32, u32)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -157,6 +158,7 @@ impl GameState {
     fn play(seat_count: usize) -> Self {
         GameState::Play(PlayState {
             players_passed: vec![false; seat_count],
+            last_stone: None,
         })
     }
 
@@ -195,6 +197,7 @@ impl GameState {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Game {
     pub state: GameState,
+    pub state_stack: Vec<GameState>,
     // TODO: use smallvec?
     pub seats: Vec<Seat>,
     pub turn: usize,
@@ -240,6 +243,7 @@ impl Game {
 
         Some(Game {
             state: GameState::play(seats.len()),
+            state_stack: Vec::new(),
             seats: seats.into_iter().map(|&t| Seat::new(Color(t))).collect(),
             turn: 0,
             pass_count: 0,
@@ -367,6 +371,7 @@ impl Game {
                 }
 
                 let state = self.state.assume_play_mut();
+                state.last_stone = Some((x, y));
                 for passed in &mut state.players_passed {
                     *passed = false;
                 }
@@ -377,7 +382,14 @@ impl Game {
                 state.players_passed[seat_idx] = true;
 
                 if state.players_passed.iter().all(|x| *x) {
-                    self.state = GameState::scoring(&self.board, self.seats.len(), &self.komis);
+                    for passed in &mut state.players_passed {
+                        *passed = false;
+                    }
+                    let old_state = std::mem::replace(
+                        &mut self.state,
+                        GameState::scoring(&self.board, self.seats.len(), &self.komis),
+                    );
+                    self.state_stack.push(old_state);
                 }
 
                 self.turn += 1;
@@ -440,7 +452,10 @@ impl Game {
                 }
             }
             ActionKind::Cancel => {
-                self.state = GameState::play(self.seats.len());
+                self.state = self
+                    .state_stack
+                    .pop()
+                    .expect("Empty state stack in scoring cancel");
             }
         }
 
