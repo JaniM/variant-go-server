@@ -67,6 +67,7 @@ impl Component for SeatList {
                 let colorname = match color {
                     1 => "Black",
                     2 => "White",
+                    3 => "Blue",
                     _ => "???",
                 };
 
