@@ -380,6 +380,7 @@ impl Game {
                 let seat_idx = self.turn;
                 let state = self.state.assume_play_mut();
                 state.players_passed[seat_idx] = true;
+                state.last_stone = None;
 
                 if state.players_passed.iter().all(|x| *x) {
                     for passed in &mut state.players_passed {
