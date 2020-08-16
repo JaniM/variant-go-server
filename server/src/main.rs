@@ -1,4 +1,5 @@
 mod game;
+mod game_room;
 mod message;
 mod server;
 
@@ -23,10 +24,11 @@ async fn ws_index(
     server_addr: web::Data<Addr<GameServer>>,
 ) -> Result<HttpResponse, Error> {
     println!("{:?}", r);
-    let actor = MyWebSocket {
+    let actor = ClientWebSocket {
         hb: Instant::now(),
         id: 0,
         server_addr: server_addr.get_ref().clone(),
+        game_addr: None,
         room_id: None,
     };
     let res = ws::start(actor, &r, stream);
@@ -39,16 +41,17 @@ async fn ws_index(
 
 /// websocket connection is long running connection, it easier
 /// to handle with an actor
-struct MyWebSocket {
+struct ClientWebSocket {
     /// Client must send ping at least once per 10 seconds (CLIENT_TIMEOUT),
     /// otherwise we drop connection.
     hb: Instant,
     id: usize,
     server_addr: Addr<GameServer>,
+    game_addr: Option<Addr<game_room::GameRoom>>,
     room_id: Option<u32>,
 }
 
-impl Actor for MyWebSocket {
+impl Actor for ClientWebSocket {
     type Context = ws::WebsocketContext<Self>;
 
     /// Method is called on actor start. We start the heartbeat process here.
@@ -59,7 +62,8 @@ impl Actor for MyWebSocket {
         let addr = ctx.address();
         self.server_addr
             .send(server::Connect {
-                addr: addr.recipient(),
+                addr: addr.clone().recipient(),
+                game_addr: addr.recipient(),
             })
             .into_actor(self)
             .then(|res, act, ctx| {
@@ -80,24 +84,16 @@ impl Actor for MyWebSocket {
     }
 }
 
-/// Handle messages from chat server, we simply send it to peer websocket
-impl Handler<server::Message> for MyWebSocket {
+impl Handler<game_room::Message> for ClientWebSocket {
     type Result = ();
 
-    fn handle(&mut self, msg: server::Message, ctx: &mut Self::Context) {
+    fn handle(&mut self, msg: game_room::Message, ctx: &mut Self::Context) {
         match msg {
-            server::Message::AnnounceRoom(room_id, name) => {
-                ctx.binary(pack(ServerMessage::AnnounceGame { room_id, name }));
-            }
-            server::Message::CloseRoom(room_id) => {
-                ctx.binary(pack(ServerMessage::CloseGame { room_id }));
-            }
-            server::Message::GameStatus {
+            game_room::Message::GameStatus {
                 room_id,
                 members,
                 view,
             } => {
-                self.room_id = Some(room_id);
                 ctx.binary(pack(ServerMessage::GameStatus {
                     room_id,
                     members,
@@ -111,6 +107,21 @@ impl Handler<server::Message> for MyWebSocket {
                     size: view.size,
                     state: view.state,
                 }));
+            }
+        }
+    }
+}
+
+impl Handler<server::Message> for ClientWebSocket {
+    type Result = ();
+
+    fn handle(&mut self, msg: server::Message, ctx: &mut Self::Context) {
+        match msg {
+            server::Message::AnnounceRoom(room_id, name) => {
+                ctx.binary(pack(ServerMessage::AnnounceGame { room_id, name }));
+            }
+            server::Message::CloseRoom(room_id) => {
+                ctx.binary(pack(ServerMessage::CloseGame { room_id }));
             }
             server::Message::Identify(res) => {
                 ctx.binary(pack(ServerMessage::Identify {
@@ -133,7 +144,7 @@ fn pack(msg: ServerMessage) -> Vec<u8> {
     serde_cbor::to_vec(&msg).expect("cbor fail")
 }
 
-impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for MyWebSocket {
+impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for ClientWebSocket {
     fn handle(&mut self, msg: Result<ws::Message, ws::ProtocolError>, ctx: &mut Self::Context) {
         match msg {
             Ok(ws::Message::Ping(msg)) => {
@@ -176,25 +187,44 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for MyWebSocket {
                         komis,
                         size,
                     }) => {
-                        self.server_addr.do_send(server::CreateRoom {
-                            id: self.id,
-                            name,
-                            seats,
-                            komis,
-                            size,
-                        });
+                        self.server_addr
+                            .send(server::CreateRoom {
+                                id: self.id,
+                                name,
+                                seats,
+                                komis,
+                                size,
+                            })
+                            .into_actor(self)
+                            .then(|res, act, _| {
+                                if let Ok(Ok((id, addr))) = res {
+                                    act.room_id = Some(id);
+                                    act.game_addr = Some(addr);
+                                }
+                                fut::ready(())
+                            })
+                            .wait(ctx);
                     }
                     Ok(ClientMessage::JoinGame(room_id)) => {
-                        self.server_addr.do_send(server::Join {
-                            id: self.id,
-                            room_id,
-                        });
-                    }
-                    Ok(ClientMessage::GameAction(action)) => {
-                        if let Some(room_id) = self.room_id {
-                            self.server_addr.do_send(server::GameAction {
+                        self.server_addr
+                            .send(server::Join {
                                 id: self.id,
                                 room_id,
+                            })
+                            .into_actor(self)
+                            .then(move |res, act, _| {
+                                if let Ok(Ok(addr)) = res {
+                                    act.room_id = Some(room_id);
+                                    act.game_addr = Some(addr);
+                                }
+                                fut::ready(())
+                            })
+                            .wait(ctx);
+                    }
+                    Ok(ClientMessage::GameAction(action)) => {
+                        if let Some(addr) = &self.game_addr {
+                            addr.do_send(game_room::GameAction {
+                                id: self.id,
                                 action,
                             });
                         }
@@ -235,7 +265,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for MyWebSocket {
     }
 }
 
-impl MyWebSocket {
+impl ClientWebSocket {
     /// helper method that sends ping to client every second.
     ///
     /// also this method checks heartbeats from client

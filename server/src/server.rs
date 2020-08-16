@@ -5,6 +5,7 @@ use std::time::{Duration, Instant};
 use uuid::Uuid;
 
 use crate::game;
+use crate::game_room::{self, GameRoom};
 use crate::message;
 
 macro_rules! catch {
@@ -15,18 +16,12 @@ macro_rules! catch {
 
 // TODO: separate game rooms to their own actors to deal with load
 
-/// Server sends this when a new room is created
 #[derive(Message, Clone)]
 #[rtype(result = "()")]
 pub enum Message {
     // TODO: Use a proper struct, not magic tuples
     AnnounceRoom(u32, String),
     CloseRoom(u32),
-    GameStatus {
-        room_id: u32,
-        members: Vec<u64>,
-        view: game::GameView,
-    },
     Identify(Profile),
     UpdateProfile(Profile),
 }
@@ -36,6 +31,7 @@ pub enum Message {
 #[rtype(usize)]
 pub struct Connect {
     pub addr: Recipient<Message>,
+    pub game_addr: Recipient<game_room::Message>,
 }
 
 /// Session is disconnected
@@ -54,12 +50,14 @@ impl actix::Message for ListRooms {
 }
 
 /// Join room, if room does not exists create new one.
-#[derive(Message)]
-#[rtype(result = "()")]
 pub struct Join {
     /// Client id
     pub id: usize,
     pub room_id: u32,
+}
+
+impl actix::Message for Join {
+    type Result = Result<Addr<GameRoom>, ()>;
 }
 
 /// Create room, announce to clients
@@ -74,15 +72,7 @@ pub struct CreateRoom {
 }
 
 impl actix::Message for CreateRoom {
-    type Result = Option<u32>;
-}
-
-#[derive(Message)]
-#[rtype(result = "()")]
-pub struct GameAction {
-    pub id: usize,
-    pub room_id: u32,
-    pub action: message::GameAction,
+    type Result = Result<(u32, Addr<GameRoom>), ()>;
 }
 
 #[derive(Message)]
@@ -103,21 +93,20 @@ pub struct Profile {
 pub struct Session {
     pub user_id: Option<u64>,
     pub client: Recipient<Message>,
+    pub game_client: Recipient<game_room::Message>,
+    pub room_id: Option<u32>,
 }
 
 pub struct Room {
-    members: HashSet<usize>,
-    users: HashSet<u64>,
-    name: String,
-    last_action: Instant,
-    game: game::Game,
+    pub addr: Addr<GameRoom>,
+    pub name: String,
 }
 
-/// `ChatServer` manages chat rooms and responsible for coordinating chat
+/// `GameServer` manages chat rooms and responsible for coordinating chat
 /// session. implementation is super primitive
 pub struct GameServer {
     sessions: HashMap<usize, Session>,
-    sessions_by_user: HashMap<u64, Vec<usize>>,
+    sessions_by_user: HashMap<u64, HashSet<usize>>,
     profiles: HashMap<u64, Profile>,
     user_tokens: HashMap<Uuid, u64>,
     rooms: HashMap<u32, Room>,
@@ -151,14 +140,7 @@ impl GameServer {
 
     /// Send message to all users in a room
     fn send_room_message(&self, room: u32, message: Message) -> Option<()> {
-        let room = self.rooms.get(&room)?;
-        for user in &room.members {
-            let session = self.sessions.get(&user);
-            if let Some(session) = session {
-                let _ = session.client.do_send(message.clone());
-            }
-        }
-        Some(())
+        todo!()
     }
 
     fn send_message(&self, session_id: usize, message: Message) {
@@ -180,66 +162,68 @@ impl GameServer {
         }
     }
 
-    fn leave_room(&mut self, session_id: usize, room_id: u32) {
-        let mut user_removed = false;
+    fn leave_room(&mut self, session_id: usize) -> impl ActorFuture<Output = (), Actor = Self> {
+        let session = self
+            .sessions
+            .get_mut(&session_id)
+            .expect("session not found");
+        let rooms = &self.rooms;
+        let room_addr = catch!(rooms.get(&session.room_id?)?.addr.clone());
 
-        if let Some(session) = self.sessions.get(&session_id) {
-            // remove session from all rooms
-            if let Some(room) = self.rooms.get_mut(&room_id) {
-                if room.members.remove(&session_id) {
-                    if let Some(user_id) = session.user_id {
-                        let sessions = &self.sessions;
-                        if !room
-                            .members
-                            .iter()
-                            .any(|s| sessions.get(s).unwrap().user_id == Some(user_id))
-                        {
-                            room.users.remove(&user_id);
-                            user_removed = true;
-                        }
-                    }
-                }
-            }
+        if room_addr.is_some() {
+            session.room_id = None;
         }
 
-        if user_removed {
-            if let Some(room) = self.rooms.get(&room_id) {
-                let msg = Message::GameStatus {
-                    room_id,
-                    members: room.users.iter().copied().collect(),
-                    view: room.game.get_view(),
-                };
-                self.send_room_message(room_id, msg);
+        let fut = async move {
+            if let Some(room_addr) = room_addr {
+                room_addr.send(game_room::Leave { session_id }).await;
+            } else {
+                ()
             }
-        }
+        };
+
+        fut.into_actor(self)
     }
 
-    fn clear_timer(&self, ctx: &mut <Self as Actor>::Context) {
-        // Magic number: prune games every 10 minutes
-        ctx.run_interval(Duration::from_secs(60), |act, _ctx| {
-            let mut killed_games = Vec::new();
-            let now = Instant::now();
-            for (&id, room) in &act.rooms {
-                // if older than 1h
-                if now - room.last_action > Duration::from_secs(60 * 60) {
-                    killed_games.push(id);
-                }
+    fn join_room(
+        &mut self,
+        session_id: usize,
+        room_id: u32,
+    ) -> impl ActorFuture<Output = (), Actor = Self> {
+        let session = self
+            .sessions
+            .get_mut(&session_id)
+            .expect("session not found");
+        let user_id = session.user_id.expect("user_id not set in Join");
+        let room_addr = self.rooms.get(&room_id).map(|r| r.addr.clone());
+        let addr = session.game_client.clone();
+
+        if room_addr.is_some() {
+            session.room_id = Some(room_id);
+        }
+
+        let fut = async move {
+            if let Some(room_addr) = room_addr {
+                room_addr
+                    .send(game_room::Join {
+                        session_id,
+                        user_id,
+                        addr,
+                    })
+                    .await;
+            } else {
+                ()
             }
-            for id in killed_games {
-                println!("Killed game: {}", id);
-                act.rooms.remove(&id);
-                act.send_global_message(Message::CloseRoom(id));
-            }
-        });
+        };
+
+        fut.into_actor(self)
     }
 }
 
 impl Actor for GameServer {
     type Context = Context<Self>;
 
-    fn started(&mut self, ctx: &mut Self::Context) {
-        self.clear_timer(ctx);
-    }
+    fn started(&mut self, ctx: &mut Self::Context) {}
 }
 
 /// Handler for Connect message.
@@ -258,8 +242,16 @@ impl Handler<Connect> for GameServer {
             Session {
                 user_id: None,
                 client: msg.addr,
+                game_client: msg.game_addr,
+                room_id: None,
             },
         );
+
+        // TODO: the client DOES NOT  need to know every profile..
+        for user_id in self.sessions_by_user.keys() {
+            let profile = self.profiles.get(user_id).unwrap();
+            self.send_message(id, Message::UpdateProfile(profile.clone()));
+        }
 
         // send id back
         id
@@ -270,31 +262,29 @@ impl Handler<Connect> for GameServer {
 impl Handler<Disconnect> for GameServer {
     type Result = ();
 
-    fn handle(&mut self, msg: Disconnect, _: &mut Context<Self>) {
+    fn handle(&mut self, msg: Disconnect, ctx: &mut Context<Self>) {
         println!("Someone disconnected");
 
-        let mut rooms = Vec::new();
+        self.leave_room(msg.id)
+            .then(move |(), act, _| {
+                // remove address
+                if let Some(session) = act.sessions.remove(&msg.id) {
+                    let empty = if let Some(sessions) = session
+                        .user_id
+                        .and_then(|uid| act.sessions_by_user.get_mut(&uid))
+                    {
+                        sessions.retain(|&s| s != msg.id);
+                        sessions.is_empty()
+                    } else { false };
 
-        // remove session from all rooms
-        for (room_id, room) in &mut self.rooms {
-            if room.members.contains(&msg.id) {
-                rooms.push(*room_id);
-            }
-        }
+                    if empty {
+                        act.sessions_by_user.remove(session.user_id.as_ref().unwrap());
+                    }
 
-        for room_id in rooms {
-            self.leave_room(msg.id, room_id)
-        }
-
-        // remove address
-        if let Some(session) = self.sessions.remove(&msg.id) {
-            if let Some(sessions) = session
-                .user_id
-                .and_then(|uid| self.sessions_by_user.get_mut(&uid))
-            {
-                sessions.retain(|&s| s != msg.id);
-            }
-        }
+                }
+                fut::ready(())
+            })
+            .wait(ctx);
     }
 }
 
@@ -315,60 +305,29 @@ impl Handler<ListRooms> for GameServer {
 
 /// Join room, send disconnect message to old room
 impl Handler<Join> for GameServer {
-    type Result = ();
+    // Can this possibly be right?
+    type Result = ActorResponse<Self, Addr<GameRoom>, ()>;
 
-    fn handle(&mut self, msg: Join, _: &mut Context<Self>) {
+    fn handle(&mut self, msg: Join, ctx: &mut Context<Self>) -> Self::Result {
         let Join { id, room_id } = msg;
 
-        let user_id = match catch!(self.sessions.get(&id)?.user_id?) {
-            Some(x) => x,
-            None => return,
-        };
+        let result = self
+            .leave_room(msg.id)
+            .then(move |(), act, _ctx| act.join_room(id, room_id))
+            .then(move |(), act, _ctx| {
+                fut::ready(match act.rooms.get(&room_id) {
+                    Some(room) => Ok(room.addr.clone()),
+                    None => Err(()),
+                })
+            });
 
-        let mut rooms = Vec::new();
-
-        // remove session from all rooms
-        for (room_id, room) in &mut self.rooms {
-            if room.members.contains(&id) {
-                rooms.push(*room_id);
-            }
-        }
-        for room_id in rooms {
-            self.leave_room(msg.id, room_id)
-        }
-
-        catch! {
-            let room = self.rooms.get_mut(&room_id)?;
-            room.members.insert(id);
-            room.users.insert(user_id);
-            let msg = Message::GameStatus {
-                room_id,
-                members: room.users.iter().copied().collect(),
-                view: room.game.get_view(),
-            };
-            self.send_room_message(room_id, msg);
-
-            // List room users' profiles
-            let room = self.rooms.get(&room_id)?;
-            for user_id in &room.users {
-                catch! {
-                    let profile = self.profiles.get(user_id)?;
-                    self.send_message(id, Message::UpdateProfile(profile.clone()));
-                };
-            }
-
-            // Announce the current user's profile to the room
-            catch! {
-                let profile = self.profiles.get(&user_id)?;
-                self.send_room_message(room_id, Message::UpdateProfile(profile.clone()));
-            };
-        };
+        ActorResponse::r#async(result)
     }
 }
 
 /// Create room, announce to users
 impl Handler<CreateRoom> for GameServer {
-    type Result = MessageResult<CreateRoom>;
+    type Result = ActorResponse<Self, (u32, Addr<GameRoom>), ()>;
 
     fn handle(&mut self, msg: CreateRoom, _: &mut Context<Self>) -> Self::Result {
         let CreateRoom {
@@ -382,129 +341,47 @@ impl Handler<CreateRoom> for GameServer {
         // TODO: sanitize name
         // TODO: prevent spamming rooms (allow only one?)
 
-        let user_id = match catch!(self.sessions.get(&id)?.user_id?) {
+        let _user_id = match catch!(self.sessions.get(&id)?.user_id?) {
             Some(x) => x,
-            None => return MessageResult(None),
+            None => return ActorResponse::reply(Err(())),
         };
 
         let game = match game::Game::standard(&seats, komis, size) {
             Some(g) => g,
-            None => return MessageResult(None),
+            None => return ActorResponse::reply(Err(())),
         };
 
-        let mut rooms = Vec::new();
+        let result = self.leave_room(id).then(move |(), act, _| {
+            // TODO: room ids are currently sequential as a hack for ordering..
+            let room_id = act.game_counter;
+            act.game_counter += 1;
 
-        // remove session from all rooms
-        for (room_id, room) in &mut self.rooms {
-            if room.members.contains(&id) {
-                rooms.push(*room_id);
-            }
-        }
-        for room_id in rooms {
-            self.leave_room(id, room_id)
-        }
-
-        // TODO: room ids are currently sequential as a hack for ordering..
-        let room_id = self.game_counter;
-        self.game_counter += 1;
-
-        let mut room = Room {
-            members: HashSet::new(),
-            users: HashSet::new(),
-            name: name.clone(),
-            last_action: Instant::now(),
-            game,
-        };
-        room.members.insert(id);
-        room.users.insert(user_id);
-
-        self.send_message(
-            id,
-            Message::GameStatus {
+            let room = GameRoom {
                 room_id,
-                members: room.users.iter().copied().collect(),
-                view: room.game.get_view(),
-            },
-        );
+                sessions: HashMap::new(),
+                users: HashSet::new(),
+                name: name.clone(),
+                last_action: Instant::now(),
+                game,
+            };
 
-        self.rooms.insert(room_id, room);
+            let addr = room.start();
 
-        self.send_global_message(Message::AnnounceRoom(room_id, name));
+            act.rooms.insert(
+                room_id,
+                Room {
+                    addr: addr.clone(),
+                    name: name.clone(),
+                },
+            );
 
-        MessageResult(Some(room_id))
-    }
-}
+            act.send_global_message(Message::AnnounceRoom(room_id, name));
 
-impl Handler<GameAction> for GameServer {
-    type Result = ();
+            act.join_room(id, room_id)
+                .then(move |(), _, _| fut::ready(Ok((room_id, addr))))
+        });
 
-    fn handle(&mut self, msg: GameAction, _: &mut Context<Self>) {
-        let GameAction {
-            id,
-            room_id,
-            action,
-        } = msg;
-
-        let user_id = match catch!(self.sessions.get(&id)?.user_id?) {
-            Some(x) => x,
-            None => return,
-        };
-
-        match self.rooms.get_mut(&room_id) {
-            Some(room) => {
-                room.last_action = Instant::now();
-                // TODO: Handle errors in game actions - currently they fail quietly
-                match action {
-                    message::GameAction::Place(x, y) => {
-                        let res = room
-                            .game
-                            .make_action(user_id, game::ActionKind::Place(x, y));
-                        if res.is_err() {
-                            return;
-                        }
-                    }
-                    message::GameAction::Pass => {
-                        let res = room.game.make_action(user_id, game::ActionKind::Pass);
-                        if res.is_err() {
-                            return;
-                        }
-                    }
-                    message::GameAction::Cancel => {
-                        let res = room.game.make_action(user_id, game::ActionKind::Cancel);
-                        if res.is_err() {
-                            return;
-                        }
-                    }
-                    message::GameAction::TakeSeat(seat_id) => {
-                        let res = room.game.take_seat(user_id, seat_id as _);
-                        if res.is_err() {
-                            return;
-                        }
-                    }
-                    message::GameAction::LeaveSeat(seat_id) => {
-                        let res = room.game.leave_seat(user_id, seat_id as _);
-                        if res.is_err() {
-                            return;
-                        }
-                    }
-                }
-            }
-            None => {}
-        };
-
-        match self.rooms.get(&room_id) {
-            Some(room) => {
-                self.send_room_message(
-                    room_id,
-                    Message::GameStatus {
-                        room_id,
-                        members: room.users.iter().copied().collect(),
-                        view: room.game.get_view(),
-                    },
-                );
-            }
-            None => {}
-        };
+        ActorResponse::r#async(result)
     }
 }
 
@@ -539,23 +416,16 @@ impl Handler<IdentifyAs> for GameServer {
         let sessions = self
             .sessions_by_user
             .entry(user_id)
-            .or_insert_with(|| Vec::new());
-        sessions.push(id);
+            .or_insert_with(|| HashSet::new());
+        sessions.insert(id);
 
         catch! {
             self.sessions.get_mut(&id)?.user_id = Some(user_id);
         };
 
-        // Announce profile update to rooms
-        let mut rooms = Vec::new();
-        for (room_id, room) in &self.rooms {
-            if room.users.contains(&user_id) {
-                rooms.push(*room_id);
-            }
-        }
-        for room_id in rooms {
-            self.send_room_message(room_id, Message::UpdateProfile(profile.clone()));
-        }
+        // Announce profile update to users
+        // TODO: only send the profile to users in relevant rooms
+        self.send_global_message(Message::UpdateProfile(profile.clone()));
 
         MessageResult(profile)
     }
