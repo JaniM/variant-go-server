@@ -173,9 +173,9 @@ impl Component for Board {
 impl Board {
     fn render_gl(&mut self, timestamp: f64) -> Result<(), JsValue> {
         // TODO: remove hardcoding for 19x19
-        let shadow_stone_colors = ["#555555", "#bbbbbb", "#86abbf"];
+        let shadow_stone_colors = ["#555555", "#bbbbbb", "#7b91bd"];
         let shadow_border_colors = ["#bbbbbb", "#555555", "#555555"];
-        let stone_colors = ["#000000", "#eeeeee", "#4d97bf"];
+        let stone_colors = ["#000000", "#eeeeee", "#5074bc"];
         let border_colors = ["#555555", "#000000", "#000000"];
         let dead_mark_color = ["#eeeeee", "#000000", "#000000"];
 
