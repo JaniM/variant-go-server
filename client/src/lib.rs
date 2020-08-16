@@ -284,7 +284,7 @@ impl Component for GameList {
                         <board::Board game=game/>
                     </div>
                 </div>
-                <div style="min-width: 200px; border-left: 2px solid #dedede; margin: 10px; padding-left: 10px;">
+                <div style="width: 300px; overflow: hidden; border-left: 2px solid #dedede; margin: 10px; padding-left: 10px;">
                     {"Users"}
                     <div>{userlist}</div>
                 </div>
@@ -332,7 +332,7 @@ impl Component for GameList {
             id="main"
             class=class
             style="display: flex; flex-direction: row; min-height: 100vh;">
-            <div style="min-width: 300px; border-right: 2px solid #dedede; margin: 10px;">
+            <div style="width: 300px; border-right: 2px solid #dedede; margin: 10px;">
                 <div>{"Theme: "}{theme_selection}</div>
                 <div>
                     {"Nick:"}
