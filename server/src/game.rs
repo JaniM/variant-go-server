@@ -242,6 +242,10 @@ impl Game {
             return None;
         }
 
+        if seats.len() == 0 || komis.len() == 0 {
+            return None;
+        }
+
         // Don't allow huge boards
         if size.0 > 19 || size.1 > 19 {
             return None;

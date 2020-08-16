@@ -80,6 +80,9 @@ impl Component for CreateGameView {
                 true
             }
             Msg::OnCreate => {
+                if self.seats.is_empty() || self.komis.is_empty() {
+                    return false;
+                }
                 networking::send(ClientMessage::StartGame {
                     name: self.name.clone(),
                     seats: self.seats.clone(),
