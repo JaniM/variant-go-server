@@ -94,11 +94,12 @@ impl Component for SeatList {
                         html!()
                     };
 
-                    let style = if game.turn == idx as u32 {
-                        "background-color: #eeeeee;"
+                    let class = if game.turn == idx as u32 {
+                        "occupied"
                     } else {
                         ""
                     };
+
                     let passed = match &game.state {
                         GameState::Play(state) if state.players_passed[idx] => " - passed!",
                         GameState::Scoring(state) if state.players_accepted[idx] => " - accepted!",
@@ -106,7 +107,7 @@ impl Component for SeatList {
                     };
 
                     html! {
-                        <li style=style>
+                        <li class=class>
                             {format!("{}: {} {}{}", colorname, nick, scoretext, passed)}
                             {leave}
                         </li>

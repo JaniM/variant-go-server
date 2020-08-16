@@ -29,6 +29,35 @@ enum Pane {
     Board,
 }
 
+#[derive(Copy, Clone, PartialEq, Debug)]
+enum Theme {
+    White,
+    Dark,
+}
+
+impl std::fmt::Display for Theme {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl Theme {
+    fn get() -> Theme {
+        let val = utils::local_storage().get_item("theme").unwrap();
+        match val.as_ref().map(|x| &**x) {
+            Some("White") => Theme::White,
+            Some("Dark") => Theme::Dark,
+            _ => Theme::White,
+        }
+    }
+
+    fn save(&self) {
+        utils::local_storage()
+            .set_item("theme", &format!("{:?}", self))
+            .unwrap();
+    }
+}
+
 struct GameList {
     link: ComponentLink<Self>,
     // TODO: Use a proper struct, not magic tuples
@@ -38,6 +67,7 @@ struct GameList {
     profiles: HashMap<u64, Profile>,
     pane: Pane,
     debounce_job: Option<TimeoutTask>,
+    theme: Theme,
 }
 
 enum Msg {
@@ -52,6 +82,7 @@ enum Msg {
     AddGame((u32, String)),
     RemoveGame(u32),
     SetPane(Pane),
+    SetTheme(Theme),
     Render,
 }
 
@@ -115,6 +146,7 @@ impl Component for GameList {
             profiles: HashMap::new(),
             pane: Pane::Board,
             debounce_job: None,
+            theme: Theme::get(),
         }
     }
 
@@ -162,6 +194,10 @@ impl Component for GameList {
                 self.profiles.insert(profile.user_id, profile);
             }
             Msg::SetPane(pane) => self.pane = pane,
+            Msg::SetTheme(theme) => {
+                self.theme = theme;
+                self.theme.save();
+            }
             Msg::Render => {
                 self.debounce_job = None;
                 self.games.sort_unstable_by_key(|x| -(x.0 as i32));
@@ -211,9 +247,12 @@ impl Component for GameList {
                         .map(|n| &**n)
                         .unwrap_or("no nick");
                     html!(
+                        <>
                         <span style="padding: 0px 10px">
-                            {format!("{} ({})", id, nick)}
+                            {format!("{}", nick)}
                         </span>
+                        <br />
+                        </>
                     )
                 })
                 .collect::<Html>();
@@ -236,13 +275,20 @@ impl Component for GameList {
             };
 
             html!(
-                <div>
-                    <p>{"Users:"} {userlist}</p>
-                    <p>{"Seats"}</p>
-                    <SeatList game=game profiles=&self.profiles user=&self.user />
-                    <div>{"Status:"} {status} {pass_button} {cancel_button}</div>
-                    <board::Board game=game/>
+                <>
+                <div style="flex-grow: 1; margin: 10px; display: flex; justify-content: center;">
+                    <div style="width: 800px;">
+                        <div>{"Seats"}</div>
+                        <SeatList game=game profiles=&self.profiles user=&self.user />
+                        <div>{"Status:"} {status} {pass_button} {cancel_button}</div>
+                        <board::Board game=game/>
+                    </div>
                 </div>
+                <div style="min-width: 200px; border-left: 2px solid #dedede; margin: 10px; padding-left: 10px;">
+                    {"Users"}
+                    <div>{userlist}</div>
+                </div>
+                </>
             )
         } else {
             html!(<p>{"Join a game!"}</p>)
@@ -255,9 +301,39 @@ impl Component for GameList {
                 oncreate=self.link.callback(|_| Msg::SetPane(Pane::Board)) />),
         };
 
+        let select_theme = self.link.callback(|event| match event {
+            ChangeData::Select(elem) => {
+                let value = elem.selected_index();
+                Msg::SetTheme(match value {
+                    0 => Theme::White,
+                    1 => Theme::Dark,
+                    _ => unreachable!(),
+                })
+            }
+            _ => unreachable!(),
+        });
+
+        let theme_selection = html! {
+            <select
+                onchange=select_theme
+            >
+                <option value=Theme::White selected=self.theme == Theme::White>{ "White" }</option>
+                <option value=Theme::Dark selected=self.theme == Theme::Dark>{ "Dark" }</option>
+            </select>
+        };
+
+        let class = match self.theme {
+            Theme::White => "",
+            Theme::Dark => "dark",
+        };
+
         html! {
-        <div style="display: flex; flex-direction: row; min-height: 100vh;">
-            <div style="min-width: 300px; border-right: 2px solid black; margin: 10px;">
+        <div
+            id="main"
+            class=class
+            style="display: flex; flex-direction: row; min-height: 100vh;">
+            <div style="min-width: 300px; border-right: 2px solid #dedede; margin: 10px;">
+                <div>{"Theme: "}{theme_selection}</div>
                 <div>
                     {"Nick:"}
                     <TextInput value=nick onsubmit=nick_enter />
@@ -268,7 +344,7 @@ impl Component for GameList {
                     {list}
                 </ul>
             </div>
-            <div> {right_panel} </div>
+            {right_panel}
         </div>
         }
     }

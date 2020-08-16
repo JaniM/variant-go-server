@@ -16,3 +16,8 @@ pub fn set_hash(hash: &str) {
         .set_hash(hash)
         .expect("url hash not available");
 }
+
+pub fn local_storage() -> web_sys::Storage {
+    let window = web_sys::window().expect("Window not available");
+    window.local_storage().unwrap().unwrap()
+}

@@ -6,6 +6,7 @@ use web_sys::{ErrorEvent, MessageEvent, WebSocket};
 use std::cell::RefCell;
 
 use crate::message::{ClientMessage, ServerMessage};
+use crate::utils::local_storage;
 
 #[wasm_bindgen]
 extern "C" {
@@ -26,11 +27,6 @@ thread_local! {
     static HANDLER: RefCell<WsHandler> = RefCell::new(WsHandler {
         ws: None
     });
-}
-
-pub fn local_storage() -> web_sys::Storage {
-    let window = web_sys::window().expect("Window not available");
-    window.local_storage().unwrap().unwrap()
 }
 
 pub fn get_token() -> Option<String> {
