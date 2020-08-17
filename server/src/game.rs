@@ -79,7 +79,7 @@ impl<T: Copy + Default + Hash> Board<T> {
     }
 
     fn point_within(&self, (x, y): Point) -> bool {
-        !(0..self.width).contains(&x) && !(0..self.height).contains(&y)
+        (0..self.width).contains(&x) && (0..self.height).contains(&y)
     }
 
     fn get_point(&self, (x, y): Point) -> T {
@@ -134,7 +134,7 @@ pub struct Group {
 pub struct PlayState {
     // TODO: use smallvec?
     pub players_passed: Vec<bool>,
-    pub last_stone: Option<(u32, u32)>,
+    pub last_stone: Option<Vec<(u32, u32)>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -334,28 +334,44 @@ impl Game {
         }
         match action {
             ActionKind::Place(x, y) => {
-                if self.board.point_within((x, y)) {
-                    return Err(MakeActionError::OutOfBounds);
-                }
+                let mut points_played = vec![];
 
                 if self.mods.pixel {
-                    if x >= self.board.width - 1 || y >= self.board.height {
+                    // In pixel mode coordinate 0,0 is outside the board.
+                    // This is to adjust for it.
+
+                    if x > self.board.width || y > self.board.height {
                         return Err(MakeActionError::OutOfBounds);
                     }
+                    let x = x as i32 - 1;
+                    let y = y as i32 - 1;
 
                     let mut any_placed = false;
-                    for &point in &[(x, y), (x + 1, y), (x, y + 1), (x + 1, y + 1)] {
-                        let point = self.board.point_mut(point);
+                    for &(x, y) in &[(x, y), (x + 1, y), (x, y + 1), (x + 1, y + 1)] {
+                        if x < 0 || y < 0 {
+                            continue;
+                        }
+                        let coord = (x as u32, y as u32);
+                        if !self.board.point_within(coord) {
+                            continue;
+                        }
+
+                        let point = self.board.point_mut(coord);
                         if !point.is_empty() {
                             continue;
                         }
                         *point = active_seat.team;
+                        points_played.push(coord);
                         any_placed = true;
                     }
                     if !any_placed {
                         return Err(MakeActionError::PointOccupied);
                     }
                 } else {
+                    if !self.board.point_within((x, y)) {
+                        return Err(MakeActionError::OutOfBounds);
+                    }
+
                     // TODO: don't repeat yourself
                     let point = self.board.point_mut((x, y));
                     if !point.is_empty() {
@@ -363,6 +379,7 @@ impl Game {
                     }
 
                     *point = active_seat.team;
+                    points_played.push((x, y));
                 }
 
                 let groups = find_groups(&self.board);
@@ -423,7 +440,7 @@ impl Game {
                 }
 
                 let state = self.state.assume_play_mut();
-                state.last_stone = Some((x, y));
+                state.last_stone = Some(points_played);
                 for passed in &mut state.players_passed {
                     *passed = false;
                 }

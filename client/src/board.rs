@@ -134,8 +134,8 @@ impl Component for Board {
             let canvas = canvas.as_ref().expect("Canvas not initialized!");
             match game.mods.pixel {
                 true => (
-                    (p.0 / (canvas.width() as f64 / game.size.0 as f64) - 0.5) as u32,
-                    (p.1 / (canvas.width() as f64 / game.size.1 as f64) - 0.5) as u32,
+                    (p.0 / (canvas.width() as f64 / game.size.0 as f64) + 0.5) as u32,
+                    (p.1 / (canvas.width() as f64 / game.size.1 as f64) + 0.5) as u32,
                 ),
                 false => (
                     (p.0 / (canvas.width() as f64 / game.size.0 as f64)) as u32,
@@ -251,7 +251,11 @@ impl Board {
         }
 
         if let Some(selection_pos) = self.selection_pos {
-            let p = selection_pos;
+            let mut p = (selection_pos.0 as i32, selection_pos.1 as i32);
+            if game.mods.pixel {
+                p.0 -= 1;
+                p.1 -= 1;
+            }
 
             // TODO: This allocation is horrible, figure out how to avoid it
             let points = match game.mods.pixel {
@@ -311,29 +315,32 @@ impl Board {
 
         match &self.props.game.state {
             GameState::Play(state) => {
-                if let Some((x, y)) = state.last_stone {
-                    let mut color = game.board[y as usize * game.size.0 as usize + x as usize];
+                if let Some(points) = &state.last_stone {
+                    for &(x, y) in points {
+                        let mut color = game.board[y as usize * game.size.0 as usize + x as usize];
 
-                    if color == 0 {
-                        // White stones have the most fitting (read: black) marker for empty board
-                        color = 2;
+                        if color == 0 {
+                            // White stones have the most fitting (read: black) marker for empty board
+                            color = 2;
+                        }
+
+                        context.set_stroke_style(&JsValue::from_str(
+                            dead_mark_color[color as usize - 1],
+                        ));
+                        context.set_line_width(2.0);
+
+                        let size = canvas.width() as f64 / board_size as f64;
+                        // create shape of radius 'size' around center point (size, size)
+                        context.begin_path();
+                        context.arc(
+                            (x as f64 + 0.5) * size,
+                            (y as f64 + 0.5) * size,
+                            size / 4.,
+                            0.0,
+                            2.0 * std::f64::consts::PI,
+                        )?;
+                        context.stroke();
                     }
-
-                    context
-                        .set_stroke_style(&JsValue::from_str(dead_mark_color[color as usize - 1]));
-                    context.set_line_width(2.0);
-
-                    let size = canvas.width() as f64 / board_size as f64;
-                    // create shape of radius 'size' around center point (size, size)
-                    context.begin_path();
-                    context.arc(
-                        (x as f64 + 0.5) * size,
-                        (y as f64 + 0.5) * size,
-                        size / 4.,
-                        0.0,
-                        2.0 * std::f64::consts::PI,
-                    )?;
-                    context.stroke();
                 }
             }
             GameState::Scoring(scoring) | GameState::Done(scoring) => {
