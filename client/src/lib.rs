@@ -1,3 +1,5 @@
+#![recursion_limit = "1024"]
+
 mod board;
 mod create_game;
 #[path = "../../server/src/game.rs"]
@@ -111,6 +113,7 @@ impl Component for GameList {
                     turn,
                     state,
                     size,
+                    mods,
                 } => {
                     game.emit(GameView {
                         room_id,
@@ -120,6 +123,7 @@ impl Component for GameList {
                         turn,
                         state,
                         size,
+                        mods,
                     });
                 }
                 ServerMessage::Identify {

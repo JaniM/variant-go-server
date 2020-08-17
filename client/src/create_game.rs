@@ -1,6 +1,7 @@
 use web_sys::HtmlSelectElement;
 use yew::prelude::*;
 
+use crate::game::GameModifier;
 use crate::game_view::Profile;
 use crate::message::ClientMessage;
 use crate::networking;
@@ -23,12 +24,14 @@ pub struct CreateGameView {
     size: u8,
     size_select_ref: NodeRef,
     oncreate: Callback<()>,
+    mods: GameModifier,
 }
 
 pub enum Msg {
     LoadPreset(Preset),
     SelectSize(u8),
     SetName(String),
+    TogglePixel,
     OnCreate,
 }
 
@@ -52,6 +55,7 @@ impl Component for CreateGameView {
             size: 19,
             size_select_ref: NodeRef::default(),
             oncreate: props.oncreate,
+            mods: GameModifier::default(),
         }
     }
 
@@ -79,6 +83,10 @@ impl Component for CreateGameView {
                 self.name = name;
                 true
             }
+            Msg::TogglePixel => {
+                self.mods.pixel = !self.mods.pixel;
+                true
+            }
             Msg::OnCreate => {
                 if self.seats.is_empty() || self.komis.is_empty() {
                     return false;
@@ -88,6 +96,7 @@ impl Component for CreateGameView {
                     seats: self.seats.clone(),
                     komis: self.komis.clone(),
                     size: (self.size, self.size),
+                    mods: self.mods.clone(),
                 });
                 self.oncreate.emit(());
                 false
@@ -189,6 +198,19 @@ impl Component for CreateGameView {
                 <div>
                     {"Presets:"} {presets}
                     <span>{"Size:"} {size_selection}</span>
+                </div>
+                <div>
+                    {"Modifiers"}
+                    <ul>
+                        <li>
+                            <input
+                                type="checkbox"
+                                class="toggle"
+                                checked=self.mods.pixel
+                                onclick=self.link.callback(move |_| Msg::TogglePixel) />
+                            <label onclick=self.link.callback(move |_| Msg::TogglePixel)>{"Pixel go"}</label>
+                        </li>
+                    </ul>
                 </div>
                 <div>
                     {"Seats:"}

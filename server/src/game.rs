@@ -194,6 +194,14 @@ impl GameState {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+pub struct GameModifier {
+    /// Pixel go is a game mode where you place 2x2 blobs instead of a single stone.
+    /// Overlapping existing stones are ignored.
+    /// The blob must fit on the board.
+    pub pixel: bool,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Game {
     pub state: GameState,
@@ -207,6 +215,7 @@ pub struct Game {
     /// Optimization for superko
     pub capture_count: usize,
     pub komis: Vec<i32>,
+    pub mods: GameModifier,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -234,10 +243,16 @@ pub struct GameView {
     pub turn: u32,
     pub board: Vec<Color>,
     pub size: (u8, u8),
+    pub mods: GameModifier,
 }
 
 impl Game {
-    pub fn standard(seats: &[u8], komis: Vec<i32>, size: (u8, u8)) -> Option<Game> {
+    pub fn standard(
+        seats: &[u8],
+        komis: Vec<i32>,
+        size: (u8, u8),
+        mods: GameModifier,
+    ) -> Option<Game> {
         if !seats.iter().all(|&t| t > 0 && t <= 3) {
             return None;
         }
@@ -264,6 +279,7 @@ impl Game {
             board_history: vec![(board.hash(), board, state)],
             capture_count: 0,
             komis,
+            mods,
         })
     }
 
@@ -322,12 +338,32 @@ impl Game {
                     return Err(MakeActionError::OutOfBounds);
                 }
 
-                let point = self.board.point_mut((x, y));
-                if !point.is_empty() {
-                    return Err(MakeActionError::PointOccupied);
-                }
+                if self.mods.pixel {
+                    if x >= self.board.width - 1 || y >= self.board.height {
+                        return Err(MakeActionError::OutOfBounds);
+                    }
 
-                *point = active_seat.team;
+                    let mut any_placed = false;
+                    for &point in &[(x, y), (x + 1, y), (x, y + 1), (x + 1, y + 1)] {
+                        let point = self.board.point_mut(point);
+                        if !point.is_empty() {
+                            continue;
+                        }
+                        *point = active_seat.team;
+                        any_placed = true;
+                    }
+                    if !any_placed {
+                        return Err(MakeActionError::PointOccupied);
+                    }
+                } else {
+                    // TODO: don't repeat yourself
+                    let point = self.board.point_mut((x, y));
+                    if !point.is_empty() {
+                        return Err(MakeActionError::PointOccupied);
+                    }
+
+                    *point = active_seat.team;
+                }
 
                 let groups = find_groups(&self.board);
                 let dead = groups.iter().filter(|g| g.liberties == 0);
@@ -343,7 +379,13 @@ impl Game {
 
                     // Suicide is illegal, bail out
                     if !opp_died {
-                        *self.board.point_mut((x, y)) = Color::empty();
+                        // TODO: don't repeat yourself
+                        self.board = self
+                            .board_history
+                            .last()
+                            .expect("board_history.last() shouldn't be None")
+                            .1
+                            .clone();
                         return Err(MakeActionError::Suicide);
                     }
 
@@ -511,6 +553,7 @@ impl Game {
             turn: self.turn as _,
             board: self.board.points.clone(),
             size: (self.board.width as u8, self.board.height as u8),
+            mods: self.mods.clone(),
         }
     }
 }

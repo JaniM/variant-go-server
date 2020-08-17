@@ -129,26 +129,33 @@ impl Component for Board {
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         let game = &self.props.game;
+        let canvas = &self.canvas;
+        let mouse_to_coord = |p: (f64, f64)| {
+            let canvas = canvas.as_ref().expect("Canvas not initialized!");
+            match game.mods.pixel {
+                true => (
+                    (p.0 / (canvas.width() as f64 / game.size.0 as f64) - 0.5) as u32,
+                    (p.1 / (canvas.width() as f64 / game.size.1 as f64) - 0.5) as u32,
+                ),
+                false => (
+                    (p.0 / (canvas.width() as f64 / game.size.0 as f64)) as u32,
+                    (p.1 / (canvas.width() as f64 / game.size.1 as f64)) as u32,
+                ),
+            }
+        };
+
         match msg {
             Msg::Render(_timestamp) => {
                 //self.render_gl(timestamp).unwrap();
             }
             Msg::MouseMove(p) => {
-                let canvas = self.canvas.as_ref().expect("Canvas not initialized!");
                 self.mouse_pos = Some(p);
-                self.selection_pos = Some((
-                    (p.0 / (canvas.width() as f64 / game.size.0 as f64)) as u32,
-                    (p.1 / (canvas.width() as f64 / game.size.1 as f64)) as u32,
-                ));
+                self.selection_pos = Some(mouse_to_coord(p));
                 self.render_gl(0.0).unwrap();
             }
             Msg::Click(p) => {
-                let canvas = self.canvas.as_ref().expect("Canvas not initialized!");
                 self.mouse_pos = Some(p);
-                self.selection_pos = Some((
-                    (p.0 / (canvas.width() as f64 / game.size.0 as f64)) as u32,
-                    (p.1 / (canvas.width() as f64 / game.size.1 as f64)) as u32,
-                ));
+                self.selection_pos = Some(mouse_to_coord(p));
                 networking::send(ClientMessage::GameAction(GameAction::Place(
                     self.selection_pos.unwrap().0,
                     self.selection_pos.unwrap().1,
@@ -244,21 +251,36 @@ impl Board {
         }
 
         if let Some(selection_pos) = self.selection_pos {
+            let p = selection_pos;
+
+            // TODO: This allocation is horrible, figure out how to avoid it
+            let points = match game.mods.pixel {
+                true => vec![
+                    (p.0, p.1),
+                    (p.0 + 1, p.1),
+                    (p.0, p.1 + 1),
+                    (p.0 + 1, p.1 + 1),
+                ],
+                false => vec![p],
+            };
+
             let color = turn;
             // Teams start from 1
             context.set_fill_style(&JsValue::from_str(shadow_stone_colors[color as usize - 1]));
             context.set_stroke_style(&JsValue::from_str(shadow_border_colors[color as usize - 1]));
-            // create shape of radius 'size' around center point (size, size)
-            context.begin_path();
-            context.arc(
-                (selection_pos.0 as f64 + 0.5) * size,
-                (selection_pos.1 as f64 + 0.5) * size,
-                size / 2.,
-                0.0,
-                2.0 * std::f64::consts::PI,
-            )?;
-            context.fill();
-            context.stroke();
+
+            for p in points {
+                context.begin_path();
+                context.arc(
+                    (p.0 as f64 + 0.5) * size,
+                    (p.1 as f64 + 0.5) * size,
+                    size / 2.,
+                    0.0,
+                    2.0 * std::f64::consts::PI,
+                )?;
+                context.fill();
+                context.stroke();
+            }
         }
 
         for (idx, &color) in self.props.game.board.iter().enumerate() {
@@ -290,8 +312,12 @@ impl Board {
         match &self.props.game.state {
             GameState::Play(state) => {
                 if let Some((x, y)) = state.last_stone {
-                    let color = game.board[y as usize * game.size.0 as usize + x as usize];
-                    assert!(color > 0);
+                    let mut color = game.board[y as usize * game.size.0 as usize + x as usize];
+
+                    if color == 0 {
+                        // White stones have the most fitting (read: black) marker for empty board
+                        color = 2;
+                    }
 
                     context
                         .set_stroke_style(&JsValue::from_str(dead_mark_color[color as usize - 1]));

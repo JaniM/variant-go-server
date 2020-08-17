@@ -106,6 +106,7 @@ impl Handler<game_room::Message> for ClientWebSocket {
                     board: view.board.into_iter().map(|x| x.0).collect(),
                     size: view.size,
                     state: view.state,
+                    mods: view.mods,
                 }));
             }
         }
@@ -186,6 +187,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for ClientWebSocket {
                         seats,
                         komis,
                         size,
+                        mods,
                     }) => {
                         self.server_addr
                             .send(server::CreateRoom {
@@ -194,6 +196,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for ClientWebSocket {
                                 seats,
                                 komis,
                                 size,
+                                mods,
                             })
                             .into_actor(self)
                             .then(|res, act, _| {

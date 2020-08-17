@@ -24,6 +24,7 @@ pub enum ClientMessage {
         seats: Vec<u8>,
         komis: Vec<i32>,
         size: (u8, u8),
+        mods: game::GameModifier,
     },
 }
 
@@ -56,6 +57,7 @@ pub enum ServerMessage {
         board: Vec<u8>,
         size: (u8, u8),
         state: game::GameState,
+        mods: game::GameModifier,
     },
     Profile(Profile),
     MsgError(String),

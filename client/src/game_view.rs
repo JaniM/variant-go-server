@@ -1,3 +1,5 @@
+use crate::game::{GameModifier, GameState};
+
 #[derive(Clone, PartialEq)]
 pub struct GameView {
     pub room_id: u32,
@@ -7,7 +9,8 @@ pub struct GameView {
     // 19x19 vec, 0 = empty, 1 = black, 2 = white
     pub board: Vec<u8>,
     pub size: (u8, u8),
-    pub state: crate::game::GameState,
+    pub state: GameState,
+    pub mods: GameModifier,
 }
 
 #[derive(Clone, PartialEq)]

@@ -69,6 +69,7 @@ pub struct CreateRoom {
     pub seats: Vec<u8>,
     pub komis: Vec<i32>,
     pub size: (u8, u8),
+    pub mods: game::GameModifier,
 }
 
 impl actix::Message for CreateRoom {
@@ -338,6 +339,7 @@ impl Handler<CreateRoom> for GameServer {
             seats,
             komis,
             size,
+            mods,
         } = msg;
 
         // TODO: prevent spamming rooms (allow only one?)
@@ -351,7 +353,7 @@ impl Handler<CreateRoom> for GameServer {
             None => return ActorResponse::reply(Err(())),
         };
 
-        let game = match game::Game::standard(&seats, komis, size) {
+        let game = match game::Game::standard(&seats, komis, size, mods) {
             Some(g) => g,
             None => return ActorResponse::reply(Err(())),
         };
