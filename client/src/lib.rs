@@ -282,14 +282,14 @@ impl Component for GameList {
             html!(
                 <>
                 <div style="flex-grow: 1; margin: 10px; display: flex; justify-content: center;">
-                    <div style="width: 800px;">
-                        <div>{"Seats"}</div>
-                        <SeatList game=game profiles=&self.profiles user=&self.user />
+                    <div style="width: 800px; margin: auto 0;">
                         <div>{"Status:"} {status} {pass_button} {cancel_button}</div>
                         <board::Board game=game/>
                     </div>
                 </div>
                 <div style="width: 300px; overflow: hidden; border-left: 2px solid #dedede; margin: 10px; padding-left: 10px;">
+                    <div>{"Seats"}</div>
+                    <SeatList game=game profiles=&self.profiles user=&self.user />
                     {"Users"}
                     <div>{userlist}</div>
                 </div>
