@@ -203,7 +203,7 @@ pub struct Game {
     pub turn: usize,
     pub pass_count: usize,
     pub board: Board,
-    pub board_history: Vec<(u64, Board)>,
+    pub board_history: Vec<(u64, Board, GameState)>,
     /// Optimization for superko
     pub capture_count: usize,
     pub komis: Vec<i32>,
@@ -242,7 +242,7 @@ impl Game {
             return None;
         }
 
-        if seats.len() == 0 || komis.len() == 0 {
+        if !(1..=4).contains(&seats.len()) || !(1..=3).contains(&komis.len()) {
             return None;
         }
 
@@ -251,14 +251,17 @@ impl Game {
             return None;
         }
 
+        let state = GameState::play(seats.len());
+        let board = Board::empty(size.0 as _, size.1 as _);
+
         Some(Game {
-            state: GameState::play(seats.len()),
+            state: state.clone(),
             state_stack: Vec::new(),
             seats: seats.into_iter().map(|&t| Seat::new(Color(t))).collect(),
             turn: 0,
             pass_count: 0,
-            board: Board::empty(size.0 as _, size.1 as _),
-            board_history: Vec::new(),
+            board: board.clone(),
+            board_history: vec![(board.hash(), board, state)],
             capture_count: 0,
             komis,
         })
@@ -355,7 +358,7 @@ impl Game {
                 // Superko
                 // We only need to scan back capture_count boards, as per Ten 1p's clever idea.
                 // The board can't possibly repeat further back than the number of removed stones.
-                for (old_hash, old_board) in self
+                for (old_hash, old_board, _) in self
                     .board_history
                     .iter()
                     .rev()
@@ -372,9 +375,6 @@ impl Game {
                     }
                 }
 
-                self.board_history.push((hash, self.board.clone()));
-                self.capture_count += captures;
-
                 self.turn += 1;
                 if self.turn >= self.seats.len() {
                     self.turn = 0;
@@ -385,6 +385,10 @@ impl Game {
                 for passed in &mut state.players_passed {
                     *passed = false;
                 }
+
+                self.board_history
+                    .push((hash, self.board.clone(), self.state.clone()));
+                self.capture_count += captures;
             }
             ActionKind::Pass => {
                 let seat_idx = self.turn;
@@ -407,6 +411,33 @@ impl Game {
                 if self.turn >= self.seats.len() {
                     self.turn = 0;
                 }
+
+                self.board_history.push((
+                    self.board.hash(),
+                    self.board.clone(),
+                    self.state.clone(),
+                ));
+            }
+            ActionKind::Cancel => {
+                // Undo a turn
+                if self.board_history.len() < 2 {
+                    return Err(MakeActionError::OutOfBounds);
+                }
+
+                self.board_history
+                    .pop()
+                    .ok_or(MakeActionError::OutOfBounds)?;
+                let (_, last_board, last_state) = self
+                    .board_history
+                    .last()
+                    .ok_or(MakeActionError::OutOfBounds)?;
+                self.board = last_board.clone();
+                self.state = last_state.clone();
+                self.turn = if self.turn == 0 {
+                    self.seats.len() - 1
+                } else {
+                    self.turn - 1
+                };
             }
             unknown => {
                 println!("Play state got unexpected action {:?}", unknown);

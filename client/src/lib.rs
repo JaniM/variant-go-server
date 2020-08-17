@@ -270,6 +270,7 @@ impl Component for GameList {
             };
 
             let cancel_button = match game.state {
+                game::GameState::Play(_) => html!(<button onclick=cancel>{"Undo"}</button>),
                 game::GameState::Scoring(_) => html!(<button onclick=cancel>{"Cancel"}</button>),
                 _ => html!(),
             };

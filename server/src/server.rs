@@ -275,12 +275,14 @@ impl Handler<Disconnect> for GameServer {
                     {
                         sessions.retain(|&s| s != msg.id);
                         sessions.is_empty()
-                    } else { false };
+                    } else {
+                        false
+                    };
 
                     if empty {
-                        act.sessions_by_user.remove(session.user_id.as_ref().unwrap());
+                        act.sessions_by_user
+                            .remove(session.user_id.as_ref().unwrap());
                     }
-
                 }
                 fut::ready(())
             })
@@ -338,8 +340,11 @@ impl Handler<CreateRoom> for GameServer {
             size,
         } = msg;
 
-        // TODO: sanitize name
         // TODO: prevent spamming rooms (allow only one?)
+
+        if name.len() > 50 {
+            return ActorResponse::reply(Err(()));
+        }
 
         let _user_id = match catch!(self.sessions.get(&id)?.user_id?) {
             Some(x) => x,
@@ -405,8 +410,9 @@ impl Handler<IdentifyAs> for GameServer {
         });
 
         if let Some(nick) = nick {
-            // TODO: sanitize nick
-            profile.nick = Some(nick);
+            if nick.len() < 30 {
+                profile.nick = Some(nick);
+            }
         }
 
         let profile = profile.clone();
