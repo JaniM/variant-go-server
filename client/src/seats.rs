@@ -107,24 +107,24 @@ impl Component for SeatList {
                     };
 
                     html! {
-                        <li class=class>
+                        <div class=class style="margin: 5px 0;">
                             {format!("{}: {} {}{}", colorname, nick, scoretext, passed)}
                             {leave}
-                        </li>
+                        </div>
                     }
                 } else {
                     html! {
-                        <li>
+                        <div style="margin: 5px 0;">
                             {format!("{}: unoccupied{}", colorname, scoretext)}
                             <button onclick=self.link.callback(move |_| Msg::TakeSeat(idx as _))>
                                 {"Take seat"}
                             </button>
-                        </li>
+                        </div>
                     }
                 }
             })
             .collect::<Html>();
 
-        html!(<ul>{list}</ul>)
+        html!(<div style="margin: 10px;">{list}</div>)
     }
 }
