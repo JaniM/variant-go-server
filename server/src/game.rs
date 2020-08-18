@@ -345,7 +345,11 @@ impl Game {
             mods: self.mods.clone(),
         };
 
-        serde_cbor::to_vec(&replay).expect("Game dump failed")
+        let mut vec = Vec::new();
+        replay
+            .serialize(&mut serde_cbor::Serializer::new(&mut vec).packed_format())
+            .expect("Game dump failed");
+        vec
     }
 
     pub fn take_seat(&mut self, player_id: u64, seat_id: usize) -> Result<(), TakeSeatError> {
