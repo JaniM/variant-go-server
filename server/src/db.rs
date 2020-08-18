@@ -6,8 +6,8 @@ use diesel::result::Error as DError;
 use dotenv::dotenv;
 use std::env;
 
-use crate::schema::users;
 use crate::schema::games;
+use crate::schema::users;
 
 fn establish_connection() -> PgConnection {
     dotenv().ok();
@@ -146,7 +146,7 @@ impl Handler<StoreGame> for DbActor {
         };
 
         result.map_err(|e| {
-                println!("{:?}", e);
+            println!("{:?}", e);
         })
     }
 }
@@ -160,7 +160,7 @@ impl Handler<GetGame> for DbActor {
         let result = games.find(msg.0 as i64).first(&self.connection);
 
         result.map_err(|e| {
-                println!("{:?}", e);
+            println!("{:?}", e);
         })
     }
 }

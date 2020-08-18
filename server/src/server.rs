@@ -205,62 +205,66 @@ impl GameServer {
             session.room_id = Some(room_id);
             fut::Either::Right(async move { Ok::<_, ()>(room_addr) }.into_actor(self))
         } else {
-            fut::Either::Left(self.db.send(db::GetGame(room_id as _)).into_actor(self).then(move |res, act, _| {
-                let db_game = match res {
-                    Ok(Ok(db_game)) => db_game,
-                    _ => return fut::err(())
-                };
+            fut::Either::Left(
+                self.db
+                    .send(db::GetGame(room_id as _))
+                    .into_actor(self)
+                    .then(move |res, act, _| {
+                        let db_game = match res {
+                            Ok(Ok(db_game)) => db_game,
+                            _ => return fut::err(()),
+                        };
 
-                let replay = match db_game.replay {
-                    Some(r) => r,
-                    _ => return fut::err(())
-                };
+                        let replay = match db_game.replay {
+                            Some(r) => r,
+                            _ => return fut::err(()),
+                        };
 
-                let game = match game::Game::load(&replay) {
-                    Some(r) => r,
-                    _ => return fut::err(())
-                };
+                        let game = match game::Game::load(&replay) {
+                            Some(r) => r,
+                            _ => return fut::err(()),
+                        };
 
-                let room = GameRoom {
-                    room_id,
-                    sessions: HashMap::new(),
-                    users: HashSet::new(),
-                    name: db_game.name.to_owned(),
-                    last_action: Instant::now(),
-                    game,
-                    db: act.db.clone(),
-                };
+                        let room = GameRoom {
+                            room_id,
+                            sessions: HashMap::new(),
+                            users: HashSet::new(),
+                            name: db_game.name.to_owned(),
+                            last_action: Instant::now(),
+                            game,
+                            db: act.db.clone(),
+                        };
 
-                let addr = room.start();
+                        let addr = room.start();
 
-                act.rooms.insert(
-                    room_id,
-                    Room {
-                        addr: addr.clone(),
-                        name: db_game.name.to_owned(),
-                    },
-                );
+                        act.rooms.insert(
+                            room_id,
+                            Room {
+                                addr: addr.clone(),
+                                name: db_game.name.to_owned(),
+                            },
+                        );
 
-                let session = act
-                    .sessions
-                    .get_mut(&session_id)
-                    .expect("session not found");
-                session.room_id = Some(room_id);
+                        let session = act
+                            .sessions
+                            .get_mut(&session_id)
+                            .expect("session not found");
+                        session.room_id = Some(room_id);
 
-                fut::ok(addr)
-            }))
+                        fut::ok(addr)
+                    }),
+            )
         };
 
         let fut = prefetch.then(move |res, act, _| {
             if let Ok(room_addr) = res {
-                room_addr
-                    .do_send(game_room::Join {
-                        session_id,
-                        user_id,
-                        addr,
-                    });
+                room_addr.do_send(game_room::Join {
+                    session_id,
+                    user_id,
+                    addr,
+                });
             }
-            async { }.into_actor(act)
+            async {}.into_actor(act)
         });
 
         fut
@@ -410,40 +414,51 @@ impl Handler<CreateRoom> for GameServer {
         };
 
         let cloned_name = name.clone();
-        let result = self.leave_room(id).then(move |(), act, _| {
-            act.db.send(db::StoreGame { id: None, replay: None, name: cloned_name }).into_actor(act)
-        }).then(move |res, act, _| {
-            // TODO: Figure out how to early exit here instead
-            let room_id = match res {
-                Ok(Ok(g)) => g.id as _,
-                e => panic!("{:?}", e)
-            };
+        let result = self
+            .leave_room(id)
+            .then(move |(), act, _| {
+                act.db
+                    .send(db::StoreGame {
+                        id: None,
+                        replay: None,
+                        name: cloned_name,
+                    })
+                    .into_actor(act)
+            })
+            .then(move |res, act, _| {
+                // TODO: Figure out how to early exit here instead
+                let room_id = match res {
+                    Ok(Ok(g)) => g.id as _,
+                    e => panic!("{:?}", e),
+                };
 
-            let room = GameRoom {
-                room_id,
-                sessions: HashMap::new(),
-                users: HashSet::new(),
-                name: name.clone(),
-                last_action: Instant::now(),
-                game,
-                db: act.db.clone(),
-            };
-
-            let addr = room.start();
-
-            act.rooms.insert(
-                room_id,
-                Room {
-                    addr: addr.clone(),
+                let room = GameRoom {
+                    room_id,
+                    sessions: HashMap::new(),
+                    users: HashSet::new(),
                     name: name.clone(),
-                },
-            );
+                    last_action: Instant::now(),
+                    game,
+                    db: act.db.clone(),
+                };
 
-            act.send_global_message(Message::AnnounceRoom(room_id, name));
+                let addr = room.start();
 
-            Box::new(act.join_room(id, room_id)
-                .then(move |(), _, _| fut::ready(Ok((room_id, addr)))))
-        });
+                act.rooms.insert(
+                    room_id,
+                    Room {
+                        addr: addr.clone(),
+                        name: name.clone(),
+                    },
+                );
+
+                act.send_global_message(Message::AnnounceRoom(room_id, name));
+
+                Box::new(
+                    act.join_room(id, room_id)
+                        .then(move |(), _, _| fut::ready(Ok((room_id, addr)))),
+                )
+            });
 
         ActorResponse::r#async(result)
     }

@@ -69,9 +69,7 @@ pub struct GameAction {
 
 impl GameAction {
     fn new(user_id: u64, action: ReplayActionKind) -> Self {
-        GameAction {
-            user_id, action
-        }
+        GameAction { user_id, action }
     }
 
     fn play(user_id: u64, action: ActionKind) -> Self {
@@ -359,7 +357,10 @@ impl Game {
             return Err(TakeSeatError::NotOpen);
         }
         seat.player = Some(player_id);
-        self.actions.push(GameAction::new(player_id, ReplayActionKind::TakeSeat(seat_id as _)));
+        self.actions.push(GameAction::new(
+            player_id,
+            ReplayActionKind::TakeSeat(seat_id as _),
+        ));
         Ok(())
     }
 
@@ -372,7 +373,10 @@ impl Game {
             return Err(TakeSeatError::NotOpen);
         }
         seat.player = None;
-        self.actions.push(GameAction::new(player_id, ReplayActionKind::LeaveSeat(seat_id as _)));
+        self.actions.push(GameAction::new(
+            player_id,
+            ReplayActionKind::LeaveSeat(seat_id as _),
+        ));
         Ok(())
     }
 
