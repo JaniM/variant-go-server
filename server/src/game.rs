@@ -47,17 +47,36 @@ impl Seat {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ActionKind {
     Place(u32, u32),
     Pass,
     Cancel,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum ReplayActionKind {
+    Play(ActionKind),
+    TakeSeat(u32),
+    LeaveSeat(u32),
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GameAction {
-    pub seat: usize,
-    pub action: ActionKind,
+    pub user_id: u64,
+    pub action: ReplayActionKind,
+}
+
+impl GameAction {
+    fn new(user_id: u64, action: ReplayActionKind) -> Self {
+        GameAction {
+            user_id, action
+        }
+    }
+
+    fn play(user_id: u64, action: ActionKind) -> Self {
+        GameAction::new(user_id, ReplayActionKind::Play(action))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Hash, Serialize, Deserialize)]
@@ -216,6 +235,7 @@ pub struct Game {
     pub capture_count: usize,
     pub komis: Vec<i32>,
     pub mods: GameModifier,
+    pub actions: Vec<GameAction>,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -244,6 +264,15 @@ pub struct GameView {
     pub board: Vec<Color>,
     pub size: (u8, u8),
     pub mods: GameModifier,
+}
+
+#[derive(Serialize, Deserialize)]
+struct GameReplay {
+    actions: Vec<GameAction>,
+    mods: GameModifier,
+    komis: Vec<i32>,
+    seats: Vec<u8>,
+    size: (u8, u8),
 }
 
 impl Game {
@@ -280,7 +309,45 @@ impl Game {
             capture_count: 0,
             komis,
             mods,
+            actions: vec![],
         })
+    }
+
+    /// Loads a game from a replay dump. Can fail at any point due to changed rules...
+    /// Such is life.
+    pub fn load(dump: &[u8]) -> Option<Game> {
+        let replay: GameReplay = serde_cbor::from_slice(dump).ok()?;
+        let mut game = Game::standard(&replay.seats, replay.komis, replay.size, replay.mods)?;
+
+        for action in replay.actions {
+            use ReplayActionKind::*;
+            match action.action {
+                TakeSeat(seat_id) => {
+                    game.take_seat(action.user_id, seat_id as _).ok()?;
+                }
+                LeaveSeat(seat_id) => {
+                    game.leave_seat(action.user_id, seat_id as _).ok()?;
+                }
+                Play(play) => {
+                    game.make_action(action.user_id, play).ok()?;
+                }
+            }
+        }
+
+        Some(game)
+    }
+
+    /// Dumps the game to a (hopefully somewhat) stable replay format.
+    pub fn dump(&self) -> Vec<u8> {
+        let replay = GameReplay {
+            actions: self.actions.clone(),
+            komis: self.komis.clone(),
+            size: (self.board.width as _, self.board.height as _),
+            seats: self.seats.iter().map(|x| x.team.0).collect(),
+            mods: self.mods.clone(),
+        };
+
+        serde_cbor::to_vec(&replay).expect("Game dump failed")
     }
 
     pub fn take_seat(&mut self, player_id: u64, seat_id: usize) -> Result<(), TakeSeatError> {
@@ -292,6 +359,7 @@ impl Game {
             return Err(TakeSeatError::NotOpen);
         }
         seat.player = Some(player_id);
+        self.actions.push(GameAction::new(player_id, ReplayActionKind::TakeSeat(seat_id as _)));
         Ok(())
     }
 
@@ -304,6 +372,7 @@ impl Game {
             return Err(TakeSeatError::NotOpen);
         }
         seat.player = None;
+        self.actions.push(GameAction::new(player_id, ReplayActionKind::LeaveSeat(seat_id as _)));
         Ok(())
     }
 
@@ -316,11 +385,17 @@ impl Game {
             return Err(MakeActionError::NotPlayer);
         }
 
-        match self.state {
-            GameState::Play(_) => self.make_action_play(player_id, action),
-            GameState::Scoring(_) => self.make_action_scoring(player_id, action),
+        let res = match self.state {
+            GameState::Play(_) => self.make_action_play(player_id, action.clone()),
+            GameState::Scoring(_) => self.make_action_scoring(player_id, action.clone()),
             GameState::Done(_) => Err(MakeActionError::GameDone),
+        };
+
+        if res.is_ok() {
+            self.actions.push(GameAction::play(player_id, action));
         }
+
+        res
     }
 
     pub fn make_action_play(

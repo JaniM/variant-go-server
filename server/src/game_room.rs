@@ -2,6 +2,7 @@ use actix::prelude::*;
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
+use crate::db;
 use crate::game;
 use crate::message;
 
@@ -52,6 +53,7 @@ pub struct GameRoom {
     pub name: String,
     pub last_action: Instant,
     pub game: game::Game,
+    pub db: Addr<db::DbActor>,
 }
 
 impl GameRoom {
@@ -64,6 +66,12 @@ impl GameRoom {
 
 impl Actor for GameRoom {
     type Context = Context<Self>;
+
+    fn stopping(&mut self, ctx: &mut Self::Context) -> Running {
+        println!("Room {} stopping!", self.room_id);
+
+        Running::Stop
+    }
 }
 
 impl Handler<Leave> for GameRoom {
@@ -157,6 +165,12 @@ impl Handler<GameAction> for GameRoom {
                 }
             }
         }
+
+        self.db.do_send(db::StoreGame {
+            id: Some(self.room_id as _),
+            name: self.name.clone(),
+            replay: Some(self.game.dump()),
+        });
 
         self.send_room_message(Message::GameStatus {
             room_id: self.room_id,

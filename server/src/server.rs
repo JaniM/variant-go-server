@@ -4,6 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 use uuid::Uuid;
 
+use crate::db;
 use crate::game;
 use crate::game_room::{self, GameRoom};
 use crate::message;
@@ -13,8 +14,6 @@ macro_rules! catch {
         (|| Some({ $($code)+ }))()
     };
 }
-
-// TODO: separate game rooms to their own actors to deal with load
 
 #[derive(Message, Clone)]
 #[rtype(result = "()")]
@@ -76,12 +75,14 @@ impl actix::Message for CreateRoom {
     type Result = Result<(u32, Addr<GameRoom>), ()>;
 }
 
-#[derive(Message)]
-#[rtype(Profile)]
 pub struct IdentifyAs {
     pub id: usize,
     pub token: Option<String>,
     pub nick: Option<String>,
+}
+
+impl actix::Message for IdentifyAs {
+    type Result = Result<Profile, ()>;
 }
 
 #[derive(Clone)]
@@ -109,24 +110,25 @@ pub struct GameServer {
     sessions: HashMap<usize, Session>,
     sessions_by_user: HashMap<u64, HashSet<usize>>,
     profiles: HashMap<u64, Profile>,
-    user_tokens: HashMap<Uuid, u64>,
     rooms: HashMap<u32, Room>,
     rng: ThreadRng,
     game_counter: u32,
+    db: Addr<db::DbActor>,
 }
 
 impl Default for GameServer {
     fn default() -> GameServer {
         let mut rooms = HashMap::new();
+        let db = SyncArbiter::start(8, || db::DbActor::default());
 
         GameServer {
             sessions: HashMap::new(),
             sessions_by_user: HashMap::new(),
             profiles: HashMap::new(),
-            user_tokens: HashMap::new(),
             rooms,
             rng: rand::thread_rng(),
             game_counter: 0,
+            db,
         }
     }
 }
@@ -199,25 +201,69 @@ impl GameServer {
         let room_addr = self.rooms.get(&room_id).map(|r| r.addr.clone());
         let addr = session.game_client.clone();
 
-        if room_addr.is_some() {
+        let prefetch = if let Some(room_addr) = room_addr {
             session.room_id = Some(room_id);
-        }
+            fut::Either::Right(async move { Ok::<_, ()>(room_addr) }.into_actor(self))
+        } else {
+            fut::Either::Left(self.db.send(db::GetGame(room_id as _)).into_actor(self).then(move |res, act, _| {
+                let db_game = match res {
+                    Ok(Ok(db_game)) => db_game,
+                    _ => return fut::err(())
+                };
 
-        let fut = async move {
-            if let Some(room_addr) = room_addr {
+                let replay = match db_game.replay {
+                    Some(r) => r,
+                    _ => return fut::err(())
+                };
+
+                let game = match game::Game::load(&replay) {
+                    Some(r) => r,
+                    _ => return fut::err(())
+                };
+
+                let room = GameRoom {
+                    room_id,
+                    sessions: HashMap::new(),
+                    users: HashSet::new(),
+                    name: db_game.name.to_owned(),
+                    last_action: Instant::now(),
+                    game,
+                    db: act.db.clone(),
+                };
+
+                let addr = room.start();
+
+                act.rooms.insert(
+                    room_id,
+                    Room {
+                        addr: addr.clone(),
+                        name: db_game.name.to_owned(),
+                    },
+                );
+
+                let session = act
+                    .sessions
+                    .get_mut(&session_id)
+                    .expect("session not found");
+                session.room_id = Some(room_id);
+
+                fut::ok(addr)
+            }))
+        };
+
+        let fut = prefetch.then(move |res, act, _| {
+            if let Ok(room_addr) = res {
                 room_addr
-                    .send(game_room::Join {
+                    .do_send(game_room::Join {
                         session_id,
                         user_id,
                         addr,
-                    })
-                    .await;
-            } else {
-                ()
+                    });
             }
-        };
+            async { }.into_actor(act)
+        });
 
-        fut.into_actor(self)
+        fut
     }
 }
 
@@ -225,6 +271,11 @@ impl Actor for GameServer {
     type Context = Context<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {}
+
+    fn stopping(&mut self, ctx: &mut Self::Context) -> Running {
+        println!("Server stopping!");
+        Running::Stop
+    }
 }
 
 /// Handler for Connect message.
@@ -358,10 +409,15 @@ impl Handler<CreateRoom> for GameServer {
             None => return ActorResponse::reply(Err(())),
         };
 
+        let cloned_name = name.clone();
         let result = self.leave_room(id).then(move |(), act, _| {
-            // TODO: room ids are currently sequential as a hack for ordering..
-            let room_id = act.game_counter;
-            act.game_counter += 1;
+            act.db.send(db::StoreGame { id: None, replay: None, name: cloned_name }).into_actor(act)
+        }).then(move |res, act, _| {
+            // TODO: Figure out how to early exit here instead
+            let room_id = match res {
+                Ok(Ok(g)) => g.id as _,
+                e => panic!("{:?}", e)
+            };
 
             let room = GameRoom {
                 room_id,
@@ -370,6 +426,7 @@ impl Handler<CreateRoom> for GameServer {
                 name: name.clone(),
                 last_action: Instant::now(),
                 game,
+                db: act.db.clone(),
             };
 
             let addr = room.start();
@@ -384,8 +441,8 @@ impl Handler<CreateRoom> for GameServer {
 
             act.send_global_message(Message::AnnounceRoom(room_id, name));
 
-            act.join_room(id, room_id)
-                .then(move |(), _, _| fut::ready(Ok((room_id, addr))))
+            Box::new(act.join_room(id, room_id)
+                .then(move |(), _, _| fut::ready(Ok((room_id, addr)))))
         });
 
         ActorResponse::r#async(result)
@@ -393,9 +450,9 @@ impl Handler<CreateRoom> for GameServer {
 }
 
 impl Handler<IdentifyAs> for GameServer {
-    type Result = MessageResult<IdentifyAs>;
+    type Result = ActorResponse<Self, Profile, ()>;
 
-    fn handle(&mut self, msg: IdentifyAs, _: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: IdentifyAs, ctx: &mut Self::Context) -> Self::Result {
         let IdentifyAs { id, token, nick } = msg;
 
         let rng = &mut self.rng;
@@ -403,38 +460,54 @@ impl Handler<IdentifyAs> for GameServer {
         let token = token
             .and_then(|t| Uuid::parse_str(&t).ok())
             .unwrap_or_else(|| Uuid::from_bytes(rng.gen()));
-        let user_id = *self.user_tokens.entry(token).or_insert_with(|| rng.gen());
 
-        let profile = self.profiles.entry(user_id).or_insert_with(|| Profile {
-            user_id,
-            token,
-            nick: None,
+        let db = self.db.clone();
+        let fut = db.send(db::IdentifyUser {
+            auth_token: token.to_string(),
+            nick: nick.clone(),
         });
 
-        if let Some(nick) = nick {
-            if nick.len() < 30 {
-                profile.nick = Some(nick);
+        let fut = fut.into_actor(self).then(move |res, act, _| {
+            let user = match res {
+                Ok(Ok(u)) => u,
+                _ => return fut::ready(Err(())),
+            };
+
+            let user_id = user.id as u64;
+
+            let profile = act.profiles.entry(user_id).or_insert_with(move || Profile {
+                user_id,
+                token,
+                nick: user.nick,
+            });
+
+            if let Some(nick) = nick {
+                if nick.len() < 30 {
+                    profile.nick = Some(nick);
+                }
             }
-        }
 
-        let profile = profile.clone();
+            let profile = profile.clone();
 
-        self.send_user_message(user_id, Message::Identify(profile.clone()));
+            act.send_user_message(user_id, Message::Identify(profile.clone()));
 
-        let sessions = self
-            .sessions_by_user
-            .entry(user_id)
-            .or_insert_with(|| HashSet::new());
-        sessions.insert(id);
+            let sessions = act
+                .sessions_by_user
+                .entry(user_id)
+                .or_insert_with(|| HashSet::new());
+            sessions.insert(id);
 
-        catch! {
-            self.sessions.get_mut(&id)?.user_id = Some(user_id);
-        };
+            catch! {
+                act.sessions.get_mut(&id)?.user_id = Some(user_id);
+            };
 
-        // Announce profile update to users
-        // TODO: only send the profile to users in relevant rooms
-        self.send_global_message(Message::UpdateProfile(profile.clone()));
+            // Announce profile update to users
+            // TODO: only send the profile to users in relevant rooms
+            act.send_global_message(Message::UpdateProfile(profile.clone()));
 
-        MessageResult(profile)
+            fut::ready(Ok(profile))
+        });
+
+        ActorResponse::r#async(fut)
     }
 }

@@ -1,6 +1,11 @@
+#[macro_use]
+extern crate diesel;
+
+mod db;
 mod game;
 mod game_room;
 mod message;
+mod schema;
 mod server;
 
 use std::time::{Duration, Instant};
@@ -242,7 +247,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for ClientWebSocket {
                             .into_actor(self)
                             .then(|res, _act, ctx| {
                                 match res {
-                                    Ok(res) => ctx.binary(pack(ServerMessage::Identify {
+                                    Ok(Ok(res)) => ctx.binary(pack(ServerMessage::Identify {
                                         user_id: res.user_id,
                                         token: res.token.to_string(),
                                         nick: res.nick,
