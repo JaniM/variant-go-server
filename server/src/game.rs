@@ -179,10 +179,10 @@ impl GameState {
         })
     }
 
-    fn scoring(board: &Board, seat_count: usize, komis: &[i32]) -> Self {
+    fn scoring(board: &Board, seat_count: usize, scores: &[i32]) -> Self {
         let groups = find_groups(board);
         let points = score_board(board.width, board.height, &groups);
-        let mut scores = komis.to_vec();
+        let mut scores = scores.to_vec();
         for color in &points.points {
             if !color.is_empty() {
                 scores[color.0 as usize - 1] += 2;
@@ -217,6 +217,11 @@ pub struct GameModifier {
     /// Overlapping existing stones are ignored.
     /// The blob must fit on the board.
     pub pixel: bool,
+
+    /// "Ponnuki is 30 points". Whenever a player captures a single stone, forming a ponnuki
+    /// they get (or lose) points.
+    #[serde(default)]
+    pub ponnuki_is_points: Option<i32>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -225,10 +230,11 @@ pub struct Game {
     pub state_stack: Vec<GameState>,
     // TODO: use smallvec?
     pub seats: Vec<Seat>,
+    pub points: Vec<i32>,
     pub turn: usize,
     pub pass_count: usize,
     pub board: Board,
-    pub board_history: Vec<(u64, Board, GameState)>,
+    pub board_history: Vec<(u64, Board, GameState, Vec<i32>)>,
     /// Optimization for superko
     pub capture_count: usize,
     pub komis: Vec<i32>,
@@ -262,6 +268,7 @@ pub struct GameView {
     pub board: Vec<Color>,
     pub size: (u8, u8),
     pub mods: GameModifier,
+    pub points: Vec<i32>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -300,10 +307,11 @@ impl Game {
             state: state.clone(),
             state_stack: Vec::new(),
             seats: seats.into_iter().map(|&t| Seat::new(Color(t))).collect(),
+            points: komis.clone(),
             turn: 0,
             pass_count: 0,
             board: board.clone(),
-            board_history: vec![(board.hash(), board, state)],
+            board_history: vec![(board.hash(), board, state, komis.clone())],
             capture_count: 0,
             komis,
             mods,
@@ -493,6 +501,20 @@ impl Game {
                         captures += 1;
                         *self.board.point_mut(point) = Color::empty();
                     }
+
+                    if let Some(ponnuki) = self.mods.ponnuki_is_points {
+                        if group.points.len() == 1 && group.team != active_seat.team {
+                            let p = group.points[0];
+                            let neighbours = self.board.surrounding_points(p).collect::<Vec<_>>();
+                            if neighbours.len() == 4
+                                && neighbours
+                                    .iter()
+                                    .all(|x| self.board.get_point(*x) == active_seat.team)
+                            {
+                                self.points[(active_seat.team.0 - 1) as usize] += ponnuki;
+                            }
+                        }
+                    }
                 }
 
                 let hash = self.board.hash();
@@ -500,7 +522,7 @@ impl Game {
                 // Superko
                 // We only need to scan back capture_count boards, as per Ten 1p's clever idea.
                 // The board can't possibly repeat further back than the number of removed stones.
-                for (old_hash, old_board, _) in self
+                for (old_hash, old_board, _, _) in self
                     .board_history
                     .iter()
                     .rev()
@@ -528,8 +550,12 @@ impl Game {
                     *passed = false;
                 }
 
-                self.board_history
-                    .push((hash, self.board.clone(), self.state.clone()));
+                self.board_history.push((
+                    hash,
+                    self.board.clone(),
+                    self.state.clone(),
+                    self.points.clone(),
+                ));
                 self.capture_count += captures;
             }
             ActionKind::Pass => {
@@ -544,7 +570,7 @@ impl Game {
                     }
                     let old_state = std::mem::replace(
                         &mut self.state,
-                        GameState::scoring(&self.board, self.seats.len(), &self.komis),
+                        GameState::scoring(&self.board, self.seats.len(), &self.points),
                     );
                     self.state_stack.push(old_state);
                 }
@@ -558,6 +584,7 @@ impl Game {
                     self.board.hash(),
                     self.board.clone(),
                     self.state.clone(),
+                    self.points.clone(),
                 ));
             }
             ActionKind::Cancel => {
@@ -569,12 +596,13 @@ impl Game {
                 self.board_history
                     .pop()
                     .ok_or(MakeActionError::OutOfBounds)?;
-                let (_, last_board, last_state) = self
+                let (_, last_board, last_state, last_points) = self
                     .board_history
                     .last()
                     .ok_or(MakeActionError::OutOfBounds)?;
                 self.board = last_board.clone();
                 self.state = last_state.clone();
+                self.points = last_points.clone();
                 self.turn = if self.turn == 0 {
                     self.seats.len() - 1
                 } else {
@@ -608,7 +636,7 @@ impl Game {
                 group.alive = !group.alive;
 
                 state.points = score_board(self.board.width, self.board.height, &state.groups);
-                state.scores = self.komis.clone();
+                state.scores = self.points.clone();
                 for color in &state.points.points {
                     if !color.is_empty() {
                         state.scores[color.0 as usize - 1] += 2;
@@ -654,6 +682,7 @@ impl Game {
             board: self.board.points.clone(),
             size: (self.board.width as u8, self.board.height as u8),
             mods: self.mods.clone(),
+            points: self.points.clone(),
         }
     }
 }

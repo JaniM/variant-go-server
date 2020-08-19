@@ -11,6 +11,7 @@ pub struct GameView {
     pub size: (u8, u8),
     pub state: GameState,
     pub mods: GameModifier,
+    pub points: Vec<i32>,
 }
 
 #[derive(Clone, PartialEq)]

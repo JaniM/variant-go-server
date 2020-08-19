@@ -32,6 +32,7 @@ pub enum Msg {
     SelectSize(u8),
     SetName(String),
     TogglePixel,
+    TogglePonnuki,
     OnCreate,
 }
 
@@ -85,6 +86,14 @@ impl Component for CreateGameView {
             }
             Msg::TogglePixel => {
                 self.mods.pixel = !self.mods.pixel;
+                true
+            }
+            Msg::TogglePonnuki => {
+                self.mods.ponnuki_is_points = match self.mods.ponnuki_is_points {
+                    Some(_) => None,
+                    // These are half points so 60 = 30 points
+                    None => Some(60),
+                };
                 true
             }
             Msg::OnCreate => {
@@ -209,6 +218,14 @@ impl Component for CreateGameView {
                                 checked=self.mods.pixel
                                 onclick=self.link.callback(move |_| Msg::TogglePixel) />
                             <label onclick=self.link.callback(move |_| Msg::TogglePixel)>{"Pixel go"}</label>
+                        </li>
+                        <li>
+                            <input
+                                type="checkbox"
+                                class="toggle"
+                                checked=self.mods.pixel
+                                onclick=self.link.callback(move |_| Msg::TogglePonnuki) />
+                            <label onclick=self.link.callback(move |_| Msg::TogglePonnuki)>{"Ponnuki is 30 points"}</label>
                         </li>
                     </ul>
                 </div>

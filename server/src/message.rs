@@ -58,6 +58,7 @@ pub enum ServerMessage {
         size: (u8, u8),
         state: game::GameState,
         mods: game::GameModifier,
+        points: Vec<i32>,
     },
     Profile(Profile),
     MsgError(String),

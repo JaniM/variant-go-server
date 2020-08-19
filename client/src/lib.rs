@@ -114,6 +114,7 @@ impl Component for GameList {
                     state,
                     size,
                     mods,
+                    points,
                 } => {
                     game.emit(GameView {
                         room_id,
@@ -124,6 +125,7 @@ impl Component for GameList {
                         state,
                         size,
                         mods,
+                        points,
                     });
                 }
                 ServerMessage::Identify {
