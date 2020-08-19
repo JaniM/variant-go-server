@@ -288,6 +288,7 @@ impl Component for GameList {
                     </div>
                 </div>
                 <div style="width: 300px; overflow: hidden; border-left: 2px solid #dedede; margin: 10px; padding-left: 10px;">
+                    <div><a href="https://github.com/JaniM/variant-go-server" target="_blank">{"Github"}</a>{" / "}<a href="https://discord.gg/qzqwEV4" target="_blank">{"Discord"}</a></div>
                     <div>{"Seats"}</div>
                     <SeatList game=game profiles=&self.profiles user=&self.user />
                     {"Users"}
