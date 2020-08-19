@@ -90,6 +90,7 @@ pub struct Profile {
     pub user_id: u64,
     pub token: Uuid,
     pub nick: Option<String>,
+    pub last_game_time: Option<Instant>,
 }
 
 pub struct Session {
@@ -403,15 +404,34 @@ impl Handler<CreateRoom> for GameServer {
             return ActorResponse::reply(Err(()));
         }
 
-        let _user_id = match catch!(self.sessions.get(&id)?.user_id?) {
+        let session = match self.sessions.get(&id) {
             Some(x) => x,
             None => return ActorResponse::reply(Err(())),
         };
+
+        let user_id = match session.user_id {
+            Some(x) => x,
+            None => return ActorResponse::reply(Err(())),
+        };
+
+        let profile = self
+            .profiles
+            .get_mut(&user_id)
+            .expect("User id exists without session");
+
+        if let Some(time) = profile.last_game_time {
+            // Only allow creating a game once every two minutes.
+            if Instant::now() - time < Duration::from_secs(60 * 2) {
+                return ActorResponse::reply(Err(()));
+            }
+        }
 
         let game = match game::Game::standard(&seats, komis, size, mods) {
             Some(g) => g,
             None => return ActorResponse::reply(Err(())),
         };
+
+        profile.last_game_time = Some(Instant::now());
 
         let cloned_name = name.clone();
         let result = self
@@ -494,6 +514,7 @@ impl Handler<IdentifyAs> for GameServer {
                 user_id,
                 token,
                 nick: user.nick,
+                last_game_time: None,
             });
 
             if let Some(nick) = nick {
