@@ -529,12 +529,13 @@ impl Game {
                     .take(self.capture_count + captures)
                 {
                     if *old_hash == hash && old_board == &self.board {
-                        self.board = self
+                        let (_, old_board, _, old_points) = self
                             .board_history
                             .last()
                             .expect("board_history.last() shouldn't be None")
-                            .1
                             .clone();
+                        self.board = old_board;
+                        self.points = old_points;
                         return Err(MakeActionError::Ko);
                     }
                 }
