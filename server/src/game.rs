@@ -669,6 +669,9 @@ impl Game {
                     .state_stack
                     .pop()
                     .expect("Empty state stack in scoring cancel");
+                self.board_history
+                    .pop()
+                    .expect("Empty board history in scoring cancel");
             }
         }
 
