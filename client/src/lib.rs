@@ -197,9 +197,12 @@ impl Component for GameList {
             Msg::Cancel => networking::send(ClientMessage::GameAction(message::GameAction::Cancel)),
             Msg::SetGameStatus(game) => {
                 utils::set_hash(&game.room_id.to_string());
+                let room_id = game.room_id;
                 let old = std::mem::replace(&mut self.game, Some(game));
                 if let Some(old) = old {
-                    self.game.as_mut().unwrap().history = old.history;
+                    if old.room_id == room_id {
+                        self.game.as_mut().unwrap().history = old.history;
+                    }
                 }
             }
             Msg::SetGameHistory(view) => {
