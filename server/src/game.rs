@@ -565,6 +565,13 @@ impl Game {
                 state.players_passed[seat_idx] = true;
                 state.last_stone = None;
 
+                self.board_history.push((
+                    self.board.hash(),
+                    self.board.clone(),
+                    GameState::Play(state.clone()),
+                    self.points.clone(),
+                ));
+
                 if state.players_passed.iter().all(|x| *x) {
                     for passed in &mut state.players_passed {
                         *passed = false;
@@ -574,13 +581,6 @@ impl Game {
                         GameState::scoring(&self.board, self.seats.len(), &self.points),
                     );
                     self.state_stack.push(old_state);
-                } else {
-                    self.board_history.push((
-                        self.board.hash(),
-                        self.board.clone(),
-                        self.state.clone(),
-                        self.points.clone(),
-                    ));
                 }
 
                 self.turn += 1;
@@ -609,6 +609,7 @@ impl Game {
                 } else {
                     self.turn - 1
                 };
+                println!("{:?}", self.board_history);
             }
             unknown => {
                 println!("Play state got unexpected action {:?}", unknown);
