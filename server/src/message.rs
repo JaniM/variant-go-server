@@ -1,5 +1,6 @@
 use crate::game;
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum GameAction {
@@ -35,6 +36,19 @@ pub struct Profile {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum Error {
+    /// This error means the client has to wait for x seconds before it can create a game
+    GameStartTimer(u64),
+    Other(Cow<'static, str>),
+}
+
+impl Error {
+    pub fn other(v: &'static str) -> Self {
+        Error::Other(Cow::from(v))
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum ServerMessage {
     Identify {
         token: String,
@@ -62,4 +76,5 @@ pub enum ServerMessage {
     },
     Profile(Profile),
     MsgError(String),
+    Error(Error),
 }

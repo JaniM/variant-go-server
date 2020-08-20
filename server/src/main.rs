@@ -205,10 +205,16 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for ClientWebSocket {
                                 mods,
                             })
                             .into_actor(self)
-                            .then(|res, act, _| {
-                                if let Ok(Ok((id, addr))) = res {
-                                    act.room_id = Some(id);
-                                    act.game_addr = Some(addr);
+                            .then(|res, act, ctx| {
+                                match res {
+                                    Ok(Ok((id, addr))) => {
+                                        act.room_id = Some(id);
+                                        act.game_addr = Some(addr);
+                                    }
+                                    Ok(Err(err)) => {
+                                        ctx.binary(pack(ServerMessage::Error(err)));
+                                    }
+                                    _ => {}
                                 }
                                 fut::ready(())
                             })

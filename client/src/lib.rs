@@ -70,6 +70,7 @@ struct GameList {
     pane: Pane,
     debounce_job: Option<TimeoutTask>,
     theme: Theme,
+    error: Option<(message::Error, TimeoutTask)>,
 }
 
 enum Msg {
@@ -85,6 +86,7 @@ enum Msg {
     RemoveGame(u32),
     SetPane(Pane),
     SetTheme(Theme),
+    SetError(Option<message::Error>),
     Render,
 }
 
@@ -97,6 +99,7 @@ impl Component for GameList {
         let game = link.callback(Msg::SetGameStatus);
         let set_own_profile = link.callback(Msg::SetOwnProfile);
         let set_profile = link.callback(Msg::SetProfile);
+        let set_error = link.callback(Msg::SetError);
         networking::start_websocket(move |msg| {
             match msg {
                 ServerMessage::AnnounceGame { room_id, name } => {
@@ -139,6 +142,9 @@ impl Component for GameList {
                 ServerMessage::Profile(message::Profile { user_id, nick }) => {
                     set_profile.emit(Profile { user_id, nick });
                 }
+                ServerMessage::Error(err) => {
+                    set_error.emit(Some(err));
+                }
                 _ => {}
             };
         })
@@ -153,6 +159,7 @@ impl Component for GameList {
             pane: Pane::Board,
             debounce_job: None,
             theme: Theme::get(),
+            error: None,
         }
     }
 
@@ -203,6 +210,17 @@ impl Component for GameList {
             Msg::SetTheme(theme) => {
                 self.theme = theme;
                 self.theme.save();
+            }
+            Msg::SetError(err) => {
+                self.error = err.map(|err| {
+                    (
+                        err,
+                        TimeoutService::spawn(
+                            Duration::from_secs(10),
+                            self.link.callback(|_| Msg::SetError(None)),
+                        ),
+                    )
+                });
             }
             Msg::Render => {
                 self.debounce_job = None;
@@ -335,6 +353,24 @@ impl Component for GameList {
             Theme::Dark => "dark",
         };
 
+        let error_box = if let Some((error, _)) = &self.error {
+            let text = match error {
+                message::Error::GameStartTimer(x) => {
+                    format!("You have to wait {} seconds to create a game!", x)
+                }
+                message::Error::Other(x) => x.to_string(),
+            };
+            html! {
+                <div
+                    class=("error-box", class)
+                    onclick=self.link.callback(|_| Msg::SetError(None))>
+                    {text}
+                </div>
+            }
+        } else {
+            html!()
+        };
+
         html! {
         <div
             id="main"
@@ -353,6 +389,7 @@ impl Component for GameList {
                 </ul>
             </div>
             {right_panel}
+            {error_box}
         </div>
         }
     }

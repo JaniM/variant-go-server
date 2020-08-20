@@ -72,7 +72,7 @@ pub struct CreateRoom {
 }
 
 impl actix::Message for CreateRoom {
-    type Result = Result<(u32, Addr<GameRoom>), ()>;
+    type Result = Result<(u32, Addr<GameRoom>), message::Error>;
 }
 
 pub struct IdentifyAs {
@@ -386,9 +386,10 @@ impl Handler<Join> for GameServer {
 
 /// Create room, announce to users
 impl Handler<CreateRoom> for GameServer {
-    type Result = ActorResponse<Self, (u32, Addr<GameRoom>), ()>;
+    type Result = ActorResponse<Self, (u32, Addr<GameRoom>), message::Error>;
 
     fn handle(&mut self, msg: CreateRoom, _: &mut Context<Self>) -> Self::Result {
+        use message::Error;
         let CreateRoom {
             id,
             name,
@@ -401,17 +402,17 @@ impl Handler<CreateRoom> for GameServer {
         // TODO: prevent spamming rooms (allow only one?)
 
         if name.len() > 50 {
-            return ActorResponse::reply(Err(()));
+            return ActorResponse::reply(Err(Error::other("Name too long")));
         }
 
         let session = match self.sessions.get(&id) {
             Some(x) => x,
-            None => return ActorResponse::reply(Err(())),
+            None => return ActorResponse::reply(Err(Error::other("No session"))),
         };
 
         let user_id = match session.user_id {
             Some(x) => x,
-            None => return ActorResponse::reply(Err(())),
+            None => return ActorResponse::reply(Err(Error::other("Not identified"))),
         };
 
         let profile = self
@@ -421,14 +422,16 @@ impl Handler<CreateRoom> for GameServer {
 
         if let Some(time) = profile.last_game_time {
             // Only allow creating a game once every two minutes.
-            if Instant::now() - time < Duration::from_secs(60 * 2) {
-                return ActorResponse::reply(Err(()));
+            let diff = Instant::now() - time;
+            let target = Duration::from_secs(60 * 2);
+            if diff < target {
+                return ActorResponse::reply(Err(Error::GameStartTimer((target - diff).as_secs())));
             }
         }
 
         let game = match game::Game::standard(&seats, komis, size, mods) {
             Some(g) => g,
-            None => return ActorResponse::reply(Err(())),
+            None => return ActorResponse::reply(Err(Error::other("Rules not accepted"))),
         };
 
         profile.last_game_time = Some(Instant::now());
