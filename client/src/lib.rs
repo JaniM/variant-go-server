@@ -460,8 +460,8 @@ impl Component for GameList {
             id="main"
             class=class
             style="display: flex; flex-direction: row; min-height: 100vh;">
-            <div style="width: 300px; border-right: 2px solid #dedede; padding: 10px;">
-                <div style="width: 100%;">
+            <div style="width: 300px; border-right: 2px solid #dedede; padding: 10px; margin-right: 10px;">
+                <div style="width: 100%; margin-bottom: 10px;">
                     <button
                         style="width: 100%;"
                         onclick=self.link.callback(|_| Msg::StartGame)>
