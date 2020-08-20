@@ -574,19 +574,19 @@ impl Game {
                         GameState::scoring(&self.board, self.seats.len(), &self.points),
                     );
                     self.state_stack.push(old_state);
+                } else {
+                    self.board_history.push((
+                        self.board.hash(),
+                        self.board.clone(),
+                        self.state.clone(),
+                        self.points.clone(),
+                    ));
                 }
 
                 self.turn += 1;
                 if self.turn >= self.seats.len() {
                     self.turn = 0;
                 }
-
-                self.board_history.push((
-                    self.board.hash(),
-                    self.board.clone(),
-                    self.state.clone(),
-                    self.points.clone(),
-                ));
             }
             ActionKind::Cancel => {
                 // Undo a turn
@@ -669,9 +669,6 @@ impl Game {
                     .state_stack
                     .pop()
                     .expect("Empty state stack in scoring cancel");
-                self.board_history
-                    .pop()
-                    .expect("Empty board history in scoring cancel");
             }
         }
 
