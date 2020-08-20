@@ -82,7 +82,7 @@ pub struct IdentifyAs {
 }
 
 impl actix::Message for IdentifyAs {
-    type Result = Result<Profile, ()>;
+    type Result = Result<Profile, message::Error>;
 }
 
 #[derive(Clone)]
@@ -488,9 +488,11 @@ impl Handler<CreateRoom> for GameServer {
 }
 
 impl Handler<IdentifyAs> for GameServer {
-    type Result = ActorResponse<Self, Profile, ()>;
+    type Result = ActorResponse<Self, Profile, message::Error>;
 
     fn handle(&mut self, msg: IdentifyAs, ctx: &mut Self::Context) -> Self::Result {
+        use message::Error;
+
         let IdentifyAs { id, token, nick } = msg;
 
         let rng = &mut self.rng;
@@ -508,7 +510,7 @@ impl Handler<IdentifyAs> for GameServer {
         let fut = fut.into_actor(self).then(move |res, act, _| {
             let user = match res {
                 Ok(Ok(u)) => u,
-                _ => return fut::ready(Err(())),
+                _ => return fut::err(Error::other("No profile")),
             };
 
             let user_id = user.id as u64;
@@ -521,8 +523,14 @@ impl Handler<IdentifyAs> for GameServer {
             });
 
             if let Some(nick) = nick {
-                if nick.len() < 30 {
-                    profile.nick = Some(nick);
+                let nick = nick.trim();
+                if nick.len() >= 30 {
+                    return fut::err(Error::other("Nick too long"));
+                }
+                if nick.len() == 0 {
+                    profile.nick = None;
+                } else {
+                    profile.nick = Some(nick.to_owned());
                 }
             }
 
@@ -544,7 +552,7 @@ impl Handler<IdentifyAs> for GameServer {
             // TODO: only send the profile to users in relevant rooms
             act.send_global_message(Message::UpdateProfile(profile.clone()));
 
-            fut::ready(Ok(profile))
+            fut::ok(profile)
         });
 
         ActorResponse::r#async(fut)

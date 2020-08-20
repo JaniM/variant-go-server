@@ -259,6 +259,9 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for ClientWebSocket {
                                         token: res.token.to_string(),
                                         nick: res.nick,
                                     })),
+                                    Ok(Err(err)) => {
+                                        ctx.binary(pack(ServerMessage::Error(err)));
+                                    }
                                     _ => ctx.stop(),
                                 }
                                 fut::ready(())

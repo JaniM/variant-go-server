@@ -1,7 +1,7 @@
 use wasm_bindgen::prelude::*;
 
 use wasm_bindgen::JsCast;
-use web_sys::{ErrorEvent, MessageEvent, WebSocket};
+use web_sys::{CloseEvent, ErrorEvent, MessageEvent, WebSocket};
 
 use std::cell::RefCell;
 
@@ -37,7 +37,23 @@ pub fn set_token(token: &str) {
     local_storage().set_item("token", token).unwrap();
 }
 
-pub fn start_websocket(on_msg: impl Fn(ServerMessage) -> () + 'static) -> Result<(), JsValue> {
+fn wrap<T>(f: impl FnMut(T) + 'static) -> Closure<dyn FnMut(T)>
+where
+    T: wasm_bindgen::convert::FromWasmAbi + 'static,
+{
+    Closure::wrap(Box::new(f) as Box<dyn FnMut(T)>)
+}
+
+pub enum ServerError {
+    LostConnection,
+
+    /// This is a bit hacky. Figure out a better way?
+    Clear,
+}
+
+pub fn start_websocket(
+    on_msg: impl (Fn(Result<ServerMessage, ServerError>) -> ()) + Clone + 'static,
+) -> Result<(), JsValue> {
     let window = web_sys::window().expect("Window not available");
     let host = window.location().hostname().expect("host not available");
     let ws = WebSocket::new(&format!("ws://{}:8088/ws/", host))?;
@@ -47,8 +63,8 @@ pub fn start_websocket(on_msg: impl Fn(ServerMessage) -> () + 'static) -> Result
     // For small binary messages, like CBOR, Arraybuffer is more efficient than Blob handling
     ws.set_binary_type(web_sys::BinaryType::Arraybuffer);
     // create callback
-    let cloned_ws = ws.clone();
-    let onmessage_callback = Closure::wrap(Box::new(move |e: MessageEvent| {
+    let cloned_on_msg = on_msg.clone();
+    let onmessage_callback = wrap(move |e: MessageEvent| {
         // Handle difference Text/Binary,...
         if let Ok(abuf) = e.data().dyn_into::<js_sys::ArrayBuffer>() {
             console_log!("message event, received arraybuffer: {:?}", abuf);
@@ -63,7 +79,7 @@ pub fn start_websocket(on_msg: impl Fn(ServerMessage) -> () + 'static) -> Result
                 }
             };
             console_log!("{:?}", msg);
-            on_msg(msg);
+            cloned_on_msg(Ok(msg));
         } else if let Ok(blob) = e.data().dyn_into::<web_sys::Blob>() {
             console_log!("message event, received blob: {:?}", blob);
         } else if let Ok(txt) = e.data().dyn_into::<js_sys::JsString>() {
@@ -71,20 +87,33 @@ pub fn start_websocket(on_msg: impl Fn(ServerMessage) -> () + 'static) -> Result
         } else {
             console_log!("message event, received Unknown: {:?}", e.data());
         }
-    }) as Box<dyn FnMut(MessageEvent)>);
+    });
     // set message event handler on WebSocket
     ws.set_onmessage(Some(onmessage_callback.as_ref().unchecked_ref()));
     // forget the callback to keep it alive
     onmessage_callback.forget();
 
-    let onerror_callback = Closure::wrap(Box::new(move |e: ErrorEvent| {
+    let cloned_on_msg = on_msg.clone();
+    let onerror_callback = wrap(move |e: ErrorEvent| {
         console_log!("error event: {:?}", e);
-    }) as Box<dyn FnMut(ErrorEvent)>);
+        cloned_on_msg(Err(ServerError::LostConnection));
+        let _ = start_websocket(cloned_on_msg.clone());
+    });
     ws.set_onerror(Some(onerror_callback.as_ref().unchecked_ref()));
     onerror_callback.forget();
 
-    let onopen_callback = Closure::wrap(Box::new(move |_| {
+    let cloned_on_msg = on_msg.clone();
+    let onclose_callback = wrap(move |e: CloseEvent| {
+        cloned_on_msg(Err(ServerError::LostConnection));
+        let _ = start_websocket(cloned_on_msg.clone());
+    });
+    ws.set_onclose(Some(onclose_callback.as_ref().unchecked_ref()));
+    onclose_callback.forget();
+
+    let cloned_on_msg = on_msg.clone();
+    let onopen_callback = wrap(move |_: JsValue| {
         console_log!("socket opened");
+        cloned_on_msg(Err(ServerError::Clear));
 
         // TODO: these should not be here
         send(ClientMessage::GetGameList);
@@ -102,7 +131,7 @@ pub fn start_websocket(on_msg: impl Fn(ServerMessage) -> () + 'static) -> Result
                 send(ClientMessage::JoinGame(id));
             }
         }
-    }) as Box<dyn FnMut(JsValue)>);
+    });
     ws.set_onopen(Some(onopen_callback.as_ref().unchecked_ref()));
     onopen_callback.forget();
 

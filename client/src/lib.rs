@@ -26,6 +26,8 @@ use crate::text_input::TextInput;
 use yew::prelude::*;
 use yew::services::timeout::{TimeoutService, TimeoutTask};
 
+use itertools::Itertools;
+
 enum Pane {
     CreateGame,
     Board,
@@ -102,13 +104,13 @@ impl Component for GameList {
         let set_error = link.callback(Msg::SetError);
         networking::start_websocket(move |msg| {
             match msg {
-                ServerMessage::AnnounceGame { room_id, name } => {
+                Ok(ServerMessage::AnnounceGame { room_id, name }) => {
                     addgame.emit((room_id, name));
                 }
-                ServerMessage::CloseGame { room_id } => {
+                Ok(ServerMessage::CloseGame { room_id }) => {
                     remove_game.emit(room_id);
                 }
-                ServerMessage::GameStatus {
+                Ok(ServerMessage::GameStatus {
                     room_id,
                     members,
                     seats,
@@ -118,7 +120,7 @@ impl Component for GameList {
                     size,
                     mods,
                     points,
-                } => {
+                }) => {
                     game.emit(GameView {
                         room_id,
                         members,
@@ -131,19 +133,27 @@ impl Component for GameList {
                         points,
                     });
                 }
-                ServerMessage::Identify {
+                Ok(ServerMessage::Identify {
                     user_id,
                     token,
                     nick,
-                } => {
+                }) => {
                     networking::set_token(&token);
                     set_own_profile.emit(Profile { user_id, nick });
                 }
-                ServerMessage::Profile(message::Profile { user_id, nick }) => {
+                Ok(ServerMessage::Profile(message::Profile { user_id, nick })) => {
                     set_profile.emit(Profile { user_id, nick });
                 }
-                ServerMessage::Error(err) => {
+                Ok(ServerMessage::Error(err)) => {
                     set_error.emit(Some(err));
+                }
+                Err(networking::ServerError::LostConnection) => {
+                    set_error.emit(Some(message::Error::other(
+                        "Lost connection, reconnecting...",
+                    )));
+                }
+                Err(networking::ServerError::Clear) => {
+                    set_error.emit(None);
                 }
                 _ => {}
             };
@@ -225,6 +235,12 @@ impl Component for GameList {
             Msg::Render => {
                 self.debounce_job = None;
                 self.games.sort_unstable_by_key(|x| -(x.0 as i32));
+                self.games = self
+                    .games
+                    .iter()
+                    .cloned()
+                    .dedup_by(|x, y| x.0 == y.0)
+                    .collect();
             }
         }
         true
