@@ -346,6 +346,7 @@ impl Component for GameList {
                 _ => html!(),
             };
 
+            let game_length = game.move_number;
             let view_turn = match &game.history {
                 Some(h) => h.move_number,
                 None => game.move_number,
@@ -361,6 +362,12 @@ impl Component for GameList {
                     <button
                         onclick=self.link.callback(move |_| Msg::GetBoardAt(0))
                         disabled={view_turn == 0} >
+                        {"<<<"}
+                    </button>
+                    <button
+                        onclick=self.link.callback(move |_|
+                            Msg::GetBoardAt(view_turn.saturating_sub(5)))
+                        disabled={view_turn == 0} >
                         {"<<"}
                     </button>
                     <button
@@ -374,9 +381,15 @@ impl Component for GameList {
                         {">"}
                     </button>
                     <button
-                        onclick=self.link.callback(|_| Msg::SetGameHistory(None))
+                        onclick=self.link.callback(move |_|
+                            Msg::GetBoardAt((view_turn+5).min(game_length)))
                         disabled={view_turn >= game.move_number} >
                         {">>"}
+                    </button>
+                    <button
+                        onclick=self.link.callback(|_| Msg::SetGameHistory(None))
+                        disabled={view_turn >= game.move_number} >
+                        {">>>"}
                     </button>
                     </div>
                 </div>
