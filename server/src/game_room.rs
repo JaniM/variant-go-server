@@ -23,6 +23,10 @@ pub enum Message {
         members: Vec<u64>,
         view: game::GameView,
     },
+    BoardAt {
+        room_id: u32,
+        view: game::GameHistory,
+    },
 }
 
 #[derive(Message)]
@@ -124,7 +128,7 @@ impl Handler<GameAction> for GameRoom {
     fn handle(&mut self, msg: GameAction, _: &mut Context<Self>) {
         let GameAction { id, action } = msg;
 
-        let user_id = match catch!(self.sessions.get(&id)?.0) {
+        let &(user_id, ref addr) = match self.sessions.get(&id) {
             Some(x) => x,
             None => return,
         };
@@ -163,6 +167,16 @@ impl Handler<GameAction> for GameRoom {
                 if res.is_err() {
                     return;
                 }
+            }
+            message::GameAction::BoardAt(turn) => {
+                let view = self.game.get_view_at(turn);
+                if let Some(view) = view {
+                    addr.do_send(Message::BoardAt {
+                        room_id: self.room_id,
+                        view,
+                    });
+                }
+                return;
             }
         }
 

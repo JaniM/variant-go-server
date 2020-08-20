@@ -113,7 +113,11 @@ impl Handler<game_room::Message> for ClientWebSocket {
                     state: view.state,
                     mods: view.mods,
                     points: view.points,
+                    move_number: view.move_number,
                 }));
+            }
+            game_room::Message::BoardAt { room_id, view } => {
+                ctx.binary(pack(ServerMessage::BoardAt(view)));
             }
         }
     }

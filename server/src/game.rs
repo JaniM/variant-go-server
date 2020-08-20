@@ -196,6 +196,13 @@ impl GameState {
         })
     }
 
+    pub fn assume_play(&self) -> &PlayState {
+        match self {
+            GameState::Play(state) => state,
+            _ => panic!("Assumed play state but was in {:?}", self),
+        }
+    }
+
     pub fn assume_play_mut(&mut self) -> &mut PlayState {
         match self {
             GameState::Play(state) => state,
@@ -269,6 +276,14 @@ pub struct GameView {
     pub size: (u8, u8),
     pub mods: GameModifier,
     pub points: Vec<i32>,
+    pub move_number: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GameHistory {
+    pub board: Vec<u8>,
+    pub last_stone: Option<Vec<(u32, u32)>>,
+    pub move_number: u32,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -684,7 +699,17 @@ impl Game {
             size: (self.board.width as u8, self.board.height as u8),
             mods: self.mods.clone(),
             points: self.points.clone(),
+            move_number: self.board_history.len() as u32 - 1,
         }
+    }
+
+    pub fn get_view_at(&self, turn: u32) -> Option<GameHistory> {
+        let (_, board, state, _) = &self.board_history.get(turn as usize)?;
+        Some(GameHistory {
+            board: board.points.iter().map(|x| x.0).collect(),
+            last_stone: state.assume_play().last_stone.clone(),
+            move_number: turn,
+        })
     }
 }
 

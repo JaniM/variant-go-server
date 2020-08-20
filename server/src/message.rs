@@ -7,6 +7,7 @@ pub enum GameAction {
     Place(u32, u32),
     Pass,
     Cancel,
+    BoardAt(u32),
     TakeSeat(u32),
     LeaveSeat(u32),
 }
@@ -73,7 +74,9 @@ pub enum ServerMessage {
         state: game::GameState,
         mods: game::GameModifier,
         points: Vec<i32>,
+        move_number: u32,
     },
+    BoardAt(game::GameHistory),
     Profile(Profile),
     MsgError(String),
     Error(Error),

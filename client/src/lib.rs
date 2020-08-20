@@ -82,6 +82,7 @@ enum Msg {
     Pass,
     Cancel,
     SetGameStatus(GameView),
+    SetGameHistory(Option<game::GameHistory>),
     SetOwnProfile(Profile),
     SetProfile(Profile),
     AddGame((u32, String)),
@@ -89,6 +90,7 @@ enum Msg {
     SetPane(Pane),
     SetTheme(Theme),
     SetError(Option<message::Error>),
+    GetBoardAt(u32),
     Render,
 }
 
@@ -99,6 +101,7 @@ impl Component for GameList {
         let addgame = link.callback(Msg::AddGame);
         let remove_game = link.callback(Msg::RemoveGame);
         let game = link.callback(Msg::SetGameStatus);
+        let set_game_history = link.callback(Msg::SetGameHistory);
         let set_own_profile = link.callback(Msg::SetOwnProfile);
         let set_profile = link.callback(Msg::SetProfile);
         let set_error = link.callback(Msg::SetError);
@@ -120,6 +123,7 @@ impl Component for GameList {
                     size,
                     mods,
                     points,
+                    move_number,
                 }) => {
                     game.emit(GameView {
                         room_id,
@@ -131,7 +135,12 @@ impl Component for GameList {
                         size,
                         mods,
                         points,
+                        move_number,
+                        history: None,
                     });
+                }
+                Ok(ServerMessage::BoardAt(view)) => {
+                    set_game_history.emit(Some(view));
                 }
                 Ok(ServerMessage::Identify {
                     user_id,
@@ -188,7 +197,21 @@ impl Component for GameList {
             Msg::Cancel => networking::send(ClientMessage::GameAction(message::GameAction::Cancel)),
             Msg::SetGameStatus(game) => {
                 utils::set_hash(&game.room_id.to_string());
-                self.game = Some(game);
+                let old = std::mem::replace(&mut self.game, Some(game));
+                if let Some(old) = old {
+                    self.game.as_mut().unwrap().history = old.history;
+                }
+            }
+            Msg::SetGameHistory(view) => {
+                if let Some(game) = &mut self.game {
+                    if let Some(view) = &view {
+                        if view.move_number == game.move_number {
+                            game.history = None;
+                            return true;
+                        }
+                    }
+                    game.history = view;
+                }
             }
             Msg::AddGame(game) => {
                 self.games.push(game);
@@ -231,6 +254,11 @@ impl Component for GameList {
                         ),
                     )
                 });
+            }
+            Msg::GetBoardAt(turn) => {
+                networking::send(ClientMessage::GameAction(message::GameAction::BoardAt(
+                    turn,
+                )));
             }
             Msg::Render => {
                 self.debounce_job = None;
@@ -315,12 +343,49 @@ impl Component for GameList {
                 _ => html!(),
             };
 
+            let view_turn = match &game.history {
+                Some(h) => h.move_number,
+                None => game.move_number,
+            };
+
+            let turn_bar = html! {
+                <div style="display: flex;">
+                    <div style="width: 200px;">
+                    <span>{"Turn "}{view_turn}{"/"}{game.move_number}</span>
+                    <span>{if game.history.is_some() { "(history)" } else { "" }}</span>
+                    </div>
+                    <div style="flex-grow: 1; display: flex; justify-content: center; margin-left: -200px;">
+                    <button
+                        onclick=self.link.callback(move |_| Msg::GetBoardAt(0))
+                        disabled={view_turn == 0} >
+                        {"<<"}
+                    </button>
+                    <button
+                        onclick=self.link.callback(move |_| Msg::GetBoardAt(view_turn-1))
+                        disabled={view_turn == 0} >
+                        {"<"}
+                    </button>
+                    <button
+                        onclick=self.link.callback(move |_| Msg::GetBoardAt(view_turn+1))
+                        disabled={view_turn >= game.move_number} >
+                        {">"}
+                    </button>
+                    <button
+                        onclick=self.link.callback(|_| Msg::SetGameHistory(None))
+                        disabled={view_turn >= game.move_number} >
+                        {">>"}
+                    </button>
+                    </div>
+                </div>
+            };
+
             html!(
                 <>
                 <div style="flex-grow: 1; margin: 10px; display: flex; justify-content: center;">
                     <div style="width: 800px; margin: auto 0;">
                         <div>{"Status:"} {status} {pass_button} {cancel_button}</div>
                         <board::Board game=game/>
+                        {turn_bar}
                     </div>
                 </div>
                 <div style="width: 300px; overflow: hidden; border-left: 2px solid #dedede; margin: 10px; padding-left: 10px;">

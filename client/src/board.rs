@@ -154,6 +154,10 @@ impl Component for Board {
                 self.render_gl(0.0).unwrap();
             }
             Msg::Click(p) => {
+                // Ignore clicks while viewing history
+                if self.props.game.history.is_some() {
+                    return false;
+                }
                 self.mouse_pos = Some(p);
                 self.selection_pos = Some(mouse_to_coord(p));
                 networking::send(ClientMessage::GameAction(GameAction::Place(
@@ -202,6 +206,11 @@ impl Board {
         context.set_fill_style(&JsValue::from_str("#000000"));
 
         let game = &self.props.game;
+        let board = match &game.history {
+            Some(h) => &h.board,
+            None => &game.board,
+        };
+
         // TODO: actually handle non-square boards
         let board_size = game.size.0 as usize;
         let size = canvas.width() as f64 / board_size as f64;
@@ -287,7 +296,7 @@ impl Board {
             }
         }
 
-        for (idx, &color) in self.props.game.board.iter().enumerate() {
+        for (idx, &color) in board.iter().enumerate() {
             let x = idx % board_size;
             let y = idx / board_size;
 
@@ -313,84 +322,89 @@ impl Board {
             context.stroke();
         }
 
-        match &self.props.game.state {
-            GameState::Play(state) => {
-                if let Some(points) = &state.last_stone {
-                    for &(x, y) in points {
-                        let mut color = game.board[y as usize * game.size.0 as usize + x as usize];
+        let last_stone = match (&game.state, &game.history) {
+            (_, Some(h)) => h.last_stone.as_ref(),
+            (GameState::Play(state), _) => state.last_stone.as_ref(),
+            _ => None,
+        };
+        if let Some(points) = last_stone {
+            for &(x, y) in points {
+                let mut color = board[y as usize * game.size.0 as usize + x as usize];
 
-                        if color == 0 {
-                            // White stones have the most fitting (read: black) marker for empty board
-                            color = 2;
+                if color == 0 {
+                    // White stones have the most fitting (read: black) marker for empty board
+                    color = 2;
+                }
+
+                context.set_stroke_style(&JsValue::from_str(dead_mark_color[color as usize - 1]));
+                context.set_line_width(2.0);
+
+                let size = canvas.width() as f64 / board_size as f64;
+                // create shape of radius 'size' around center point (size, size)
+                context.begin_path();
+                context.arc(
+                    (x as f64 + 0.5) * size,
+                    (y as f64 + 0.5) * size,
+                    size / 4.,
+                    0.0,
+                    2.0 * std::f64::consts::PI,
+                )?;
+                context.stroke();
+            }
+        } else if game.history.is_none() {
+            match &game.state {
+                GameState::Scoring(scoring) | GameState::Done(scoring) => {
+                    for group in &scoring.groups {
+                        if group.alive {
+                            continue;
                         }
 
-                        context.set_stroke_style(&JsValue::from_str(
-                            dead_mark_color[color as usize - 1],
-                        ));
-                        context.set_line_width(2.0);
+                        for &(x, y) in &group.points {
+                            context.set_line_width(2.0);
+                            context.set_stroke_style(&JsValue::from_str(
+                                dead_mark_color[group.team.0 as usize - 1],
+                            ));
 
-                        let size = canvas.width() as f64 / board_size as f64;
-                        // create shape of radius 'size' around center point (size, size)
-                        context.begin_path();
-                        context.arc(
-                            (x as f64 + 0.5) * size,
-                            (y as f64 + 0.5) * size,
-                            size / 4.,
-                            0.0,
-                            2.0 * std::f64::consts::PI,
-                        )?;
-                        context.stroke();
+                            context.set_stroke_style(&JsValue::from_str(
+                                dead_mark_color[group.team.0 as usize - 1],
+                            ));
+
+                            context.begin_path();
+                            context.move_to((x as f64 + 0.2) * size, (y as f64 + 0.2) * size);
+                            context.line_to((x as f64 + 0.8) * size, (y as f64 + 0.8) * size);
+                            context.stroke();
+
+                            context.begin_path();
+                            context.move_to((x as f64 + 0.8) * size, (y as f64 + 0.2) * size);
+                            context.line_to((x as f64 + 0.2) * size, (y as f64 + 0.8) * size);
+                            context.stroke();
+                        }
+                    }
+
+                    for (idx, &color) in scoring.points.points.iter().enumerate() {
+                        let x = (idx % board_size) as f64;
+                        let y = (idx / board_size) as f64;
+
+                        if color.is_empty() {
+                            continue;
+                        }
+
+                        context
+                            .set_fill_style(&JsValue::from_str(stone_colors[color.0 as usize - 1]));
+
+                        context.set_stroke_style(&JsValue::from_str(
+                            border_colors[color.0 as usize - 1],
+                        ));
+
+                        context.fill_rect(
+                            (x + 1. / 3.) * size,
+                            (y + 1. / 3.) * size,
+                            (1. / 3.) * size,
+                            (1. / 3.) * size,
+                        );
                     }
                 }
-            }
-            GameState::Scoring(scoring) | GameState::Done(scoring) => {
-                for group in &scoring.groups {
-                    if group.alive {
-                        continue;
-                    }
-
-                    for &(x, y) in &group.points {
-                        context.set_line_width(2.0);
-                        context.set_stroke_style(&JsValue::from_str(
-                            dead_mark_color[group.team.0 as usize - 1],
-                        ));
-
-                        context.set_stroke_style(&JsValue::from_str(
-                            dead_mark_color[group.team.0 as usize - 1],
-                        ));
-
-                        context.begin_path();
-                        context.move_to((x as f64 + 0.2) * size, (y as f64 + 0.2) * size);
-                        context.line_to((x as f64 + 0.8) * size, (y as f64 + 0.8) * size);
-                        context.stroke();
-
-                        context.begin_path();
-                        context.move_to((x as f64 + 0.8) * size, (y as f64 + 0.2) * size);
-                        context.line_to((x as f64 + 0.2) * size, (y as f64 + 0.8) * size);
-                        context.stroke();
-                    }
-                }
-
-                for (idx, &color) in scoring.points.points.iter().enumerate() {
-                    let x = (idx % board_size) as f64;
-                    let y = (idx / board_size) as f64;
-
-                    if color.is_empty() {
-                        continue;
-                    }
-
-                    context.set_fill_style(&JsValue::from_str(stone_colors[color.0 as usize - 1]));
-
-                    context
-                        .set_stroke_style(&JsValue::from_str(border_colors[color.0 as usize - 1]));
-
-                    context.fill_rect(
-                        (x + 1. / 3.) * size,
-                        (y + 1. / 3.) * size,
-                        (1. / 3.) * size,
-                        (1. / 3.) * size,
-                    );
-                }
+                _ => {}
             }
         }
 
