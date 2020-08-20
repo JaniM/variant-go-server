@@ -391,7 +391,7 @@ impl Component for GameList {
                         {turn_bar}
                     </div>
                 </div>
-                <div style="width: 300px; overflow: hidden; border-left: 2px solid #dedede; margin: 10px; padding-left: 10px;">
+                <div style="width: 300px; overflow: hidden; border-left: 2px solid #dedede; padding: 10px; padding-left: 10px;">
                     <div><a href="https://github.com/JaniM/variant-go-server" target="_blank">{"Github"}</a>{" / "}<a href="https://discord.gg/qzqwEV4" target="_blank">{"Discord"}</a></div>
                     <div>{"Seats"}</div>
                     <SeatList game=game profiles=&self.profiles user=&self.user />
@@ -460,13 +460,19 @@ impl Component for GameList {
             id="main"
             class=class
             style="display: flex; flex-direction: row; min-height: 100vh;">
-            <div style="width: 300px; border-right: 2px solid #dedede; margin: 10px;">
+            <div style="width: 300px; border-right: 2px solid #dedede; padding: 10px;">
+                <div style="width: 100%;">
+                    <button
+                        style="width: 100%;"
+                        onclick=self.link.callback(|_| Msg::StartGame)>
+                        { "Start game" }
+                    </button>
+                </div>
                 <div>{"Theme: "}{theme_selection}</div>
                 <div>
-                    {"Nick:"}
+                    {"Nick: "}
                     <TextInput value=nick onsubmit=nick_enter />
                 </div>
-                <button onclick=self.link.callback(|_| Msg::StartGame)>{ "Start game" }</button>
                 {"Games live: "}{self.games.len()}
                 <ul>
                     {list}
