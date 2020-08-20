@@ -212,18 +212,20 @@ impl Component for CreateGameView {
                     {"Modifiers"}
                     <ul>
                         <li>
-                            <input
-                                type="checkbox"
-                                class="toggle"
-                                checked=self.mods.pixel
-                                onclick=self.link.callback(move |_| Msg::TogglePixel) />
-                            <label onclick=self.link.callback(move |_| Msg::TogglePixel)>{"Pixel go"}</label>
+                            <label onclick=self.link.callback(move |_| Msg::TogglePixel)>
+                                <input
+                                    type="checkbox"
+                                    class="toggle"
+                                    checked=self.mods.pixel
+                                    onclick=self.link.callback(move |_| Msg::TogglePixel) />
+                                {"Pixel go"}
+                            </label>
                         </li>
                         <li>
                             <input
                                 type="checkbox"
                                 class="toggle"
-                                checked=self.mods.pixel
+                                checked=self.mods.ponnuki_is_points.is_some()
                                 onclick=self.link.callback(move |_| Msg::TogglePonnuki) />
                             <label onclick=self.link.callback(move |_| Msg::TogglePonnuki)>{"Ponnuki is 30 points"}</label>
                         </li>
