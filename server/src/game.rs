@@ -609,7 +609,6 @@ impl Game {
                 } else {
                     self.turn - 1
                 };
-                println!("{:?}", self.board_history);
             }
             unknown => {
                 println!("Play state got unexpected action {:?}", unknown);
