@@ -172,6 +172,10 @@ impl Handler<GameAction> for GameRoom {
                 if start > end {
                     return;
                 }
+                // Prevent asking for a ridiculous amount.
+                if end as usize > self.game.board_history.len() + 20 {
+                    return;
+                }
                 for turn in (start..=end).rev() {
                     let view = self.game.get_view_at(turn);
                     if let Some(view) = view {
