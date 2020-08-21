@@ -7,7 +7,7 @@ pub enum GameAction {
     Place(u32, u32),
     Pass,
     Cancel,
-    BoardAt(u32),
+    BoardAt(u32, u32),
     TakeSeat(u32),
     LeaveSeat(u32),
 }

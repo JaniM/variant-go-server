@@ -73,6 +73,8 @@ struct GameList {
     debounce_job: Option<TimeoutTask>,
     theme: Theme,
     error: Option<(message::Error, TimeoutTask)>,
+    history: Vec<game::GameHistory>,
+    wanted_history: Option<u32>,
 }
 
 enum Msg {
@@ -179,6 +181,8 @@ impl Component for GameList {
             debounce_job: None,
             theme: Theme::get(),
             error: None,
+            history: Vec::new(),
+            wanted_history: None,
         }
     }
 
@@ -198,19 +202,36 @@ impl Component for GameList {
             Msg::SetGameStatus(game) => {
                 utils::set_hash(&game.room_id.to_string());
                 let room_id = game.room_id;
+                let move_number = game.move_number;
                 let old = std::mem::replace(&mut self.game, Some(game));
                 if let Some(old) = old {
                     if old.room_id == room_id {
                         self.game.as_mut().unwrap().history = old.history;
+                        if move_number <= self.history.len() as u32 {
+                            self.history.drain(move_number as usize..);
+                        }
+                    } else {
+                        self.history.clear();
                     }
                 }
             }
             Msg::SetGameHistory(view) => {
                 if let Some(game) = &mut self.game {
                     if let Some(view) = &view {
+                        self.history.push(view.clone());
+                        self.history.sort_unstable_by_key(|x| x.move_number);
+                        self.history = self
+                            .history
+                            .iter()
+                            .cloned()
+                            .dedup_by(|x, y| x.move_number == y.move_number)
+                            .collect();
                         if view.move_number == game.move_number {
                             game.history = None;
                             return true;
+                        }
+                        if Some(view.move_number) != self.wanted_history {
+                            return false;
                         }
                     }
                     game.history = view;
@@ -259,9 +280,17 @@ impl Component for GameList {
                 });
             }
             Msg::GetBoardAt(turn) => {
-                networking::send(ClientMessage::GameAction(message::GameAction::BoardAt(
-                    turn,
-                )));
+                self.wanted_history = Some(turn);
+                if self.history.len() as u32 <= turn {
+                    networking::send(ClientMessage::GameAction(message::GameAction::BoardAt(
+                        self.history.len() as _,
+                        turn,
+                    )));
+                } else {
+                    return self.update(Msg::SetGameHistory(Some(
+                        self.history[turn as usize].clone(),
+                    )));
+                }
             }
             Msg::Render => {
                 self.debounce_job = None;

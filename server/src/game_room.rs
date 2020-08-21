@@ -168,13 +168,18 @@ impl Handler<GameAction> for GameRoom {
                     return;
                 }
             }
-            message::GameAction::BoardAt(turn) => {
-                let view = self.game.get_view_at(turn);
-                if let Some(view) = view {
-                    addr.do_send(Message::BoardAt {
-                        room_id: self.room_id,
-                        view,
-                    });
+            message::GameAction::BoardAt(start, end) => {
+                if start > end {
+                    return;
+                }
+                for turn in start..=end {
+                    let view = self.game.get_view_at(turn);
+                    if let Some(view) = view {
+                        let _ = addr.do_send(Message::BoardAt {
+                            room_id: self.room_id,
+                            view,
+                        });
+                    }
                 }
                 return;
             }
