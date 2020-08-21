@@ -1,7 +1,7 @@
 use web_sys::HtmlSelectElement;
 use yew::prelude::*;
 
-use crate::game::GameModifier;
+use crate::game::{self, GameModifier};
 use crate::game_view::Profile;
 use crate::message::ClientMessage;
 use crate::networking;
@@ -33,6 +33,7 @@ pub enum Msg {
     SetName(String),
     TogglePixel,
     TogglePonnuki,
+    ToggleZen,
     OnCreate,
 }
 
@@ -71,6 +72,8 @@ impl Component for CreateGameView {
                 self.seats = seats;
                 self.komis = komi;
                 self.size = size;
+                // TODO: this is a hack
+                self.mods.zen_go = None;
                 if let Some(select) = self.size_select_ref.cast::<HtmlSelectElement>() {
                     select.set_value(&size.to_string());
                 }
@@ -93,6 +96,21 @@ impl Component for CreateGameView {
                     Some(_) => None,
                     // These are half points so 60 = 30 points
                     None => Some(60),
+                };
+                true
+            }
+            Msg::ToggleZen => {
+                self.mods.zen_go = match &self.mods.zen_go {
+                    None => {
+                        self.seats.push(self.seats[0]);
+                        Some(game::ZenGo {
+                            color_count: self.komis.len() as u8,
+                        })
+                    }
+                    Some(_) => {
+                        self.seats.pop();
+                        None
+                    }
                 };
                 true
             }
@@ -220,6 +238,14 @@ impl Component for CreateGameView {
                                     onclick=self.link.callback(move |_| Msg::TogglePixel) />
                                 {"Pixel go"}
                             </label>
+                        </li>
+                        <li>
+                            <input
+                                type="checkbox"
+                                class="toggle"
+                                checked=self.mods.zen_go.is_some()
+                                onclick=self.link.callback(move |_| Msg::ToggleZen) />
+                            <label onclick=self.link.callback(move |_| Msg::ToggleZen)>{"Zen go"}</label>
                         </li>
                         <li>
                             <input

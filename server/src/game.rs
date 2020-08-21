@@ -219,6 +219,11 @@ impl GameState {
 }
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+pub struct ZenGo {
+    pub color_count: u8,
+}
+
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct GameModifier {
     /// Pixel go is a game mode where you place 2x2 blobs instead of a single stone.
     /// Overlapping existing stones are ignored.
@@ -229,6 +234,9 @@ pub struct GameModifier {
     /// they get (or lose) points.
     #[serde(default)]
     pub ponnuki_is_points: Option<i32>,
+
+    #[serde(default)]
+    pub zen_go: Option<ZenGo>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -575,10 +583,12 @@ impl Game {
                 self.capture_count += captures;
             }
             ActionKind::Pass => {
-                let seat_idx = self.turn;
                 let state = self.state.assume_play_mut();
-                state.players_passed[seat_idx] = true;
-                state.last_stone = None;
+                for (seat, passed) in self.seats.iter().zip(state.players_passed.iter_mut()) {
+                    if seat.team == active_seat.team {
+                        *passed = true;
+                    }
+                }
 
                 self.board_history.push((
                     self.board.hash(),
@@ -630,7 +640,18 @@ impl Game {
             }
         }
 
+        self.set_zen_teams();
+
         Ok(())
+    }
+
+    fn set_zen_teams(&mut self) {
+        let move_number = self.board_history.len() - 1;
+        if let Some(zen) = &self.mods.zen_go {
+            for seat in &mut self.seats {
+                seat.team = Color((move_number % zen.color_count as usize) as u8 + 1);
+            }
+        }
     }
 
     pub fn make_action_scoring(
