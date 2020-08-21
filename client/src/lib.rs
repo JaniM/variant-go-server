@@ -284,7 +284,7 @@ impl Component for GameList {
                 if self.history.len() as u32 <= turn {
                     networking::send(ClientMessage::GameAction(message::GameAction::BoardAt(
                         self.history.len() as _,
-                        turn,
+                        turn + 10,
                     )));
                 } else {
                     return self.update(Msg::SetGameHistory(Some(
