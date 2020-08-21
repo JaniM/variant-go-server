@@ -281,12 +281,13 @@ impl Component for GameList {
             }
             Msg::GetBoardAt(turn) => {
                 self.wanted_history = Some(turn);
-                if self.history.len() as u32 <= turn {
+                if self.history.len() as u32 <= turn + 5 {
                     networking::send(ClientMessage::GameAction(message::GameAction::BoardAt(
                         self.history.len() as _,
                         turn + 10,
                     )));
-                } else {
+                }
+                if self.history.len() as u32 > turn {
                     return self.update(Msg::SetGameHistory(Some(
                         self.history[turn as usize].clone(),
                     )));

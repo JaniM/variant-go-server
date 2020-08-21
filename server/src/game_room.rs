@@ -172,7 +172,7 @@ impl Handler<GameAction> for GameRoom {
                 if start > end {
                     return;
                 }
-                for turn in start..=end {
+                for turn in (start..=end).rev() {
                     let view = self.game.get_view_at(turn);
                     if let Some(view) = view {
                         let _ = addr.do_send(Message::BoardAt {
