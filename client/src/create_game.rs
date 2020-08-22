@@ -34,6 +34,8 @@ pub enum Msg {
     TogglePixel,
     TogglePonnuki,
     ToggleZen,
+    ToggleHiddenMove,
+    SetHiddenMoveCount(u32),
     OnCreate,
 }
 
@@ -111,6 +113,25 @@ impl Component for CreateGameView {
                         self.seats.pop();
                         None
                     }
+                };
+                true
+            }
+            Msg::ToggleHiddenMove => {
+                self.mods.hidden_move = match &self.mods.hidden_move {
+                    None => Some(game::HiddenMoveGo {
+                        placement_count: 5,
+                        teams_share_stones: true,
+                    }),
+                    Some(_) => None,
+                };
+                true
+            }
+            Msg::SetHiddenMoveCount(count) => {
+                match &mut self.mods.hidden_move {
+                    Some(rules) => {
+                        rules.placement_count = count;
+                    }
+                    None => {}
                 };
                 true
             }
@@ -229,6 +250,26 @@ impl Component for CreateGameView {
                 <div>
                     {"Modifiers"}
                     <ul>
+                        <li>
+                            <input
+                                type="checkbox"
+                                class="toggle"
+                                checked=self.mods.hidden_move.is_some()
+                                onclick=self.link.callback(move |_| Msg::ToggleHiddenMove) />
+                            <label onclick=self.link.callback(move |_| Msg::ToggleHiddenMove)>{"Hidden move go"}</label>
+                            {" Placement stones: "}
+                            <input
+                                style="width: 3em;"
+                                type="number"
+                                value={self.mods.hidden_move.as_ref().map(|x| x.placement_count).unwrap_or(0)}
+                                disabled=self.mods.hidden_move.is_none()
+                                onchange=self.link.callback(|data|
+                                    match data {
+                                        yew::events::ChangeData::Value(v) => Msg::SetHiddenMoveCount(v.parse().unwrap()),
+                                        _ => unreachable!(),
+                                    }
+                                ) />
+                        </li>
                         <li>
                             <label onclick=self.link.callback(move |_| Msg::TogglePixel)>
                                 <input

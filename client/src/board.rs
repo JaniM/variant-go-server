@@ -187,6 +187,7 @@ impl Board {
         let shadow_stone_colors = ["#555555", "#bbbbbb", "#7b91bd"];
         let shadow_border_colors = ["#bbbbbb", "#555555", "#555555"];
         let stone_colors = ["#000000", "#eeeeee", "#5074bc"];
+        let stone_colors_hidden = ["#00000080", "#eeeeee80", "#5074bc80"];
         let border_colors = ["#555555", "#000000", "#000000"];
         let dead_mark_color = ["#eeeeee", "#000000", "#000000"];
 
@@ -209,6 +210,10 @@ impl Board {
         let board = match &game.history {
             Some(h) => &h.board,
             None => &game.board,
+        };
+        let board_visibility = match &game.history {
+            Some(h) => &h.board_visibility,
+            None => &game.board_visibility,
         };
 
         // TODO: actually handle non-square boards
@@ -300,11 +305,20 @@ impl Board {
             let x = idx % board_size;
             let y = idx / board_size;
 
+            let visible = board_visibility
+                .as_ref()
+                .map(|v| v[idx] == 0)
+                .unwrap_or(true);
+
             if color == 0 {
                 continue;
             }
 
-            context.set_fill_style(&JsValue::from_str(stone_colors[color as usize - 1]));
+            if visible {
+                context.set_fill_style(&JsValue::from_str(stone_colors[color as usize - 1]));
+            } else {
+                context.set_fill_style(&JsValue::from_str(stone_colors_hidden[color as usize - 1]));
+            }
 
             context.set_stroke_style(&JsValue::from_str(border_colors[color as usize - 1]));
 

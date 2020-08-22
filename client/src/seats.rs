@@ -56,7 +56,7 @@ impl Component for SeatList {
         let game = &self.props.game;
         let scores = match &self.props.game.state {
             GameState::Scoring(state) | GameState::Done(state) => Some(&state.scores),
-            GameState::Play(_) => Some(&self.props.game.points),
+            _ => Some(&self.props.game.points),
         };
 
         let list = game

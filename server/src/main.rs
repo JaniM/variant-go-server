@@ -1,6 +1,8 @@
 #[macro_use]
 extern crate diesel;
 
+#[macro_use]
+mod assume;
 mod db;
 mod game;
 mod game_room;
@@ -109,6 +111,9 @@ impl Handler<game_room::Message> for ClientWebSocket {
                         .collect(),
                     turn: view.turn,
                     board: view.board.into_iter().map(|x| x.0).collect(),
+                    board_visibility: view
+                        .board_visibility
+                        .map(|b| b.iter().map(|x| x.0).collect()),
                     size: view.size,
                     state: view.state,
                     mods: view.mods,

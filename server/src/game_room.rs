@@ -66,6 +66,12 @@ impl GameRoom {
             let _ = addr.do_send(msg.clone());
         }
     }
+
+    fn send_room_messages(&self, mut create_msg: impl FnMut(u64) -> Message) {
+        for (user_id, addr) in self.sessions.values() {
+            let _ = addr.do_send(create_msg(*user_id));
+        }
+    }
 }
 
 impl Actor for GameRoom {
@@ -88,12 +94,11 @@ impl Handler<Leave> for GameRoom {
             let sessions = &self.sessions;
             if !sessions.values().any(|(uid, _addr)| *uid == user_id) {
                 self.users.remove(&user_id);
-                let msg = Message::GameStatus {
+                self.send_room_messages(|user_id| Message::GameStatus {
                     room_id: self.room_id,
                     members: self.users.iter().copied().collect(),
-                    view: self.game.get_view(),
-                };
-                self.send_room_message(msg);
+                    view: self.game.get_view(user_id),
+                });
             }
         }
     }
@@ -111,12 +116,11 @@ impl Handler<Join> for GameRoom {
 
         self.sessions.insert(session_id, (user_id, addr));
         self.users.insert(user_id);
-        let msg = Message::GameStatus {
+        self.send_room_messages(|user_id| Message::GameStatus {
             room_id: self.room_id,
             members: self.users.iter().copied().collect(),
-            view: self.game.get_view(),
-        };
-        self.send_room_message(msg);
+            view: self.game.get_view(user_id),
+        });
 
         // TODO: Announce profile to room members
     }
@@ -177,7 +181,7 @@ impl Handler<GameAction> for GameRoom {
                     return;
                 }
                 for turn in (start..=end).rev() {
-                    let view = self.game.get_view_at(turn);
+                    let view = self.game.get_view_at(user_id, turn);
                     if let Some(view) = view {
                         let _ = addr.do_send(Message::BoardAt {
                             room_id: self.room_id,
@@ -195,10 +199,10 @@ impl Handler<GameAction> for GameRoom {
             replay: Some(self.game.dump()),
         });
 
-        self.send_room_message(Message::GameStatus {
+        self.send_room_messages(|user_id| Message::GameStatus {
             room_id: self.room_id,
             members: self.users.iter().copied().collect(),
-            view: self.game.get_view(),
+            view: self.game.get_view(user_id),
         });
     }
 }

@@ -2,6 +2,10 @@
 
 mod board;
 mod create_game;
+#[path = "../../server/src/assume.rs"]
+#[allow(dead_code)]
+#[macro_use]
+mod assume;
 #[path = "../../server/src/game.rs"]
 #[allow(dead_code)]
 mod game;
@@ -120,6 +124,7 @@ impl Component for GameList {
                     members,
                     seats,
                     board,
+                    board_visibility,
                     turn,
                     state,
                     size,
@@ -132,6 +137,7 @@ impl Component for GameList {
                         members,
                         seats,
                         board,
+                        board_visibility,
                         turn,
                         state,
                         size,
@@ -359,18 +365,23 @@ impl Component for GameList {
                 .collect::<Html>();
 
             let status = match game.state {
+                game::GameState::FreePlacement(_) => "Free placement",
                 game::GameState::Play(_) => "Active",
                 game::GameState::Scoring(_) => "Scoring",
                 game::GameState::Done(_) => "Game over!",
             };
 
             let pass_button = match game.state {
+                game::GameState::FreePlacement(_) => html!(<button onclick=pass>{"Ready"}</button>),
                 game::GameState::Play(_) => html!(<button onclick=pass>{"Pass"}</button>),
                 game::GameState::Scoring(_) => html!(<button onclick=pass>{"Accept"}</button>),
                 game::GameState::Done(_) => html!(),
             };
 
             let cancel_button = match game.state {
+                game::GameState::FreePlacement(_) => {
+                    html!(<button onclick=cancel>{"Clear"}</button>)
+                }
                 game::GameState::Play(_) => html!(<button onclick=cancel>{"Undo"}</button>),
                 game::GameState::Scoring(_) => html!(<button onclick=cancel>{"Cancel"}</button>),
                 _ => html!(),

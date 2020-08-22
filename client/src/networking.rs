@@ -97,7 +97,7 @@ pub fn start_websocket(
     let onerror_callback = wrap(move |e: ErrorEvent| {
         console_log!("error event: {:?}", e);
         cloned_on_msg(Err(ServerError::LostConnection));
-        let _ = start_websocket(cloned_on_msg.clone());
+        // let _ = start_websocket(cloned_on_msg.clone());
     });
     ws.set_onerror(Some(onerror_callback.as_ref().unchecked_ref()));
     onerror_callback.forget();

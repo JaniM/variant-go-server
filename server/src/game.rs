@@ -4,6 +4,8 @@ use std::collections::{HashSet, VecDeque};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
+use crate::assume::AssumeFrom;
+
 #[derive(Debug, Copy, Clone, PartialEq, Hash, Serialize, Deserialize)]
 #[repr(transparent)]
 pub struct Color(pub u8);
@@ -165,13 +167,42 @@ pub struct ScoringState {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FreePlacement {
+    // One board per visibility group (= team or player)
+    pub boards: Vec<Board>,
+    pub stones_placed: Vec<u32>,
+    pub players_ready: Vec<bool>,
+    pub teams_share_stones: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum GameState {
+    FreePlacement(FreePlacement),
     Play(PlayState),
     Scoring(ScoringState),
     Done(ScoringState),
 }
 
 impl GameState {
+    fn free_placement(
+        seat_count: usize,
+        team_count: usize,
+        board: Board,
+        teams_share_stones: bool,
+    ) -> Self {
+        let count = if teams_share_stones {
+            team_count
+        } else {
+            seat_count
+        };
+        GameState::FreePlacement(FreePlacement {
+            boards: vec![board; count],
+            stones_placed: vec![0; count],
+            players_ready: vec![false; seat_count],
+            teams_share_stones,
+        })
+    }
+
     fn play(seat_count: usize) -> Self {
         GameState::Play(PlayState {
             players_passed: vec![false; seat_count],
@@ -195,32 +226,22 @@ impl GameState {
             players_accepted: vec![false; seat_count],
         })
     }
-
-    pub fn assume_play(&self) -> &PlayState {
-        match self {
-            GameState::Play(state) => state,
-            _ => panic!("Assumed play state but was in {:?}", self),
-        }
-    }
-
-    pub fn assume_play_mut(&mut self) -> &mut PlayState {
-        match self {
-            GameState::Play(state) => state,
-            _ => panic!("Assumed play state but was in {:?}", self),
-        }
-    }
-
-    pub fn assume_scoring_mut(&mut self) -> &mut ScoringState {
-        match self {
-            GameState::Scoring(state) => state,
-            _ => panic!("Assumed scoring state but was in {:?}", self),
-        }
-    }
 }
+
+assume!(GameState);
+assume!(GameState, Play(x) => x, PlayState);
+assume!(GameState, Scoring(x) => x, ScoringState);
+assume!(GameState, FreePlacement(x) => x, FreePlacement);
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ZenGo {
     pub color_count: u8,
+}
+
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+pub struct HiddenMoveGo {
+    pub placement_count: u32,
+    pub teams_share_stones: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
@@ -237,6 +258,18 @@ pub struct GameModifier {
 
     #[serde(default)]
     pub zen_go: Option<ZenGo>,
+
+    #[serde(default)]
+    pub hidden_move: Option<HiddenMoveGo>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct BoardHistory {
+    pub hash: u64,
+    pub board: Board,
+    pub board_visibility: Option<Board>,
+    pub state: GameState,
+    pub points: Vec<i32>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -249,7 +282,8 @@ pub struct Game {
     pub turn: usize,
     pub pass_count: usize,
     pub board: Board,
-    pub board_history: Vec<(u64, Board, GameState, Vec<i32>)>,
+    pub board_visibility: Option<Board>,
+    pub board_history: Vec<BoardHistory>,
     /// Optimization for superko
     pub capture_count: usize,
     pub komis: Vec<i32>,
@@ -261,6 +295,7 @@ pub struct Game {
 pub enum TakeSeatError {
     DoesNotExist,
     NotOpen,
+    CanOnlyHoldOne,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -276,11 +311,13 @@ pub enum MakeActionError {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct GameView {
-    // TODO: we need a separate state view once we have hidden information
+    // TODO: we need a separate state view since we have hidden information
+    // currently players can cheat :F
     pub state: GameState,
     pub seats: Vec<Seat>,
     pub turn: u32,
     pub board: Vec<Color>,
+    pub board_visibility: Option<Vec<Color>>,
     pub size: (u8, u8),
     pub mods: GameModifier,
     pub points: Vec<i32>,
@@ -290,6 +327,7 @@ pub struct GameView {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GameHistory {
     pub board: Vec<u8>,
+    pub board_visibility: Option<Vec<u8>>,
     pub last_stone: Option<Vec<(u32, u32)>>,
     pub move_number: u32,
 }
@@ -323,8 +361,17 @@ impl Game {
             return None;
         }
 
-        let state = GameState::play(seats.len());
         let board = Board::empty(size.0 as _, size.1 as _);
+        let state = if let Some(rules) = &mods.hidden_move {
+            GameState::free_placement(
+                seats.len(),
+                komis.len(),
+                board.clone(),
+                rules.teams_share_stones,
+            )
+        } else {
+            GameState::play(seats.len())
+        };
 
         Some(Game {
             state: state.clone(),
@@ -334,7 +381,14 @@ impl Game {
             turn: 0,
             pass_count: 0,
             board: board.clone(),
-            board_history: vec![(board.hash(), board, state, komis.clone())],
+            board_visibility: None,
+            board_history: vec![BoardHistory {
+                hash: board.hash(),
+                board,
+                board_visibility: None,
+                state: GameState::play(seats.len()),
+                points: komis.clone(),
+            }],
             capture_count: 0,
             komis,
             mods,
@@ -384,6 +438,13 @@ impl Game {
     }
 
     pub fn take_seat(&mut self, player_id: u64, seat_id: usize) -> Result<(), TakeSeatError> {
+        if self.mods.hidden_move.is_some() {
+            let held = self.seats.iter().any(|x| x.player == Some(player_id));
+            if held {
+                return Err(TakeSeatError::CanOnlyHoldOne);
+            }
+        }
+
         let seat = self
             .seats
             .get_mut(seat_id)
@@ -425,6 +486,9 @@ impl Game {
         }
 
         let res = match self.state {
+            GameState::FreePlacement(_) => {
+                self.make_action_free_placement(player_id, action.clone())
+            }
             GameState::Play(_) => self.make_action_play(player_id, action.clone()),
             GameState::Scoring(_) => self.make_action_scoring(player_id, action.clone()),
             GameState::Done(_) => Err(MakeActionError::GameDone),
@@ -435,6 +499,147 @@ impl Game {
         }
 
         res
+    }
+
+    pub fn make_action_free_placement(
+        &mut self,
+        player_id: u64,
+        action: ActionKind,
+    ) -> Result<(), MakeActionError> {
+        // In free placement it is assumed a player can only hold a single seat.
+        let (seat_idx, active_seat) = self
+            .seats
+            .iter()
+            .enumerate()
+            .find(|(_, x)| x.player == Some(player_id))
+            .expect("User has no seat");
+        let team = active_seat.team;
+
+        match action {
+            ActionKind::Place(x, y) => {
+                let state = self.state.assume_mut::<FreePlacement>();
+                let board = if state.teams_share_stones {
+                    &mut state.boards[team.0 as usize - 1]
+                } else {
+                    &mut state.boards[seat_idx]
+                };
+                let stones_placed = if state.teams_share_stones {
+                    &mut state.stones_placed[team.0 as usize - 1]
+                } else {
+                    &mut state.stones_placed[seat_idx]
+                };
+
+                if *stones_placed >= self.mods.hidden_move.as_ref().unwrap().placement_count {
+                    return Err(MakeActionError::PointOccupied);
+                }
+
+                if self.mods.pixel {
+                    // In pixel mode coordinate 0,0 is outside the board.
+                    // This is to adjust for it.
+
+                    if x > board.width || y > board.height {
+                        return Err(MakeActionError::OutOfBounds);
+                    }
+                    let x = x as i32 - 1;
+                    let y = y as i32 - 1;
+
+                    let mut any_placed = false;
+                    for &(x, y) in &[(x, y), (x + 1, y), (x, y + 1), (x + 1, y + 1)] {
+                        if x < 0 || y < 0 {
+                            continue;
+                        }
+                        let coord = (x as u32, y as u32);
+                        if !board.point_within(coord) {
+                            continue;
+                        }
+
+                        let point = board.point_mut(coord);
+                        if !point.is_empty() {
+                            continue;
+                        }
+                        *point = active_seat.team;
+                        any_placed = true;
+                    }
+                    if !any_placed {
+                        return Err(MakeActionError::PointOccupied);
+                    }
+                } else {
+                    if !board.point_within((x, y)) {
+                        return Err(MakeActionError::OutOfBounds);
+                    }
+
+                    // TODO: don't repeat yourself
+                    let point = board.point_mut((x, y));
+                    if !point.is_empty() {
+                        return Err(MakeActionError::PointOccupied);
+                    }
+
+                    *point = active_seat.team;
+                }
+
+                *stones_placed += 1;
+            }
+            ActionKind::Pass => {
+                let state = self.state.assume_mut::<FreePlacement>();
+                state.players_ready[seat_idx] = true;
+
+                if state.players_ready.iter().all(|x| *x) {
+                    for board in &state.boards {
+                        for (a, b) in self.board.points.iter_mut().zip(&board.points) {
+                            if *b == Color::empty() {
+                                continue;
+                            }
+
+                            // Double-committed points become empty!
+                            if a.0 == 0 || *a == *b {
+                                *a = *b;
+                            } else {
+                                // This is a horrible hack.
+                                // 255 = 1 & 2, 254 = 1 & 3, 253 = 2 & 3, 252 = 1 & 2 & 3
+                                *a = Color(match (a.0, b.0) {
+                                    (1, 2) => 255,
+                                    (1, 3) => 254,
+                                    (2, 3) => 253,
+                                    (255, 3) => 252,
+                                    (254, 2) => 252,
+                                    (253, 1) => 252,
+                                    (x, _) => x,
+                                });
+                            }
+                        }
+                    }
+
+                    self.board_visibility = Some(self.board.clone());
+
+                    for p in &mut self.board.points {
+                        if p.0 == 255 {
+                            *p = Color::empty();
+                        }
+                    }
+
+                    self.state = GameState::play(self.seats.len());
+                }
+            }
+            ActionKind::Cancel => {
+                let state = self.state.assume_mut::<FreePlacement>();
+                let board = if state.teams_share_stones {
+                    &mut state.boards[team.0 as usize - 1]
+                } else {
+                    &mut state.boards[seat_idx]
+                };
+                let stones_placed = if state.teams_share_stones {
+                    &mut state.stones_placed[team.0 as usize - 1]
+                } else {
+                    &mut state.stones_placed[seat_idx]
+                };
+
+                state.players_ready[seat_idx] = false;
+                *board = self.board.clone();
+                *stones_placed = 0;
+            }
+        }
+
+        Ok(())
     }
 
     pub fn make_action_play(
@@ -461,6 +666,7 @@ impl Game {
                     let y = y as i32 - 1;
 
                     let mut any_placed = false;
+                    let mut any_revealed = false;
                     for &(x, y) in &[(x, y), (x + 1, y), (x, y + 1), (x + 1, y + 1)] {
                         if x < 0 || y < 0 {
                             continue;
@@ -471,6 +677,13 @@ impl Game {
                         }
 
                         let point = self.board.point_mut(coord);
+                        if let Some(visibility) = &mut self.board_visibility {
+                            if !visibility.get_point(coord).is_empty() {
+                                any_revealed = true;
+                                points_played.push(coord);
+                            }
+                            *visibility.point_mut(coord) = Color::empty();
+                        }
                         if !point.is_empty() {
                             continue;
                         }
@@ -479,6 +692,10 @@ impl Game {
                         any_placed = true;
                     }
                     if !any_placed {
+                        if any_revealed {
+                            self.state.assume_mut::<PlayState>().last_stone = Some(points_played);
+                            return Ok(());
+                        }
                         return Err(MakeActionError::PointOccupied);
                     }
                 } else {
@@ -488,7 +705,18 @@ impl Game {
 
                     // TODO: don't repeat yourself
                     let point = self.board.point_mut((x, y));
+                    let revealed = if let Some(visibility) = &mut self.board_visibility {
+                        let revealed = !visibility.get_point((x, y)).is_empty();
+                        *visibility.point_mut((x, y)) = Color::empty();
+                        revealed
+                    } else {
+                        false
+                    };
                     if !point.is_empty() {
+                        if revealed {
+                            self.state.assume_mut::<PlayState>().last_stone = Some(vec![(x, y)]);
+                            return Ok(());
+                        }
                         return Err(MakeActionError::PointOccupied);
                     }
 
@@ -515,14 +743,35 @@ impl Game {
                             .board_history
                             .last()
                             .expect("board_history.last() shouldn't be None")
-                            .1
+                            .board
                             .clone();
+                        if let Some(visibility) = &mut self.board_visibility {
+                            let mut revealed = false;
+                            for &point in &group.points {
+                                revealed = revealed || visibility.get_point(point).0 > 0;
+                                *visibility.point_mut(point) = Color::empty();
+                                for point in self.board.surrounding_points(point) {
+                                    revealed = revealed || visibility.get_point(point).0 > 0;
+                                    *visibility.point_mut(point) = Color::empty();
+                                }
+                            }
+                            if revealed {
+                                return Ok(());
+                            }
+                        }
                         return Err(MakeActionError::Suicide);
                     }
 
                     for &point in &group.points {
                         captures += 1;
                         *self.board.point_mut(point) = Color::empty();
+
+                        if let Some(visibility) = &mut self.board_visibility {
+                            *visibility.point_mut(point) = Color::empty();
+                            for point in self.board.surrounding_points(point) {
+                                *visibility.point_mut(point) = Color::empty();
+                            }
+                        }
                     }
 
                     if let Some(ponnuki) = self.mods.ponnuki_is_points {
@@ -545,14 +794,22 @@ impl Game {
                 // Superko
                 // We only need to scan back capture_count boards, as per Ten 1p's clever idea.
                 // The board can't possibly repeat further back than the number of removed stones.
-                for (old_hash, old_board, _, _) in self
+                for BoardHistory {
+                    hash: old_hash,
+                    board: old_board,
+                    ..
+                } in self
                     .board_history
                     .iter()
                     .rev()
                     .take(self.capture_count + captures)
                 {
                     if *old_hash == hash && old_board == &self.board {
-                        let (_, old_board, _, old_points) = self
+                        let BoardHistory {
+                            board: old_board,
+                            points: old_points,
+                            ..
+                        } = self
                             .board_history
                             .last()
                             .expect("board_history.last() shouldn't be None")
@@ -568,34 +825,36 @@ impl Game {
                     self.turn = 0;
                 }
 
-                let state = self.state.assume_play_mut();
+                let state = self.state.assume_mut::<PlayState>();
                 state.last_stone = Some(points_played);
                 for passed in &mut state.players_passed {
                     *passed = false;
                 }
 
-                self.board_history.push((
+                self.board_history.push(BoardHistory {
                     hash,
-                    self.board.clone(),
-                    self.state.clone(),
-                    self.points.clone(),
-                ));
+                    board: self.board.clone(),
+                    board_visibility: self.board_visibility.clone(),
+                    state: self.state.clone(),
+                    points: self.points.clone(),
+                });
                 self.capture_count += captures;
             }
             ActionKind::Pass => {
-                let state = self.state.assume_play_mut();
+                let state = self.state.assume_mut::<PlayState>();
                 for (seat, passed) in self.seats.iter().zip(state.players_passed.iter_mut()) {
                     if seat.team == active_seat.team {
                         *passed = true;
                     }
                 }
 
-                self.board_history.push((
-                    self.board.hash(),
-                    self.board.clone(),
-                    GameState::Play(state.clone()),
-                    self.points.clone(),
-                ));
+                self.board_history.push(BoardHistory {
+                    hash: self.board.hash(),
+                    board: self.board.clone(),
+                    board_visibility: self.board_visibility.clone(),
+                    state: GameState::Play(state.clone()),
+                    points: self.points.clone(),
+                });
 
                 if state.players_passed.iter().all(|x| *x) {
                     for passed in &mut state.players_passed {
@@ -622,13 +881,14 @@ impl Game {
                 self.board_history
                     .pop()
                     .ok_or(MakeActionError::OutOfBounds)?;
-                let (_, last_board, last_state, last_points) = self
+                let history = self
                     .board_history
                     .last()
                     .ok_or(MakeActionError::OutOfBounds)?;
-                self.board = last_board.clone();
-                self.state = last_state.clone();
-                self.points = last_points.clone();
+                self.board = history.board.clone();
+                self.board_visibility = history.board_visibility.clone();
+                self.state = history.state.clone();
+                self.points = history.points.clone();
                 self.turn = if self.turn == 0 {
                     self.seats.len() - 1
                 } else {
@@ -661,7 +921,7 @@ impl Game {
     ) -> Result<(), MakeActionError> {
         match action {
             ActionKind::Place(x, y) => {
-                let state = self.state.assume_scoring_mut();
+                let state = self.state.assume_mut::<ScoringState>();
 
                 let group = state.groups.iter_mut().find(|g| g.points.contains(&(x, y)));
 
@@ -692,7 +952,7 @@ impl Game {
                     .enumerate()
                     .filter(|x| x.1.player == Some(player_id));
 
-                let state = self.state.assume_scoring_mut();
+                let state = self.state.assume_mut::<ScoringState>();
                 for (seat_idx, _) in seats {
                     state.players_accepted[seat_idx] = true;
                 }
@@ -711,12 +971,91 @@ impl Game {
         Ok(())
     }
 
-    pub fn get_view(&self) -> GameView {
+    fn get_board_view(
+        &self,
+        player_id: u64,
+        state: &GameState,
+        board: &Board,
+        board_visibility: &Option<Board>,
+    ) -> (Vec<Color>, Option<Vec<Color>>) {
+        let (board, board_visibility) = match state {
+            GameState::FreePlacement(state) => {
+                if let Some((seat_idx, active_seat)) = self
+                    .seats
+                    .iter()
+                    .enumerate()
+                    .find(|(_, x)| x.player == Some(player_id))
+                {
+                    let team = active_seat.team;
+
+                    let board = if state.teams_share_stones {
+                        &state.boards[team.0 as usize - 1]
+                    } else {
+                        &state.boards[seat_idx]
+                    };
+                    (board.points.clone(), None)
+                } else {
+                    (self.board.points.clone(), None)
+                }
+            }
+            GameState::Play(_) => {
+                if let Some(active_seat) = self.seats.iter().find(|x| x.player == Some(player_id)) {
+                    let team = active_seat.team;
+                    let mut board = board.points.clone();
+                    if let Some(mut visibility) = board_visibility.clone() {
+                        for (a, b) in board.iter_mut().zip(&mut visibility.points) {
+                            match (team.0, b.0) {
+                                (1, 255)
+                                | (1, 254)
+                                | (1, 252)
+                                | (2, 255)
+                                | (2, 253)
+                                | (2, 252)
+                                | (3, 254)
+                                | (3, 253)
+                                | (3, 252) => {
+                                    *a = team;
+                                    *b = team;
+                                }
+                                _ => {}
+                            }
+
+                            if !b.is_empty() && *b != team {
+                                *a = Color::empty();
+                                *b = Color::empty();
+                            }
+                        }
+                        (board, Some(visibility.points))
+                    } else {
+                        (board, None)
+                    }
+                } else {
+                    let mut board = board.points.clone();
+                    if let Some(visibility) = &board_visibility {
+                        for (a, b) in board.iter_mut().zip(&visibility.points) {
+                            if !b.is_empty() {
+                                *a = Color::empty();
+                            }
+                        }
+                    }
+                    (board, None)
+                }
+            }
+            GameState::Scoring(_) | GameState::Done(_) => (board.points.clone(), None),
+        };
+
+        (board, board_visibility)
+    }
+
+    pub fn get_view(&self, player_id: u64) -> GameView {
+        let (board, board_visibility) =
+            self.get_board_view(player_id, &self.state, &self.board, &self.board_visibility);
         GameView {
             state: self.state.clone(),
             seats: self.seats.clone(),
             turn: self.turn as _,
-            board: self.board.points.clone(),
+            board,
+            board_visibility,
             size: (self.board.width as u8, self.board.height as u8),
             mods: self.mods.clone(),
             points: self.points.clone(),
@@ -724,11 +1063,19 @@ impl Game {
         }
     }
 
-    pub fn get_view_at(&self, turn: u32) -> Option<GameHistory> {
-        let (_, board, state, _) = &self.board_history.get(turn as usize)?;
+    pub fn get_view_at(&self, player_id: u64, turn: u32) -> Option<GameHistory> {
+        let BoardHistory {
+            board,
+            state,
+            board_visibility,
+            ..
+        } = &self.board_history.get(turn as usize)?;
+        let (board, board_visibility) =
+            self.get_board_view(player_id, state, board, board_visibility);
         Some(GameHistory {
-            board: board.points.iter().map(|x| x.0).collect(),
-            last_stone: state.assume_play().last_stone.clone(),
+            board: board.iter().map(|x| x.0).collect(),
+            board_visibility: board_visibility.map(|b| b.iter().map(|x| x.0).collect()),
+            last_stone: state.assume::<PlayState>().last_stone.clone(),
             move_number: turn,
         })
     }
