@@ -271,12 +271,12 @@ impl Component for CreateGameView {
                                 ) />
                         </li>
                         <li>
+                            <input
+                                type="checkbox"
+                                class="toggle"
+                                checked=self.mods.pixel
+                                onclick=self.link.callback(move |_| Msg::TogglePixel) />
                             <label onclick=self.link.callback(move |_| Msg::TogglePixel)>
-                                <input
-                                    type="checkbox"
-                                    class="toggle"
-                                    checked=self.mods.pixel
-                                    onclick=self.link.callback(move |_| Msg::TogglePixel) />
                                 {"Pixel go"}
                             </label>
                         </li>
