@@ -101,6 +101,7 @@ impl Component for SeatList {
                     };
 
                     let passed = match &game.state {
+                        GameState::FreePlacement(state) if state.players_ready[idx] => " - ready!",
                         GameState::Play(state) if state.players_passed[idx] => " - passed!",
                         GameState::Scoring(state) if state.players_accepted[idx] => " - accepted!",
                         _ => "",
