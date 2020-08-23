@@ -5,7 +5,7 @@ use web_sys::HtmlCanvasElement;
 use yew::services::{RenderService, Task};
 use yew::{html, Component, ComponentLink, Html, NodeRef, Properties, ShouldRender};
 
-use crate::game::GameState;
+use crate::game::{GameState, Visibility};
 use crate::game_view::GameView;
 use crate::message::{ClientMessage, GameAction};
 use crate::networking;
@@ -310,15 +310,11 @@ impl Board {
                 .map(|v| v[idx] == 0)
                 .unwrap_or(true);
 
-            if color == 0 {
+            if color == 0 || !visible {
                 continue;
             }
 
-            if visible {
-                context.set_fill_style(&JsValue::from_str(stone_colors[color as usize - 1]));
-            } else {
-                context.set_fill_style(&JsValue::from_str(stone_colors_hidden[color as usize - 1]));
-            }
+            context.set_fill_style(&JsValue::from_str(stone_colors[color as usize - 1]));
 
             context.set_stroke_style(&JsValue::from_str(border_colors[color as usize - 1]));
 
@@ -334,6 +330,36 @@ impl Board {
             )?;
             context.fill();
             context.stroke();
+        }
+
+        for (idx, &colors) in board_visibility.iter().flatten().enumerate() {
+            let x = idx % board_size;
+            let y = idx / board_size;
+
+            let colors = Visibility::from_value(colors);
+
+            if colors.is_empty() {
+                continue;
+            }
+
+            for color in &colors {
+                context.set_fill_style(&JsValue::from_str(stone_colors_hidden[color as usize - 1]));
+
+                context.set_stroke_style(&JsValue::from_str(border_colors[color as usize - 1]));
+
+                let size = canvas.width() as f64 / board_size as f64;
+                // create shape of radius 'size' around center point (size, size)
+                context.begin_path();
+                context.arc(
+                    (x as f64 + 0.5) * size,
+                    (y as f64 + 0.5) * size,
+                    size / 2.,
+                    0.0,
+                    2.0 * std::f64::consts::PI,
+                )?;
+                context.fill();
+                context.stroke();
+            }
         }
 
         let last_stone = match (&game.state, &game.history) {

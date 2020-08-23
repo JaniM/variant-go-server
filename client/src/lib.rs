@@ -125,6 +125,7 @@ impl Component for GameList {
                     seats,
                     board,
                     board_visibility,
+                    hidden_stones_left,
                     turn,
                     state,
                     size,
@@ -138,6 +139,7 @@ impl Component for GameList {
                         seats,
                         board,
                         board_visibility,
+                        hidden_stones_left,
                         turn,
                         state,
                         size,
@@ -371,6 +373,12 @@ impl Component for GameList {
                 game::GameState::Done(_) => "Game over!",
             };
 
+            let hidden_stones_left = if game.hidden_stones_left > 0 {
+                html!(<>{"Opponents' hidden stones left: "}{game.hidden_stones_left}</>)
+            } else {
+                html!()
+            };
+
             let pass_button = match game.state {
                 game::GameState::FreePlacement(_) => html!(<button onclick=pass>{"Ready"}</button>),
                 game::GameState::Play(_) => html!(<button onclick=pass>{"Pass"}</button>),
@@ -440,7 +448,7 @@ impl Component for GameList {
                 <>
                 <div style="flex-grow: 1; margin: 10px; display: flex; justify-content: center;">
                     <div style="width: 800px; margin: auto 0;">
-                        <div>{"Status:"} {status} {pass_button} {cancel_button}</div>
+                        <div>{"Status:"} {status} {pass_button} {cancel_button} {hidden_stones_left}</div>
                         <board::Board game=game/>
                         {turn_bar}
                     </div>

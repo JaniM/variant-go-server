@@ -4,6 +4,8 @@ use std::collections::{HashSet, VecDeque};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
+use bitmaps::Bitmap;
+
 use crate::assume::AssumeFrom;
 
 #[derive(Debug, Copy, Clone, PartialEq, Hash, Serialize, Deserialize)]
@@ -15,16 +17,12 @@ impl Color {
         Color(0)
     }
 
-    pub const fn black() -> Color {
-        Color(1)
-    }
-
-    pub const fn white() -> Color {
-        Color(2)
-    }
-
-    pub const fn is_empty(&self) -> bool {
+    pub const fn is_empty(self) -> bool {
         self.0 == 0
+    }
+
+    pub const fn as_usize(self) -> usize {
+        self.0 as usize
     }
 }
 
@@ -88,7 +86,7 @@ pub struct Board<T = Color> {
 
 type Point = (u32, u32);
 
-impl<T: Copy + Default + Hash> Board<T> {
+impl<T: Copy + Default> Board<T> {
     fn empty(width: u32, height: u32) -> Self {
         Board {
             width,
@@ -133,7 +131,9 @@ impl<T: Copy + Default + Hash> Board<T> {
                 }
             })
     }
+}
 
+impl<T: Hash> Board<T> {
     fn hash(&self) -> u64 {
         let mut hasher = DefaultHasher::new();
         Hash::hash(&self, &mut hasher);
@@ -263,11 +263,14 @@ pub struct GameModifier {
     pub hidden_move: Option<HiddenMoveGo>,
 }
 
+pub type Visibility = Bitmap<typenum::U16>;
+pub type VisibilityBoard = Board<Bitmap<typenum::U16>>;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct BoardHistory {
     pub hash: u64,
     pub board: Board,
-    pub board_visibility: Option<Board>,
+    pub board_visibility: Option<VisibilityBoard>,
     pub state: GameState,
     pub points: Vec<i32>,
 }
@@ -282,7 +285,7 @@ pub struct Game {
     pub turn: usize,
     pub pass_count: usize,
     pub board: Board,
-    pub board_visibility: Option<Board>,
+    pub board_visibility: Option<VisibilityBoard>,
     pub board_history: Vec<BoardHistory>,
     /// Optimization for superko
     pub capture_count: usize,
@@ -317,7 +320,8 @@ pub struct GameView {
     pub seats: Vec<Seat>,
     pub turn: u32,
     pub board: Vec<Color>,
-    pub board_visibility: Option<Vec<Color>>,
+    pub board_visibility: Option<Vec<Visibility>>,
+    pub hidden_stones_left: u32,
     pub size: (u8, u8),
     pub mods: GameModifier,
     pub points: Vec<i32>,
@@ -327,7 +331,7 @@ pub struct GameView {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GameHistory {
     pub board: Vec<u8>,
-    pub board_visibility: Option<Vec<u8>>,
+    pub board_visibility: Option<Vec<u16>>,
     pub last_stone: Option<Vec<(u32, u32)>>,
     pub move_number: u32,
 }
@@ -584,40 +588,43 @@ impl Game {
                 state.players_ready[seat_idx] = true;
 
                 if state.players_ready.iter().all(|x| *x) {
+                    let mut visibility =
+                        VisibilityBoard::empty(self.board.width, self.board.height);
+
                     for board in &state.boards {
-                        for (a, b) in self.board.points.iter_mut().zip(&board.points) {
+                        for ((a, b), v) in self
+                            .board
+                            .points
+                            .iter_mut()
+                            .zip(&board.points)
+                            .zip(&mut visibility.points)
+                        {
                             if *b == Color::empty() {
                                 continue;
                             }
 
+                            v.set(b.as_usize(), true);
+
                             // Double-committed points become empty!
-                            if a.0 == 0 || *a == *b {
+                            if v.len() == 1 {
                                 *a = *b;
                             } else {
-                                // This is a horrible hack.
-                                // 255 = 1 & 2, 254 = 1 & 3, 253 = 2 & 3, 252 = 1 & 2 & 3
-                                *a = Color(match (a.0, b.0) {
-                                    (1, 2) => 255,
-                                    (1, 3) => 254,
-                                    (2, 3) => 253,
-                                    (255, 3) => 252,
-                                    (254, 2) => 252,
-                                    (253, 1) => 252,
-                                    (x, _) => x,
-                                });
+                                *a = Color::empty();
                             }
                         }
                     }
 
-                    self.board_visibility = Some(self.board.clone());
-
-                    for p in &mut self.board.points {
-                        if p.0 == 255 {
-                            *p = Color::empty();
-                        }
-                    }
+                    self.board_visibility = Some(visibility);
 
                     self.state = GameState::play(self.seats.len());
+
+                    self.board_history = vec![BoardHistory {
+                        hash: self.board.hash(),
+                        board: self.board.clone(),
+                        board_visibility: self.board_visibility.clone(),
+                        state: self.state.clone(),
+                        points: self.points.clone(),
+                    }];
                 }
             }
             ActionKind::Cancel => {
@@ -682,7 +689,7 @@ impl Game {
                                 any_revealed = true;
                                 points_played.push(coord);
                             }
-                            *visibility.point_mut(coord) = Color::empty();
+                            *visibility.point_mut(coord) = Bitmap::new();
                         }
                         if !point.is_empty() {
                             continue;
@@ -707,7 +714,7 @@ impl Game {
                     let point = self.board.point_mut((x, y));
                     let revealed = if let Some(visibility) = &mut self.board_visibility {
                         let revealed = !visibility.get_point((x, y)).is_empty();
-                        *visibility.point_mut((x, y)) = Color::empty();
+                        *visibility.point_mut((x, y)) = Bitmap::new();
                         revealed
                     } else {
                         false
@@ -748,11 +755,11 @@ impl Game {
                         if let Some(visibility) = &mut self.board_visibility {
                             let mut revealed = false;
                             for &point in &group.points {
-                                revealed = revealed || visibility.get_point(point).0 > 0;
-                                *visibility.point_mut(point) = Color::empty();
+                                revealed = revealed || !visibility.get_point(point).is_empty();
+                                *visibility.point_mut(point) = Bitmap::new();
                                 for point in self.board.surrounding_points(point) {
-                                    revealed = revealed || visibility.get_point(point).0 > 0;
-                                    *visibility.point_mut(point) = Color::empty();
+                                    revealed = revealed || !visibility.get_point(point).is_empty();
+                                    *visibility.point_mut(point) = Bitmap::new();
                                 }
                             }
                             if revealed {
@@ -767,9 +774,9 @@ impl Game {
                         *self.board.point_mut(point) = Color::empty();
 
                         if let Some(visibility) = &mut self.board_visibility {
-                            *visibility.point_mut(point) = Color::empty();
+                            *visibility.point_mut(point) = Bitmap::new();
                             for point in self.board.surrounding_points(point) {
-                                *visibility.point_mut(point) = Color::empty();
+                                *visibility.point_mut(point) = Bitmap::new();
                             }
                         }
                     }
@@ -895,9 +902,6 @@ impl Game {
                     self.turn - 1
                 };
             }
-            unknown => {
-                println!("Play state got unexpected action {:?}", unknown);
-            }
         }
 
         self.set_zen_teams();
@@ -976,9 +980,10 @@ impl Game {
         player_id: u64,
         state: &GameState,
         board: &Board,
-        board_visibility: &Option<Board>,
-    ) -> (Vec<Color>, Option<Vec<Color>>) {
-        let (board, board_visibility) = match state {
+        board_visibility: &Option<VisibilityBoard>,
+        game_done: bool,
+    ) -> (Vec<Color>, Option<Vec<Visibility>>, u32) {
+        let (board, board_visibility, hidden_stones_left) = match state {
             GameState::FreePlacement(state) => {
                 if let Some((seat_idx, active_seat)) = self
                     .seats
@@ -993,41 +998,39 @@ impl Game {
                     } else {
                         &state.boards[seat_idx]
                     };
-                    (board.points.clone(), None)
+                    (board.points.clone(), None, 0)
                 } else {
-                    (self.board.points.clone(), None)
+                    (self.board.points.clone(), None, 0)
                 }
             }
             GameState::Play(_) => {
                 if let Some(active_seat) = self.seats.iter().find(|x| x.player == Some(player_id)) {
                     let team = active_seat.team;
                     let mut board = board.points.clone();
-                    if let Some(mut visibility) = board_visibility.clone() {
-                        for (a, b) in board.iter_mut().zip(&mut visibility.points) {
-                            match (team.0, b.0) {
-                                (1, 255)
-                                | (1, 254)
-                                | (1, 252)
-                                | (2, 255)
-                                | (2, 253)
-                                | (2, 252)
-                                | (3, 254)
-                                | (3, 253)
-                                | (3, 252) => {
-                                    *a = team;
-                                    *b = team;
-                                }
-                                _ => {}
-                            }
 
-                            if !b.is_empty() && *b != team {
-                                *a = Color::empty();
-                                *b = Color::empty();
+                    if game_done {
+                        return (board, board_visibility.clone().map(|x| x.points), 0);
+                    }
+
+                    if let Some(mut visibility) = board_visibility.clone() {
+                        let mut hidden_stones_left = 0;
+                        for (board, visibility) in board.iter_mut().zip(&mut visibility.points) {
+                            if visibility.get(team.as_usize()) {
+                                *board = team;
+                                if visibility.len() > 1 {
+                                    hidden_stones_left += 1;
+                                }
+                                *visibility = Bitmap::new();
+                                visibility.set(team.as_usize(), true);
+                            } else if !visibility.is_empty() {
+                                hidden_stones_left += 1;
+                                *board = Color::empty();
+                                *visibility = Bitmap::new();
                             }
                         }
-                        (board, Some(visibility.points))
+                        (board, Some(visibility.points), hidden_stones_left)
                     } else {
-                        (board, None)
+                        (board, None, 0)
                     }
                 } else {
                     let mut board = board.points.clone();
@@ -1038,24 +1041,31 @@ impl Game {
                             }
                         }
                     }
-                    (board, None)
+                    (board, None, 0)
                 }
             }
-            GameState::Scoring(_) | GameState::Done(_) => (board.points.clone(), None),
+            GameState::Scoring(_) | GameState::Done(_) => (board.points.clone(), None, 0),
         };
 
-        (board, board_visibility)
+        (board, board_visibility, hidden_stones_left)
     }
 
     pub fn get_view(&self, player_id: u64) -> GameView {
-        let (board, board_visibility) =
-            self.get_board_view(player_id, &self.state, &self.board, &self.board_visibility);
+        let game_done = matches!(self.state, GameState::Done(_));
+        let (board, board_visibility, hidden_stones_left) = self.get_board_view(
+            player_id,
+            &self.state,
+            &self.board,
+            &self.board_visibility,
+            game_done,
+        );
         GameView {
             state: self.state.clone(),
             seats: self.seats.clone(),
             turn: self.turn as _,
             board,
             board_visibility,
+            hidden_stones_left,
             size: (self.board.width as u8, self.board.height as u8),
             mods: self.mods.clone(),
             points: self.points.clone(),
@@ -1070,11 +1080,14 @@ impl Game {
             board_visibility,
             ..
         } = &self.board_history.get(turn as usize)?;
-        let (board, board_visibility) =
-            self.get_board_view(player_id, state, board, board_visibility);
+
+        let game_done = matches!(self.state, GameState::Done(_));
+        let (board, board_visibility, _hidden_stones_left) =
+            self.get_board_view(player_id, state, board, board_visibility, game_done);
+
         Some(GameHistory {
             board: board.iter().map(|x| x.0).collect(),
-            board_visibility: board_visibility.map(|b| b.iter().map(|x| x.0).collect()),
+            board_visibility: board_visibility.map(|b| b.iter().map(|x| x.into_value()).collect()),
             last_stone: state.assume::<PlayState>().last_stone.clone(),
             move_number: turn,
         })

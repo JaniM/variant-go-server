@@ -70,7 +70,8 @@ pub enum ServerMessage {
         turn: u32,
         // 19x19 vec, 0 = empty, 1 = black, 2 = white
         board: Vec<u8>,
-        board_visibility: Option<Vec<u8>>,
+        board_visibility: Option<Vec<u16>>,
+        hidden_stones_left: u32,
         size: (u8, u8),
         state: game::GameState,
         mods: game::GameModifier,

@@ -113,7 +113,8 @@ impl Handler<game_room::Message> for ClientWebSocket {
                     board: view.board.into_iter().map(|x| x.0).collect(),
                     board_visibility: view
                         .board_visibility
-                        .map(|b| b.iter().map(|x| x.0).collect()),
+                        .map(|b| b.iter().map(|x| x.into_value()).collect()),
+                    hidden_stones_left: view.hidden_stones_left,
                     size: view.size,
                     state: view.state,
                     mods: view.mods,
@@ -121,7 +122,7 @@ impl Handler<game_room::Message> for ClientWebSocket {
                     move_number: view.move_number,
                 }));
             }
-            game_room::Message::BoardAt { room_id, view } => {
+            game_room::Message::BoardAt { view, .. } => {
                 ctx.binary(pack(ServerMessage::BoardAt(view)));
             }
         }

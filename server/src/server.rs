@@ -20,6 +20,7 @@ macro_rules! catch {
 pub enum Message {
     // TODO: Use a proper struct, not magic tuples
     AnnounceRoom(u32, String),
+    #[allow(dead_code)]
     CloseRoom(u32),
     Identify(Profile),
     UpdateProfile(Profile),
@@ -113,13 +114,12 @@ pub struct GameServer {
     profiles: HashMap<u64, Profile>,
     rooms: HashMap<u32, Room>,
     rng: ThreadRng,
-    game_counter: u32,
     db: Addr<db::DbActor>,
 }
 
 impl Default for GameServer {
     fn default() -> GameServer {
-        let mut rooms = HashMap::new();
+        let rooms = HashMap::new();
         let db = SyncArbiter::start(8, || db::DbActor::default());
 
         GameServer {
@@ -128,7 +128,6 @@ impl Default for GameServer {
             profiles: HashMap::new(),
             rooms,
             rng: rand::thread_rng(),
-            game_counter: 0,
             db,
         }
     }
@@ -140,11 +139,6 @@ impl GameServer {
         for session in self.sessions.values() {
             let _ = session.client.do_send(message.clone());
         }
-    }
-
-    /// Send message to all users in a room
-    fn send_room_message(&self, room: u32, message: Message) -> Option<()> {
-        todo!()
     }
 
     fn send_message(&self, session_id: usize, message: Message) {
@@ -180,7 +174,7 @@ impl GameServer {
 
         let fut = async move {
             if let Some(room_addr) = room_addr {
-                room_addr.send(game_room::Leave { session_id }).await;
+                let _ = room_addr.send(game_room::Leave { session_id }).await;
             } else {
                 ()
             }
@@ -275,9 +269,7 @@ impl GameServer {
 impl Actor for GameServer {
     type Context = Context<Self>;
 
-    fn started(&mut self, ctx: &mut Self::Context) {}
-
-    fn stopping(&mut self, ctx: &mut Self::Context) -> Running {
+    fn stopping(&mut self, _ctx: &mut Self::Context) -> Running {
         println!("Server stopping!");
         Running::Stop
     }
@@ -367,7 +359,7 @@ impl Handler<Join> for GameServer {
     // Can this possibly be right?
     type Result = ActorResponse<Self, Addr<GameRoom>, ()>;
 
-    fn handle(&mut self, msg: Join, ctx: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, msg: Join, _ctx: &mut Context<Self>) -> Self::Result {
         let Join { id, room_id } = msg;
 
         let result = self
@@ -490,7 +482,7 @@ impl Handler<CreateRoom> for GameServer {
 impl Handler<IdentifyAs> for GameServer {
     type Result = ActorResponse<Self, Profile, message::Error>;
 
-    fn handle(&mut self, msg: IdentifyAs, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: IdentifyAs, _ctx: &mut Self::Context) -> Self::Result {
         use message::Error;
 
         let IdentifyAs { id, token, nick } = msg;

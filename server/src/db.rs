@@ -85,7 +85,7 @@ impl Default for DbActor {
 impl Actor for DbActor {
     type Context = SyncContext<Self>;
 
-    fn stopping(&mut self, ctx: &mut Self::Context) -> Running {
+    fn stopping(&mut self, _ctx: &mut Self::Context) -> Running {
         println!("Database actor stopping!");
 
         Running::Stop

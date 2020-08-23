@@ -22,3 +22,6 @@ uuid = { version = "0.8", features = ["serde", "v4"] }
 diesel = { version = "1.4.4", features = ["postgres"] }
 dotenv = "0.15.0"
 
+bitmaps = "2.1.0"
+typenum = "1.12.0"
+

@@ -1,18 +1,12 @@
 use actix::prelude::*;
 use std::collections::{HashMap, HashSet};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use crate::db;
 use crate::game;
 use crate::message;
 
 // TODO: add room timeout
-
-macro_rules! catch {
-    ($($code:tt)+) => {
-        (|| Some({ $($code)+ }))()
-    };
-}
 
 #[derive(Message, Clone)]
 #[rtype(result = "()")]
@@ -61,12 +55,6 @@ pub struct GameRoom {
 }
 
 impl GameRoom {
-    fn send_room_message(&self, msg: Message) {
-        for (_, addr) in self.sessions.values() {
-            let _ = addr.do_send(msg.clone());
-        }
-    }
-
     fn send_room_messages(&self, mut create_msg: impl FnMut(u64) -> Message) {
         for (user_id, addr) in self.sessions.values() {
             let _ = addr.do_send(create_msg(*user_id));
@@ -77,7 +65,7 @@ impl GameRoom {
 impl Actor for GameRoom {
     type Context = Context<Self>;
 
-    fn stopping(&mut self, ctx: &mut Self::Context) -> Running {
+    fn stopping(&mut self, _ctx: &mut Self::Context) -> Running {
         println!("Room {} stopping!", self.room_id);
 
         Running::Stop
@@ -87,10 +75,10 @@ impl Actor for GameRoom {
 impl Handler<Leave> for GameRoom {
     type Result = ();
 
-    fn handle(&mut self, msg: Leave, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: Leave, _ctx: &mut Self::Context) -> Self::Result {
         let Leave { session_id } = msg;
 
-        if let Some((user_id, addr)) = self.sessions.remove(&session_id) {
+        if let Some((user_id, _addr)) = self.sessions.remove(&session_id) {
             let sessions = &self.sessions;
             if !sessions.values().any(|(uid, _addr)| *uid == user_id) {
                 self.users.remove(&user_id);
@@ -107,7 +95,7 @@ impl Handler<Leave> for GameRoom {
 impl Handler<Join> for GameRoom {
     type Result = ();
 
-    fn handle(&mut self, msg: Join, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: Join, _ctx: &mut Self::Context) -> Self::Result {
         let Join {
             session_id,
             user_id,

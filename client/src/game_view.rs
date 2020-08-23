@@ -8,7 +8,8 @@ pub struct GameView {
     pub turn: u32,
     // 19x19 vec, 0 = empty, 1 = black, 2 = white
     pub board: Vec<u8>,
-    pub board_visibility: Option<Vec<u8>>,
+    pub board_visibility: Option<Vec<u16>>,
+    pub hidden_stones_left: u32,
     pub size: (u8, u8),
     pub state: GameState,
     pub mods: GameModifier,
