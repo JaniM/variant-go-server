@@ -41,6 +41,7 @@ features = [
   "BinaryType",
   "Blob",
   "ErrorEvent",
+  "KeyboardEvent",
   "Location",
   "MessageEvent",
   'MouseEvent',

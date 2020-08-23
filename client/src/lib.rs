@@ -28,6 +28,7 @@ use crate::seats::SeatList;
 use crate::text_input::TextInput;
 
 use yew::prelude::*;
+use yew::services::keyboard::{KeyListenerHandle, KeyboardService};
 use yew::services::timeout::{TimeoutService, TimeoutTask};
 
 use itertools::Itertools;
@@ -79,6 +80,9 @@ struct GameList {
     error: Option<(message::Error, TimeoutTask)>,
     history: Vec<game::GameHistory>,
     wanted_history: Option<u32>,
+    history_pending: bool,
+    #[allow(dead_code)]
+    key_listener: KeyListenerHandle,
 }
 
 enum Msg {
@@ -97,7 +101,9 @@ enum Msg {
     SetTheme(Theme),
     SetError(Option<message::Error>),
     GetBoardAt(u32),
+    ScanBoard(i32),
     Render,
+    None,
 }
 
 impl Component for GameList {
@@ -179,6 +185,15 @@ impl Component for GameList {
         })
         .unwrap();
 
+        let key_listener = KeyboardService::register_key_down(
+            &yew::utils::document(),
+            link.callback(|event: web_sys::KeyboardEvent| match event.key().as_str() {
+                "ArrowRight" => Msg::ScanBoard(1),
+                "ArrowLeft" => Msg::ScanBoard(-1),
+                _ => Msg::None,
+            }),
+        );
+
         GameList {
             link,
             games: vec![],
@@ -191,6 +206,8 @@ impl Component for GameList {
             error: None,
             history: Vec::new(),
             wanted_history: None,
+            history_pending: false,
+            key_listener,
         }
     }
 
@@ -220,6 +237,7 @@ impl Component for GameList {
                         }
                     } else {
                         self.history.clear();
+                        self.history_pending = false;
                     }
                 }
             }
@@ -236,11 +254,15 @@ impl Component for GameList {
                             .collect();
                         if view.move_number == game.move_number {
                             game.history = None;
+                            self.history_pending = false;
                             return true;
                         }
                         if Some(view.move_number) != self.wanted_history {
                             return false;
                         }
+                        self.history_pending = false;
+                    } else {
+                        self.history_pending = false;
                     }
                     game.history = view;
                 }
@@ -289,17 +311,39 @@ impl Component for GameList {
             }
             Msg::GetBoardAt(turn) => {
                 self.wanted_history = Some(turn);
+                if self.history_pending {
+                    return false;
+                }
                 if self.history.len() as u32 <= turn + 5 {
                     networking::send(ClientMessage::GameAction(message::GameAction::BoardAt(
                         self.history.len() as _,
                         turn + 10,
                     )));
+                    self.history_pending = true;
                 }
                 if self.history.len() as u32 > turn {
                     return self.update(Msg::SetGameHistory(Some(
                         self.history[turn as usize].clone(),
                     )));
                 }
+            }
+            Msg::ScanBoard(diff) => {
+                let game = match &self.game {
+                    Some(g) => g,
+                    None => return false,
+                };
+                let mut turn = match self.wanted_history {
+                    None => game.move_number as i32 + diff,
+                    Some(turn) => turn as i32 + diff,
+                };
+                if turn < 0 {
+                    turn = 0;
+                }
+                if turn > game.move_number as i32 {
+                    return false;
+                }
+
+                return self.update(Msg::GetBoardAt(turn as u32));
             }
             Msg::Render => {
                 self.debounce_job = None;
@@ -311,6 +355,7 @@ impl Component for GameList {
                     .dedup_by(|x, y| x.0 == y.0)
                     .collect();
             }
+            Msg::None => {}
         }
         true
     }
