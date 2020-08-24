@@ -50,7 +50,7 @@ impl Component for CreateGameView {
     type Properties = Props;
 
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
-        CreateGameView {
+        let mut view = CreateGameView {
             link,
             name: format!("{}'s game", props.user.nick_or("Unknown")),
             user: props.user,
@@ -60,7 +60,9 @@ impl Component for CreateGameView {
             size_select_ref: NodeRef::default(),
             oncreate: props.oncreate,
             mods: GameModifier::default(),
-        }
+        };
+        view.update(Msg::LoadPreset(Preset::Standard));
+        view
     }
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {

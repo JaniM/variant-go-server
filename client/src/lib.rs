@@ -355,7 +355,9 @@ impl Component for GameList {
                     .dedup_by(|x, y| x.0 == y.0)
                     .collect();
             }
-            Msg::None => {}
+            Msg::None => {
+                return false;
+            }
         }
         true
     }

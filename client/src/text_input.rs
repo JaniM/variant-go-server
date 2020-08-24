@@ -56,7 +56,8 @@ impl Component for TextInput {
                 value=&self.text
                 oninput=self.link.callback(|e: InputData| TextInputMsg::SetText(e.value))
                 onblur=self.link.callback(|_| TextInputMsg::Submit)
-                onkeypress=self.link.callback(move |e: KeyboardEvent| {
+                onkeydown=self.link.callback(move |e: KeyboardEvent| {
+                    e.stop_propagation();
                     if e.key() == "Enter" { TextInputMsg::Submit } else { TextInputMsg::None }
                 })
                 />
