@@ -12,8 +12,8 @@ use actix::prelude::*;
 use actix_web::{middleware, web, App, Error, HttpRequest, HttpResponse, HttpServer};
 use actix_web_actors::ws;
 
-use shared::message::{self, ClientMessage, ServerMessage};
 use crate::server::GameServer;
+use shared::message::{self, ClientMessage, ServerMessage};
 
 /// How often heartbeat pings are sent
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);

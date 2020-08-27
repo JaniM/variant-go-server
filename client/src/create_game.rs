@@ -1,11 +1,11 @@
 use web_sys::HtmlSelectElement;
 use yew::prelude::*;
 
-use shared::game::{self, GameModifier};
 use crate::game_view::Profile;
 use crate::message::ClientMessage;
 use crate::networking;
 use crate::text_input::TextInput;
+use shared::game::{self, GameModifier};
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum Preset {

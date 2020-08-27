@@ -1,4 +1,3 @@
-
 #[macro_use]
 mod assume;
 pub mod game;

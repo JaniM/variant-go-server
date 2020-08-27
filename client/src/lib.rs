@@ -1,5 +1,6 @@
 #![recursion_limit = "1024"]
 
+mod agents;
 mod board;
 mod create_game;
 mod game_view;
@@ -7,12 +8,12 @@ mod networking;
 mod seats;
 mod text_input;
 mod utils;
-mod agents;
 
 use std::collections::HashMap;
 use std::time::Duration;
 use wasm_bindgen::prelude::*;
 
+use crate::agents::{GameStore, GameStoreBridge};
 use crate::create_game::CreateGameView;
 use crate::game_view::{GameView, Profile};
 use crate::seats::SeatList;
@@ -24,6 +25,7 @@ use shared::message::{self, ClientMessage, ServerMessage};
 use yew::prelude::*;
 use yew::services::keyboard::{KeyListenerHandle, KeyboardService};
 use yew::services::timeout::{TimeoutService, TimeoutTask};
+use yewtil::store::ReadOnly;
 
 use itertools::Itertools;
 
@@ -72,11 +74,9 @@ struct GameList {
     debounce_job: Option<TimeoutTask>,
     theme: Theme,
     error: Option<(message::Error, TimeoutTask)>,
-    history: Vec<game::GameHistory>,
-    wanted_history: Option<u32>,
-    history_pending: bool,
     #[allow(dead_code)]
     key_listener: KeyListenerHandle,
+    game_store: GameStoreBridge,
 }
 
 enum Msg {
@@ -86,6 +86,7 @@ enum Msg {
     Pass,
     Cancel,
     SetGameStatus(GameView),
+    GameStoreMsg(ReadOnly<GameStore>),
     SetGameHistory(Option<game::GameHistory>),
     SetOwnProfile(Profile),
     SetProfile(Profile),
@@ -188,6 +189,8 @@ impl Component for GameList {
             }),
         );
 
+        let game_store = GameStore::bridge(link.callback(Msg::GameStoreMsg));
+
         GameList {
             link,
             games: vec![],
@@ -198,10 +201,8 @@ impl Component for GameList {
             debounce_job: None,
             theme: Theme::get(),
             error: None,
-            history: Vec::new(),
-            wanted_history: None,
-            history_pending: false,
             key_listener,
+            game_store,
         }
     }
 
@@ -219,47 +220,16 @@ impl Component for GameList {
             Msg::Pass => networking::send(ClientMessage::GameAction(message::GameAction::Pass)),
             Msg::Cancel => networking::send(ClientMessage::GameAction(message::GameAction::Cancel)),
             Msg::SetGameStatus(game) => {
-                utils::set_hash(&game.room_id.to_string());
-                let room_id = game.room_id;
-                let move_number = game.move_number;
-                let old = std::mem::replace(&mut self.game, Some(game));
-                if let Some(old) = old {
-                    if old.room_id == room_id {
-                        self.game.as_mut().unwrap().history = old.history;
-                        if move_number <= self.history.len() as u32 {
-                            self.history.drain(move_number as usize..);
-                        }
-                    } else {
-                        self.history.clear();
-                        self.history_pending = false;
-                    }
-                }
+                GameStore::set_game(&mut self.game_store, game);
+                return false;
+            }
+            Msg::GameStoreMsg(store) => {
+                let store = store.borrow();
+                self.game = store.game.clone();
             }
             Msg::SetGameHistory(view) => {
-                if let Some(game) = &mut self.game {
-                    if let Some(view) = &view {
-                        self.history.push(view.clone());
-                        self.history.sort_unstable_by_key(|x| x.move_number);
-                        self.history = self
-                            .history
-                            .iter()
-                            .cloned()
-                            .dedup_by(|x, y| x.move_number == y.move_number)
-                            .collect();
-                        if view.move_number == game.move_number {
-                            game.history = None;
-                            self.history_pending = false;
-                            return true;
-                        }
-                        if Some(view.move_number) != self.wanted_history {
-                            return false;
-                        }
-                        self.history_pending = false;
-                    } else {
-                        self.history_pending = false;
-                    }
-                    game.history = view;
-                }
+                GameStore::set_game_history(&mut self.game_store, view);
+                return false;
             }
             Msg::AddGame(game) => {
                 self.games.push(game);
@@ -304,40 +274,10 @@ impl Component for GameList {
                 });
             }
             Msg::GetBoardAt(turn) => {
-                self.wanted_history = Some(turn);
-                if self.history_pending {
-                    return false;
-                }
-                if self.history.len() as u32 <= turn + 5 {
-                    networking::send(ClientMessage::GameAction(message::GameAction::BoardAt(
-                        self.history.len() as _,
-                        turn + 10,
-                    )));
-                    self.history_pending = true;
-                }
-                if self.history.len() as u32 > turn {
-                    return self.update(Msg::SetGameHistory(Some(
-                        self.history[turn as usize].clone(),
-                    )));
-                }
+                GameStore::get_board_at(&mut self.game_store, turn);
             }
             Msg::ScanBoard(diff) => {
-                let game = match &self.game {
-                    Some(g) => g,
-                    None => return false,
-                };
-                let mut turn = match self.wanted_history {
-                    None => game.move_number as i32 + diff,
-                    Some(turn) => turn as i32 + diff,
-                };
-                if turn < 0 {
-                    turn = 0;
-                }
-                if turn > game.move_number as i32 {
-                    return false;
-                }
-
-                return self.update(Msg::GetBoardAt(turn as u32));
+                GameStore::scan_board(&mut self.game_store, diff);
             }
             Msg::Render => {
                 self.debounce_job = None;

@@ -5,8 +5,8 @@ use web_sys::{CloseEvent, ErrorEvent, MessageEvent, WebSocket};
 
 use std::cell::RefCell;
 
-use shared::message::{ClientMessage, ServerMessage};
 use crate::utils::local_storage;
+use shared::message::{ClientMessage, ServerMessage};
 
 #[wasm_bindgen]
 extern "C" {
@@ -67,10 +67,8 @@ pub fn start_websocket(
     let onmessage_callback = wrap(move |e: MessageEvent| {
         // Handle difference Text/Binary,...
         if let Ok(abuf) = e.data().dyn_into::<js_sys::ArrayBuffer>() {
-            console_log!("message event, received arraybuffer: {:?}", abuf);
             let array = js_sys::Uint8Array::new(&abuf);
             let len = array.byte_length() as usize;
-            console_log!("Arraybuffer received {}bytes: {:?}", len, array.to_vec());
             let msg = match serde_cbor::from_slice::<ServerMessage>(&array.to_vec()) {
                 Ok(v) => v,
                 Err(e) => {
@@ -78,7 +76,6 @@ pub fn start_websocket(
                     return;
                 }
             };
-            console_log!("{:?}", msg);
             cloned_on_msg(Ok(msg));
         } else if let Ok(blob) = e.data().dyn_into::<web_sys::Blob>() {
             console_log!("message event, received blob: {:?}", blob);
@@ -148,7 +145,7 @@ pub fn send(msg: ClientMessage) {
             .expect("ws not initialized")
             .send_with_u8_array(&mut vec)
         {
-            Ok(_) => console_log!("binary message successfully sent"),
+            Ok(_) => {}
             Err(err) => console_log!("error sending message: {:?}", err),
         };
     });

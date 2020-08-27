@@ -1,6 +1,6 @@
 use crate::game::{GameHistory, GameModifier, GameState};
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct GameView {
     pub room_id: u32,
     pub members: Vec<u64>,
