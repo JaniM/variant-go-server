@@ -1,7 +1,7 @@
 use web_sys::HtmlSelectElement;
 use yew::prelude::*;
 
-use crate::game::{self, GameModifier};
+use shared::game::{self, GameModifier};
 use crate::game_view::Profile;
 use crate::message::ClientMessage;
 use crate::networking;

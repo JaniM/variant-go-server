@@ -1,12 +1,8 @@
 #[macro_use]
 extern crate diesel;
 
-#[macro_use]
-mod assume;
 mod db;
-mod game;
 mod game_room;
-mod message;
 mod schema;
 mod server;
 
@@ -16,7 +12,7 @@ use actix::prelude::*;
 use actix_web::{middleware, web, App, Error, HttpRequest, HttpResponse, HttpServer};
 use actix_web_actors::ws;
 
-use crate::message::{ClientMessage, ServerMessage};
+use shared::message::{self, ClientMessage, ServerMessage};
 use crate::server::GameServer;
 
 /// How often heartbeat pings are sent

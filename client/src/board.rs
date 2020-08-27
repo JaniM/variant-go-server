@@ -5,9 +5,10 @@ use web_sys::HtmlCanvasElement;
 use yew::services::{RenderService, Task};
 use yew::{html, Component, ComponentLink, Html, NodeRef, Properties, ShouldRender};
 
-use crate::game::{GameState, Visibility};
+use shared::game::{GameState, Visibility};
+use shared::message::{ClientMessage, GameAction};
+
 use crate::game_view::GameView;
-use crate::message::{ClientMessage, GameAction};
 use crate::networking;
 
 pub struct Board {

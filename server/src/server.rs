@@ -5,9 +5,9 @@ use std::time::{Duration, Instant};
 use uuid::Uuid;
 
 use crate::db;
-use crate::game;
 use crate::game_room::{self, GameRoom};
-use crate::message;
+use shared::game;
+use shared::message;
 
 macro_rules! catch {
     ($($code:tt)+) => {

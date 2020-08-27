@@ -5,7 +5,7 @@ use web_sys::{CloseEvent, ErrorEvent, MessageEvent, WebSocket};
 
 use std::cell::RefCell;
 
-use crate::message::{ClientMessage, ServerMessage};
+use shared::message::{ClientMessage, ServerMessage};
 use crate::utils::local_storage;
 
 #[wasm_bindgen]

@@ -2,20 +2,12 @@
 
 mod board;
 mod create_game;
-#[path = "../../server/src/assume.rs"]
-#[allow(dead_code)]
-#[macro_use]
-mod assume;
-#[path = "../../server/src/game.rs"]
-#[allow(dead_code)]
-mod game;
 mod game_view;
-#[path = "../../server/src/message.rs"]
-mod message;
 mod networking;
 mod seats;
 mod text_input;
 mod utils;
+mod agents;
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -23,9 +15,11 @@ use wasm_bindgen::prelude::*;
 
 use crate::create_game::CreateGameView;
 use crate::game_view::{GameView, Profile};
-use crate::message::{ClientMessage, ServerMessage};
 use crate::seats::SeatList;
 use crate::text_input::TextInput;
+
+use shared::game;
+use shared::message::{self, ClientMessage, ServerMessage};
 
 use yew::prelude::*;
 use yew::services::keyboard::{KeyListenerHandle, KeyboardService};

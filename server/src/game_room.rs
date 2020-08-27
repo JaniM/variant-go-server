@@ -3,8 +3,8 @@ use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 
 use crate::db;
-use crate::game;
-use crate::message;
+use shared::game;
+use shared::message;
 
 // TODO: add room timeout
 
