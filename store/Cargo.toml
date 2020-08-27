@@ -1,0 +1,10 @@
+[package]
+name = "store"
+version = "0.1.0"
+authors = ["Jani Mustonen <janijohannes@kapsi.fi>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+yew = "0.17"

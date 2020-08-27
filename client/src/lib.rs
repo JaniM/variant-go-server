@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 use wasm_bindgen::prelude::*;
 
-use crate::agents::{GameStore, GameStoreBridge};
+use crate::agents::game_store;
 use crate::create_game::CreateGameView;
 use crate::game_view::{GameView, Profile};
 use crate::seats::SeatList;
@@ -25,7 +25,8 @@ use shared::message::{self, ClientMessage, ServerMessage};
 use yew::prelude::*;
 use yew::services::keyboard::{KeyListenerHandle, KeyboardService};
 use yew::services::timeout::{TimeoutService, TimeoutTask};
-use yewtil::store::ReadOnly;
+
+use store::ReadOnly;
 
 use itertools::Itertools;
 
@@ -76,7 +77,7 @@ struct GameList {
     error: Option<(message::Error, TimeoutTask)>,
     #[allow(dead_code)]
     key_listener: KeyListenerHandle,
-    game_store: GameStoreBridge,
+    game_store: game_store::GameStore,
 }
 
 enum Msg {
@@ -86,7 +87,7 @@ enum Msg {
     Pass,
     Cancel,
     SetGameStatus(GameView),
-    GameStoreMsg(ReadOnly<GameStore>),
+    GameStoreMsg(ReadOnly<game_store::GameStoreState>),
     SetGameHistory(Option<game::GameHistory>),
     SetOwnProfile(Profile),
     SetProfile(Profile),
@@ -189,7 +190,7 @@ impl Component for GameList {
             }),
         );
 
-        let game_store = GameStore::bridge(link.callback(Msg::GameStoreMsg));
+        let game_store = game_store::GameStore::bridge(link.callback(Msg::GameStoreMsg));
 
         GameList {
             link,
@@ -220,7 +221,7 @@ impl Component for GameList {
             Msg::Pass => networking::send(ClientMessage::GameAction(message::GameAction::Pass)),
             Msg::Cancel => networking::send(ClientMessage::GameAction(message::GameAction::Cancel)),
             Msg::SetGameStatus(game) => {
-                GameStore::set_game(&mut self.game_store, game);
+                self.game_store.set_game(game);
                 return false;
             }
             Msg::GameStoreMsg(store) => {
@@ -228,7 +229,7 @@ impl Component for GameList {
                 self.game = store.game.clone();
             }
             Msg::SetGameHistory(view) => {
-                GameStore::set_game_history(&mut self.game_store, view);
+                self.game_store.set_game_history(view);
                 return false;
             }
             Msg::AddGame(game) => {
@@ -274,10 +275,10 @@ impl Component for GameList {
                 });
             }
             Msg::GetBoardAt(turn) => {
-                GameStore::get_board_at(&mut self.game_store, turn);
+                self.game_store.get_board_at(turn);
             }
             Msg::ScanBoard(diff) => {
-                GameStore::scan_board(&mut self.game_store, diff);
+                self.game_store.scan_board(diff);
             }
             Msg::Render => {
                 self.debounce_job = None;

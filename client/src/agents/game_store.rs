@@ -1,7 +1,5 @@
 use yew::agent::{Agent, AgentLink};
 use yew::prelude::*;
-use yewtil::store::{Bridgeable, ReadOnly};
-use yewtil::store::{Store, StoreWrapper};
 
 use itertools::Itertools;
 
@@ -11,12 +9,17 @@ use crate::utils;
 use shared::game::GameHistory;
 use shared::message::{ClientMessage, GameAction};
 
-#[derive(Debug)]
-pub enum Request {
-    SetGame(GameView),
-    SetGameHistory(Option<GameHistory>),
-    GetBoardAt(u32),
-    ScanBoard(i32),
+use store::{store, Bridgeable, Store, StoreBridge, StoreWrapper};
+
+store! {
+    store GameStore,
+    state GameStoreState,
+    request Request {
+        set_game => SetGame(game: GameView),
+        set_game_history => SetGameHistory(view: Option<GameHistory>),
+        get_board_at => GetBoardAt(turn: u32),
+        scan_board => ScanBoard(amount: i32),
+    }
 }
 
 #[derive(Debug)]
@@ -26,21 +29,19 @@ pub enum Action {
     SetHistoryPending(u32, bool),
 }
 
-pub struct GameStore {
+pub struct GameStoreState {
     pub game: Option<GameView>,
     pub history: Vec<Option<GameHistory>>,
     pub history_pending: bool,
     pub wanted_history: Option<u32>,
 }
 
-pub type GameStoreBridge = Box<dyn Bridge<StoreWrapper<GameStore>>>;
-
-impl Store for GameStore {
+impl Store for GameStoreState {
     type Action = Action;
     type Input = Request;
 
     fn new() -> Self {
-        GameStore {
+        GameStoreState {
             game: None,
             history: Vec::new(),
             history_pending: false,
@@ -162,27 +163,5 @@ impl Store for GameStore {
                 self.wanted_history = Some(turn);
             }
         }
-    }
-}
-
-impl GameStore {
-    pub fn bridge(cb: Callback<<StoreWrapper<Self> as Agent>::Output>) -> GameStoreBridge {
-        <Self as Bridgeable>::bridge(cb)
-    }
-
-    pub fn set_game(bridge: &mut GameStoreBridge, game: GameView) {
-        bridge.send(Request::SetGame(game));
-    }
-
-    pub fn set_game_history(bridge: &mut GameStoreBridge, view: Option<GameHistory>) {
-        bridge.send(Request::SetGameHistory(view));
-    }
-
-    pub fn get_board_at(bridge: &mut GameStoreBridge, turn: u32) {
-        bridge.send(Request::GetBoardAt(turn));
-    }
-
-    pub fn scan_board(bridge: &mut GameStoreBridge, amount: i32) {
-        bridge.send(Request::ScanBoard(amount));
     }
 }
