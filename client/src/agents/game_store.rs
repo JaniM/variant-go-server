@@ -62,6 +62,7 @@ impl Store for GameStore {
                     link.send_message(Action::SetHistoryPending(turn, true));
                     return;
                 }
+                // TODO: This code needs a complete rework.
                 let min = self
                     .history
                     .iter()
@@ -75,12 +76,16 @@ impl Store for GameStore {
                     .find_position(|x| x.is_none())
                     .map(|x| self.history.len() - x.0)
                     .unwrap_or(0);
-                if (max as u32 <= turn + 5 && max as u32 >= turn) || (min as u32 <= turn)
+                if (max as u32 <= turn + 5 && max as u32 >= turn)
                     || self.history.len() <= turn as usize + 5
                 {
                     networking::send(ClientMessage::GameAction(GameAction::BoardAt(
-                        turn.saturating_sub(10).max(min as u32),
-                        turn + 10,
+                        min as _,
+                        if max > 0 {
+                            (turn + 10).min(max as u32)
+                        } else {
+                            turn + 10
+                        },
                     )));
                     link.send_message(Action::SetHistoryPending(turn, true));
                 }
