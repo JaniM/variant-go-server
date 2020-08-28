@@ -1004,13 +1004,12 @@ impl Game {
                 }
             }
             GameState::Play(_) => {
+                let mut board = board.points.clone();
+                if game_done {
+                    return (board, board_visibility.clone().map(|x| x.points), 0);
+                }
                 if let Some(active_seat) = self.seats.iter().find(|x| x.player == Some(player_id)) {
                     let team = active_seat.team;
-                    let mut board = board.points.clone();
-
-                    if game_done {
-                        return (board, board_visibility.clone().map(|x| x.points), 0);
-                    }
 
                     if let Some(mut visibility) = board_visibility.clone() {
                         let mut hidden_stones_left = 0;
@@ -1033,7 +1032,6 @@ impl Game {
                         (board, None, 0)
                     }
                 } else {
-                    let mut board = board.points.clone();
                     if let Some(visibility) = &board_visibility {
                         for (a, b) in board.iter_mut().zip(&visibility.points) {
                             if !b.is_empty() {
