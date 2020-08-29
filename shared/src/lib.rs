@@ -2,6 +2,7 @@
 mod assume;
 pub mod game;
 pub mod message;
+pub mod states;
 
 #[cfg(test)]
 mod tests {

@@ -165,7 +165,7 @@ impl Handler<GameAction> for GameRoom {
                     return;
                 }
                 // Prevent asking for a ridiculous amount.
-                if end as usize > self.game.board_history.len() + 20 {
+                if end as usize > self.game.shared.board_history.len() + 20 {
                     return;
                 }
                 for turn in (start..=end).rev() {

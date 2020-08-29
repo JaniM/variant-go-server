@@ -1,0 +1,339 @@
+use crate::game::{
+    find_groups, ActionChange, ActionKind, BoardHistory, Color, GameState, MakeActionError,
+    MakeActionResult, Point, Seat, SharedState,
+};
+use serde::{Deserialize, Serialize};
+
+use bitmaps::Bitmap;
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PlayState {
+    // TODO: use smallvec?
+    pub players_passed: Vec<bool>,
+    pub last_stone: Option<Vec<(u32, u32)>>,
+}
+
+impl PlayState {
+    pub fn new(seat_count: usize) -> Self {
+        PlayState {
+            players_passed: vec![false; seat_count],
+            last_stone: None,
+        }
+    }
+
+    fn place_stone(
+        &mut self,
+        shared: &mut SharedState,
+        (x, y): Point,
+    ) -> MakeActionResult<Vec<Point>> {
+        let active_seat = get_active_seat(shared);
+        let mut points_played = vec![];
+
+        if shared.mods.pixel {
+            // In pixel mode coordinate 0,0 is outside the board.
+            // This is to adjust for it.
+
+            if x > shared.board.width || y > shared.board.height {
+                return Err(MakeActionError::OutOfBounds);
+            }
+            let x = x as i32 - 1;
+            let y = y as i32 - 1;
+
+            let mut any_placed = false;
+            let mut any_revealed = false;
+            for &(x, y) in &[(x, y), (x + 1, y), (x, y + 1), (x + 1, y + 1)] {
+                if x < 0 || y < 0 {
+                    continue;
+                }
+                let coord = (x as u32, y as u32);
+                if !shared.board.point_within(coord) {
+                    continue;
+                }
+
+                let point = shared.board.point_mut(coord);
+                if let Some(visibility) = &mut shared.board_visibility {
+                    if !visibility.get_point(coord).is_empty() {
+                        any_revealed = true;
+                        points_played.push(coord);
+                    }
+                    *visibility.point_mut(coord) = Bitmap::new();
+                }
+                if !point.is_empty() {
+                    continue;
+                }
+                *point = active_seat.team;
+                points_played.push(coord);
+                any_placed = true;
+            }
+            if !any_placed {
+                if any_revealed {
+                    self.last_stone = Some(points_played);
+                    return Ok(Vec::new());
+                }
+                return Err(MakeActionError::PointOccupied);
+            }
+        } else {
+            if !shared.board.point_within((x, y)) {
+                return Err(MakeActionError::OutOfBounds);
+            }
+
+            // TODO: don't repeat yourshared
+            let point = shared.board.point_mut((x, y));
+            let revealed = if let Some(visibility) = &mut shared.board_visibility {
+                let revealed = !visibility.get_point((x, y)).is_empty();
+                *visibility.point_mut((x, y)) = Bitmap::new();
+                revealed
+            } else {
+                false
+            };
+            if !point.is_empty() {
+                if revealed {
+                    self.last_stone = Some(vec![(x, y)]);
+                    return Ok(points_played);
+                }
+                return Err(MakeActionError::PointOccupied);
+            }
+
+            *point = active_seat.team;
+            points_played.push((x, y));
+        }
+
+        Ok(points_played)
+    }
+
+    pub fn make_action_place(
+        &mut self,
+        shared: &mut SharedState,
+        (x, y): (u32, u32),
+    ) -> MakeActionResult {
+        let active_seat = get_active_seat(shared);
+
+        let points_played = self.place_stone(shared, (x, y))?;
+        if points_played.is_empty() {
+            return Ok(ActionChange::None);
+        }
+
+        let groups = find_groups(&shared.board);
+        let dead = groups.iter().filter(|g| g.liberties == 0);
+        let opp_died = dead.clone().any(|g| g.team != active_seat.team);
+
+        let mut captures = 0;
+
+        for group in dead {
+            // If the opponent died, suicide is ignored
+            if opp_died && group.team == active_seat.team {
+                continue;
+            }
+
+            // Suicide is illegal, bail out
+            if !opp_died {
+                // TODO: don't repeat yourshared
+                shared.board = shared
+                    .board_history
+                    .last()
+                    .expect("board_history.last() shouldn't be None")
+                    .board
+                    .clone();
+                if let Some(visibility) = &mut shared.board_visibility {
+                    let mut revealed = false;
+                    for &point in &group.points {
+                        revealed = revealed || !visibility.get_point(point).is_empty();
+                        *visibility.point_mut(point) = Bitmap::new();
+                        for point in shared.board.surrounding_points(point) {
+                            revealed = revealed || !visibility.get_point(point).is_empty();
+                            *visibility.point_mut(point) = Bitmap::new();
+                        }
+                    }
+                    if revealed {
+                        return Ok(ActionChange::None);
+                    }
+                }
+                return Err(MakeActionError::Suicide);
+            }
+
+            for &point in &group.points {
+                captures += 1;
+                *shared.board.point_mut(point) = Color::empty();
+
+                if let Some(visibility) = &mut shared.board_visibility {
+                    *visibility.point_mut(point) = Bitmap::new();
+                    for point in shared.board.surrounding_points(point) {
+                        *visibility.point_mut(point) = Bitmap::new();
+                    }
+                }
+            }
+
+            if let Some(ponnuki) = shared.mods.ponnuki_is_points {
+                if group.points.len() == 1 && group.team != active_seat.team {
+                    let p = group.points[0];
+                    let neighbours = shared.board.surrounding_points(p).collect::<Vec<_>>();
+                    if neighbours.len() == 4
+                        && neighbours
+                            .iter()
+                            .all(|x| shared.board.get_point(*x) == active_seat.team)
+                    {
+                        shared.points[(active_seat.team.0 - 1) as usize] += ponnuki;
+                    }
+                }
+            }
+        }
+
+        let hash = shared.board.hash();
+
+        // Superko
+        // We only need to scan back capture_count boards, as per Ten 1p's clever idea.
+        // The board can't possibly repeat further back than the number of removed stones.
+        for BoardHistory {
+            hash: old_hash,
+            board: old_board,
+            ..
+        } in shared
+            .board_history
+            .iter()
+            .rev()
+            .take(shared.capture_count + captures)
+        {
+            if *old_hash == hash && old_board == &shared.board {
+                let BoardHistory {
+                    board: old_board,
+                    points: old_points,
+                    ..
+                } = shared
+                    .board_history
+                    .last()
+                    .expect("board_history.last() shouldn't be None")
+                    .clone();
+                shared.board = old_board;
+                shared.points = old_points;
+                return Err(MakeActionError::Ko);
+            }
+        }
+
+        shared.turn += 1;
+        if shared.turn >= shared.seats.len() {
+            shared.turn = 0;
+        }
+
+        self.last_stone = Some(points_played);
+        for passed in &mut self.players_passed {
+            *passed = false;
+        }
+
+        shared.board_history.push(BoardHistory {
+            hash,
+            board: shared.board.clone(),
+            board_visibility: shared.board_visibility.clone(),
+            state: GameState::Play(self.clone()),
+            points: shared.points.clone(),
+        });
+        shared.capture_count += captures;
+
+        Ok(ActionChange::None)
+    }
+
+    pub fn make_action_pass(&mut self, shared: &mut SharedState) -> MakeActionResult {
+        let active_seat = get_active_seat(shared);
+
+        for (seat, passed) in shared.seats.iter().zip(self.players_passed.iter_mut()) {
+            if seat.team == active_seat.team {
+                *passed = true;
+            }
+        }
+
+        shared.board_history.push(BoardHistory {
+            hash: shared.board.hash(),
+            board: shared.board.clone(),
+            board_visibility: shared.board_visibility.clone(),
+            state: GameState::Play(self.clone()),
+            points: shared.points.clone(),
+        });
+
+        shared.turn += 1;
+        if shared.turn >= shared.seats.len() {
+            shared.turn = 0;
+        }
+
+        if self.players_passed.iter().all(|x| *x) {
+            for passed in &mut self.players_passed {
+                *passed = false;
+            }
+            return Ok(ActionChange::PushState(GameState::scoring(
+                &shared.board,
+                shared.seats.len(),
+                &shared.points,
+            )));
+        }
+
+        Ok(ActionChange::None)
+    }
+
+    pub fn make_action_cancel(&mut self, shared: &mut SharedState) -> MakeActionResult {
+        // Undo a turn
+        if shared.board_history.len() < 2 {
+            return Err(MakeActionError::OutOfBounds);
+        }
+
+        shared
+            .board_history
+            .pop()
+            .ok_or(MakeActionError::OutOfBounds)?;
+        let history = shared
+            .board_history
+            .last()
+            .ok_or(MakeActionError::OutOfBounds)?;
+
+        shared.board = history.board.clone();
+        shared.board_visibility = history.board_visibility.clone();
+        shared.points = history.points.clone();
+        shared.turn = if shared.turn == 0 {
+            shared.seats.len() - 1
+        } else {
+            shared.turn - 1
+        };
+
+        *self = history.state.assume::<PlayState>().clone();
+
+        Ok(ActionChange::None)
+    }
+
+    pub fn make_action(
+        &mut self,
+        shared: &mut SharedState,
+        player_id: u64,
+        action: ActionKind,
+    ) -> MakeActionResult {
+        let active_seat = get_active_seat(shared);
+        if active_seat.player != Some(player_id) {
+            return Err(MakeActionError::NotTurn);
+        }
+
+        let res = match action {
+            ActionKind::Place(x, y) => self.make_action_place(shared, (x, y)),
+            ActionKind::Pass => self.make_action_pass(shared),
+            ActionKind::Cancel => self.make_action_cancel(shared),
+        };
+
+        let res = res?;
+
+        self.set_zen_teams(shared);
+
+        Ok(res)
+    }
+
+    fn set_zen_teams(&mut self, shared: &mut SharedState) {
+        let move_number = shared.board_history.len() - 1;
+        if let Some(zen) = &shared.mods.zen_go {
+            for seat in &mut shared.seats {
+                seat.team = Color((move_number % zen.color_count as usize) as u8 + 1);
+            }
+        }
+    }
+}
+
+fn get_active_seat(shared: &SharedState) -> Seat {
+    shared
+        .seats
+        .get(shared.turn)
+        .expect("Game turn number invalid")
+        .clone()
+}

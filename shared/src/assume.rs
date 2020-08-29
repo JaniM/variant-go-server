@@ -26,11 +26,11 @@ macro_rules! assume {
     };
     ($owner:ident) => {
         impl $owner {
-            fn assume<T: AssumeFrom<Self>>(&self) -> &T {
+            pub fn assume<T: AssumeFrom<Self>>(&self) -> &T {
                 T::assume(self)
             }
 
-            fn assume_mut<T: AssumeFrom<Self>>(&mut self) -> &mut T {
+            pub fn assume_mut<T: AssumeFrom<Self>>(&mut self) -> &mut T {
                 T::assume_mut(self)
             }
         }

@@ -484,7 +484,7 @@ impl Component for GameList {
         let error_box = if let Some((error, _)) = &self.error {
             let text = match error {
                 message::Error::GameStartTimer(x) => {
-                    format!("You have to wait {} seconds to create a game!", x)
+                    format!("You can only create a game every 2 minutes ({}s left)", x)
                 }
                 message::Error::Other(x) => x.to_string(),
             };
