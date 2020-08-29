@@ -2,7 +2,7 @@ use web_sys::HtmlSelectElement;
 use yew::prelude::*;
 
 use crate::game_view::Profile;
-use crate::message::ClientMessage;
+use crate::message::StartGame;
 use crate::networking;
 use crate::text_input::TextInput;
 use shared::game::{self, GameModifier};
@@ -141,7 +141,7 @@ impl Component for CreateGameView {
                 if self.seats.is_empty() || self.komis.is_empty() {
                     return false;
                 }
-                networking::send(ClientMessage::StartGame {
+                networking::send(StartGame {
                     name: self.name.clone(),
                     seats: self.seats.clone(),
                     komis: self.komis.clone(),

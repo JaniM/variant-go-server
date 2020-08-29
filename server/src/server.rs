@@ -64,12 +64,7 @@ impl actix::Message for Join {
 pub struct CreateRoom {
     /// Client id
     pub id: usize,
-    /// Room name
-    pub name: String,
-    pub seats: Vec<u8>,
-    pub komis: Vec<i32>,
-    pub size: (u8, u8),
-    pub mods: game::GameModifier,
+    pub room: message::StartGame,
 }
 
 impl actix::Message for CreateRoom {
@@ -384,11 +379,14 @@ impl Handler<CreateRoom> for GameServer {
         use message::Error;
         let CreateRoom {
             id,
-            name,
-            seats,
-            komis,
-            size,
-            mods,
+            room:
+                message::StartGame {
+                    name,
+                    seats,
+                    komis,
+                    size,
+                    mods,
+                },
         } = msg;
 
         // TODO: prevent spamming rooms (allow only one?)

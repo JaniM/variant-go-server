@@ -1,6 +1,8 @@
-use crate::game;
+use derive_more::From;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
+
+use crate::game;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum GameAction {
@@ -13,21 +15,27 @@ pub enum GameAction {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct StartGame {
+    pub name: String,
+    pub seats: Vec<u8>,
+    pub komis: Vec<i32>,
+    pub size: (u8, u8),
+    pub mods: game::GameModifier,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, From)]
 pub enum ClientMessage {
+    #[from(ignore)]
     Identify {
         token: Option<String>,
         nick: Option<String>,
     },
+    #[from(ignore)]
     GetGameList,
+    #[from(ignore)]
     JoinGame(u32),
     GameAction(GameAction),
-    StartGame {
-        name: String,
-        seats: Vec<u8>,
-        komis: Vec<i32>,
-        size: (u8, u8),
-        mods: game::GameModifier,
-    },
+    StartGame(StartGame),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -82,4 +90,10 @@ pub enum ServerMessage {
     Profile(Profile),
     MsgError(String),
     Error(Error),
+}
+
+impl ServerMessage {
+    pub fn pack(&self) -> Vec<u8> {
+        serde_cbor::to_vec(self).expect("cbor fail")
+    }
 }

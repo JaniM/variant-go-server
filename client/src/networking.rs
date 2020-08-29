@@ -8,14 +8,8 @@ use std::cell::RefCell;
 use crate::utils::local_storage;
 use shared::message::{ClientMessage, ServerMessage};
 
-#[wasm_bindgen]
-extern "C" {
-    #[wasm_bindgen(js_namespace = console)]
-    fn log(s: &str);
-}
-
 macro_rules! console_log {
-    ($($t:tt)*) => (log(&format_args!($($t)*).to_string()))
+    ($($t:tt)*) => (web_sys::console::log_1(&JsValue::from_str(&format!($($t)*))))
 }
 
 #[derive(Debug, Clone)]
@@ -135,10 +129,10 @@ pub fn start_websocket(
     Ok(())
 }
 
-pub fn send(msg: ClientMessage) {
+pub fn send(msg: impl Into<ClientMessage>) {
     HANDLER.with(|h| {
         let handler = h.borrow();
-        let mut vec = serde_cbor::to_vec(&msg).expect("cbor serialization failed");
+        let mut vec = serde_cbor::to_vec(&msg.into()).expect("cbor serialization failed");
         match handler
             .ws
             .as_ref()

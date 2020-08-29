@@ -54,8 +54,10 @@ struct ClientWebSocket {
     room_id: Option<u32>,
 }
 
+type Context = ws::WebsocketContext<ClientWebSocket>;
+
 impl Actor for ClientWebSocket {
-    type Context = ws::WebsocketContext<Self>;
+    type Context = Context;
 
     /// Method is called on actor start. We start the heartbeat process here.
     fn started(&mut self, ctx: &mut Self::Context) {
@@ -97,29 +99,32 @@ impl Handler<game_room::Message> for ClientWebSocket {
                 members,
                 view,
             } => {
-                ctx.binary(pack(ServerMessage::GameStatus {
-                    room_id,
-                    members,
-                    seats: view
-                        .seats
-                        .into_iter()
-                        .map(|x| (x.player, x.team.0))
-                        .collect(),
-                    turn: view.turn,
-                    board: view.board.into_iter().map(|x| x.0).collect(),
-                    board_visibility: view
-                        .board_visibility
-                        .map(|b| b.iter().map(|x| x.into_value()).collect()),
-                    hidden_stones_left: view.hidden_stones_left,
-                    size: view.size,
-                    state: view.state,
-                    mods: view.mods,
-                    points: view.points.to_vec(),
-                    move_number: view.move_number,
-                }));
+                ctx.binary(
+                    ServerMessage::GameStatus {
+                        room_id,
+                        members,
+                        seats: view
+                            .seats
+                            .into_iter()
+                            .map(|x| (x.player, x.team.0))
+                            .collect(),
+                        turn: view.turn,
+                        board: view.board.into_iter().map(|x| x.0).collect(),
+                        board_visibility: view
+                            .board_visibility
+                            .map(|b| b.iter().map(|x| x.into_value()).collect()),
+                        hidden_stones_left: view.hidden_stones_left,
+                        size: view.size,
+                        state: view.state,
+                        mods: view.mods,
+                        points: view.points.to_vec(),
+                        move_number: view.move_number,
+                    }
+                    .pack(),
+                );
             }
             game_room::Message::BoardAt { view, .. } => {
-                ctx.binary(pack(ServerMessage::BoardAt(view)));
+                ctx.binary(ServerMessage::BoardAt(view).pack());
             }
         }
     }
@@ -131,30 +136,32 @@ impl Handler<server::Message> for ClientWebSocket {
     fn handle(&mut self, msg: server::Message, ctx: &mut Self::Context) {
         match msg {
             server::Message::AnnounceRoom(room_id, name) => {
-                ctx.binary(pack(ServerMessage::AnnounceGame { room_id, name }));
+                ctx.binary(ServerMessage::AnnounceGame { room_id, name }.pack());
             }
             server::Message::CloseRoom(room_id) => {
-                ctx.binary(pack(ServerMessage::CloseGame { room_id }));
+                ctx.binary(ServerMessage::CloseGame { room_id }.pack());
             }
             server::Message::Identify(res) => {
-                ctx.binary(pack(ServerMessage::Identify {
-                    user_id: res.user_id,
-                    token: res.token.to_string(),
-                    nick: res.nick,
-                }));
+                ctx.binary(
+                    ServerMessage::Identify {
+                        user_id: res.user_id,
+                        token: res.token.to_string(),
+                        nick: res.nick,
+                    }
+                    .pack(),
+                );
             }
             server::Message::UpdateProfile(res) => {
-                ctx.binary(pack(ServerMessage::Profile(message::Profile {
-                    user_id: res.user_id,
-                    nick: res.nick,
-                })));
+                ctx.binary(
+                    ServerMessage::Profile(message::Profile {
+                        user_id: res.user_id,
+                        nick: res.nick,
+                    })
+                    .pack(),
+                );
             }
         };
     }
-}
-
-fn pack(msg: ServerMessage) -> Vec<u8> {
-    serde_cbor::to_vec(&msg).expect("cbor fail")
 }
 
 impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for ClientWebSocket {
@@ -170,115 +177,10 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for ClientWebSocket {
             Ok(ws::Message::Text(text)) => ctx.text(text),
             Ok(ws::Message::Binary(bin)) => {
                 let data = serde_cbor::from_slice::<ClientMessage>(&bin);
-                println!("WS: {:?}", data);
                 match data {
-                    Ok(ClientMessage::GetGameList) => {
-                        self.server_addr
-                            .send(server::ListRooms)
-                            .into_actor(self)
-                            .then(|res, _act, ctx| {
-                                match res {
-                                    Ok(mut res) => {
-                                        // Sort newest first
-                                        res.sort_unstable_by_key(|x| -(x.0 as i32));
-                                        for (room_id, name) in res {
-                                            ctx.binary(pack(ServerMessage::AnnounceGame {
-                                                room_id,
-                                                name,
-                                            }));
-                                        }
-                                    }
-                                    _ => ctx.stop(),
-                                }
-                                fut::ready(())
-                            })
-                            .wait(ctx);
-                    }
-                    Ok(ClientMessage::StartGame {
-                        name,
-                        seats,
-                        komis,
-                        size,
-                        mods,
-                    }) => {
-                        self.server_addr
-                            .send(server::CreateRoom {
-                                id: self.id,
-                                name,
-                                seats,
-                                komis,
-                                size,
-                                mods,
-                            })
-                            .into_actor(self)
-                            .then(|res, act, ctx| {
-                                match res {
-                                    Ok(Ok((id, addr))) => {
-                                        act.room_id = Some(id);
-                                        act.game_addr = Some(addr);
-                                    }
-                                    Ok(Err(err)) => {
-                                        ctx.binary(pack(ServerMessage::Error(err)));
-                                    }
-                                    _ => {}
-                                }
-                                fut::ready(())
-                            })
-                            .wait(ctx);
-                    }
-                    Ok(ClientMessage::JoinGame(room_id)) => {
-                        self.server_addr
-                            .send(server::Join {
-                                id: self.id,
-                                room_id,
-                            })
-                            .into_actor(self)
-                            .then(move |res, act, _| {
-                                if let Ok(Ok(addr)) = res {
-                                    act.room_id = Some(room_id);
-                                    act.game_addr = Some(addr);
-                                }
-                                fut::ready(())
-                            })
-                            .wait(ctx);
-                    }
-                    Ok(ClientMessage::GameAction(action)) => {
-                        if let Some(addr) = &self.game_addr {
-                            addr.do_send(game_room::GameAction {
-                                id: self.id,
-                                action,
-                            });
-                        }
-                    }
-                    Ok(ClientMessage::Identify { token, nick }) => {
-                        self.server_addr
-                            .send(server::IdentifyAs {
-                                id: self.id,
-                                token,
-                                nick,
-                            })
-                            .into_actor(self)
-                            .then(|res, _act, ctx| {
-                                match res {
-                                    Ok(Ok(res)) => ctx.binary(pack(ServerMessage::Identify {
-                                        user_id: res.user_id,
-                                        token: res.token.to_string(),
-                                        nick: res.nick,
-                                    })),
-                                    Ok(Err(err)) => {
-                                        ctx.binary(pack(ServerMessage::Error(err)));
-                                    }
-                                    _ => ctx.stop(),
-                                }
-                                fut::ready(())
-                            })
-                            .wait(ctx);
-                    }
-                    Err(e) => ctx.binary(
-                        serde_cbor::to_vec(&ServerMessage::MsgError(format!("{}", e)))
-                            .expect("cbor fail"),
-                    ),
-                };
+                    Ok(data) => self.handle_message(data, ctx),
+                    Err(e) => ctx.binary(ServerMessage::MsgError(format!("{}", e)).pack()),
+                }
             }
             Ok(ws::Message::Close(reason)) => {
                 ctx.close(reason);
@@ -293,7 +195,7 @@ impl ClientWebSocket {
     /// helper method that sends ping to client every second.
     ///
     /// also this method checks heartbeats from client
-    fn hb(&self, ctx: &mut <Self as Actor>::Context) {
+    fn hb(&self, ctx: &mut Context) {
         ctx.run_interval(HEARTBEAT_INTERVAL, |act, ctx| {
             // check client heartbeats
             if Instant::now().duration_since(act.hb) > CLIENT_TIMEOUT {
@@ -309,6 +211,122 @@ impl ClientWebSocket {
 
             ctx.ping(b"");
         });
+    }
+
+    fn handle_get_game_list(&mut self, ctx: &mut Context) {
+        fn send_rooms(mut rooms: Vec<(u32, String)>, ctx: &mut Context) {
+            // Sort newest first
+            rooms.sort_unstable_by_key(|x| -(x.0 as i32));
+            for (room_id, name) in rooms {
+                ctx.binary(ServerMessage::AnnounceGame { room_id, name }.pack());
+            }
+        };
+
+        self.server_addr
+            .send(server::ListRooms)
+            .into_actor(self)
+            .then(|res, _act, ctx| {
+                match res {
+                    Ok(res) => send_rooms(res, ctx),
+                    _ => ctx.stop(),
+                }
+                fut::ready(())
+            })
+            .wait(ctx);
+    }
+
+    fn handle_start_game(&mut self, msg: message::StartGame, ctx: &mut Context) {
+        self.server_addr
+            .send(server::CreateRoom {
+                id: self.id,
+                room: msg,
+            })
+            .into_actor(self)
+            .then(|res, act, ctx| {
+                match res {
+                    Ok(Ok((id, addr))) => {
+                        act.room_id = Some(id);
+                        act.game_addr = Some(addr);
+                    }
+                    Ok(Err(err)) => {
+                        ctx.binary(ServerMessage::Error(err).pack());
+                    }
+                    _ => {}
+                }
+                fut::ready(())
+            })
+            .wait(ctx);
+    }
+
+    fn handle_join_game(&mut self, room_id: u32, ctx: &mut Context) {
+        self.server_addr
+            .send(server::Join {
+                id: self.id,
+                room_id,
+            })
+            .into_actor(self)
+            .then(move |res, act, _| {
+                if let Ok(Ok(addr)) = res {
+                    act.room_id = Some(room_id);
+                    act.game_addr = Some(addr);
+                }
+                fut::ready(())
+            })
+            .wait(ctx);
+    }
+
+    fn handle_identify(&mut self, token: Option<String>, nick: Option<String>, ctx: &mut Context) {
+        self.server_addr
+            .send(server::IdentifyAs {
+                id: self.id,
+                token,
+                nick,
+            })
+            .into_actor(self)
+            .then(|res, _act, ctx| {
+                match res {
+                    Ok(Ok(res)) => ctx.binary(
+                        ServerMessage::Identify {
+                            user_id: res.user_id,
+                            token: res.token.to_string(),
+                            nick: res.nick,
+                        }
+                        .pack(),
+                    ),
+                    Ok(Err(err)) => {
+                        ctx.binary(ServerMessage::Error(err).pack());
+                    }
+                    _ => ctx.stop(),
+                }
+                fut::ready(())
+            })
+            .wait(ctx);
+    }
+
+    fn handle_message(&mut self, msg: ClientMessage, ctx: &mut Context) {
+        println!("WS: {:?}", msg);
+        match msg {
+            ClientMessage::GetGameList => {
+                self.handle_get_game_list(ctx);
+            }
+            ClientMessage::StartGame(start) => {
+                self.handle_start_game(start, ctx);
+            }
+            ClientMessage::JoinGame(room_id) => {
+                self.handle_join_game(room_id, ctx);
+            }
+            ClientMessage::GameAction(action) => {
+                if let Some(addr) = &self.game_addr {
+                    addr.do_send(game_room::GameAction {
+                        id: self.id,
+                        action,
+                    });
+                }
+            }
+            ClientMessage::Identify { token, nick } => {
+                self.handle_identify(token, nick, ctx);
+            }
+        };
     }
 }
 
