@@ -5,6 +5,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
 use bitmaps::Bitmap;
+use tinyvec::TinyVec ;
 
 use crate::assume::AssumeFrom;
 use crate::states::{FreePlacement, PlayState, ScoringState};
@@ -33,7 +34,7 @@ impl Default for Color {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct Seat {
     pub player: Option<u64>,
     pub team: Color,
@@ -142,9 +143,11 @@ impl<T: Hash> Board<T> {
     }
 }
 
+pub type GroupVec<T> = TinyVec<[T; 8]>;
+
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Group {
-    pub points: Vec<Point>,
+    pub points: GroupVec<Point>,
     pub liberties: i32,
     pub team: Color,
     pub alive: bool,
@@ -226,14 +229,13 @@ pub struct BoardHistory {
     pub board: Board,
     pub board_visibility: Option<VisibilityBoard>,
     pub state: GameState,
-    pub points: Vec<i32>,
+    pub points: GroupVec<i32>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SharedState {
-    // TODO: use smallvec?
-    pub seats: Vec<Seat>,
-    pub points: Vec<i32>,
+    pub seats: GroupVec<Seat>,
+    pub points: GroupVec<i32>,
     pub turn: usize,
     pub pass_count: usize,
     pub board: Board,
@@ -241,7 +243,7 @@ pub struct SharedState {
     pub board_history: Vec<BoardHistory>,
     /// Optimization for superko
     pub capture_count: usize,
-    pub komis: Vec<i32>,
+    pub komis: GroupVec<i32>,
     pub mods: GameModifier,
 }
 
@@ -285,14 +287,14 @@ pub struct GameView {
     // TODO: we need a separate state view since we have hidden information
     // currently players can cheat :F
     pub state: GameState,
-    pub seats: Vec<Seat>,
+    pub seats: GroupVec<Seat>,
     pub turn: u32,
     pub board: Vec<Color>,
     pub board_visibility: Option<Vec<Visibility>>,
     pub hidden_stones_left: u32,
     pub size: (u8, u8),
     pub mods: GameModifier,
-    pub points: Vec<i32>,
+    pub points: GroupVec<i32>,
     pub move_number: u32,
 }
 
@@ -300,7 +302,7 @@ pub struct GameView {
 pub struct GameHistory {
     pub board: Vec<u8>,
     pub board_visibility: Option<Vec<u16>>,
-    pub last_stone: Option<Vec<(u32, u32)>>,
+    pub last_stone: Option<GroupVec<(u32, u32)>>,
     pub move_number: u32,
 }
 
@@ -308,15 +310,15 @@ pub struct GameHistory {
 struct GameReplay {
     actions: Vec<GameAction>,
     mods: GameModifier,
-    komis: Vec<i32>,
-    seats: Vec<u8>,
+    komis: GroupVec<i32>,
+    seats: GroupVec<u8>,
     size: (u8, u8),
 }
 
 impl Game {
     pub fn standard(
         seats: &[u8],
-        komis: Vec<i32>,
+        komis: GroupVec<i32>,
         size: (u8, u8),
         mods: GameModifier,
     ) -> Option<Game> {

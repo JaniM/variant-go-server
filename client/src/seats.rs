@@ -55,8 +55,8 @@ impl Component for SeatList {
     fn view(&self) -> Html {
         let game = &self.props.game;
         let scores = match &self.props.game.state {
-            GameState::Scoring(state) | GameState::Done(state) => Some(&state.scores),
-            _ => Some(&self.props.game.points),
+            GameState::Scoring(state) | GameState::Done(state) => Some(&state.scores[..]),
+            _ => Some(&self.props.game.points[..]),
         };
 
         let list = game

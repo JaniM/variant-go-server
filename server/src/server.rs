@@ -421,6 +421,7 @@ impl Handler<CreateRoom> for GameServer {
             }
         }
 
+        let komis = komis.as_slice().into();
         let game = match game::Game::standard(&seats, komis, size, mods) {
             Some(g) => g,
             None => return ActorResponse::reply(Err(Error::other("Rules not accepted"))),

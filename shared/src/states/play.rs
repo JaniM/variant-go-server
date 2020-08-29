@@ -1,16 +1,17 @@
 use crate::game::{
     find_groups, ActionChange, ActionKind, BoardHistory, Color, GameState, MakeActionError,
-    MakeActionResult, Point, Seat, SharedState,
+    MakeActionResult, Point, Seat, SharedState, GroupVec
 };
 use serde::{Deserialize, Serialize};
 
 use bitmaps::Bitmap;
+use tinyvec::tiny_vec;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PlayState {
     // TODO: use smallvec?
     pub players_passed: Vec<bool>,
-    pub last_stone: Option<Vec<(u32, u32)>>,
+    pub last_stone: Option<GroupVec<(u32, u32)>>,
 }
 
 impl PlayState {
@@ -25,9 +26,9 @@ impl PlayState {
         &mut self,
         shared: &mut SharedState,
         (x, y): Point,
-    ) -> MakeActionResult<Vec<Point>> {
+    ) -> MakeActionResult<GroupVec<Point>> {
         let active_seat = get_active_seat(shared);
-        let mut points_played = vec![];
+        let mut points_played = GroupVec::new();
 
         if shared.mods.pixel {
             // In pixel mode coordinate 0,0 is outside the board.
@@ -68,7 +69,7 @@ impl PlayState {
             if !any_placed {
                 if any_revealed {
                     self.last_stone = Some(points_played);
-                    return Ok(Vec::new());
+                    return Ok(GroupVec::new());
                 }
                 return Err(MakeActionError::PointOccupied);
             }
@@ -88,7 +89,7 @@ impl PlayState {
             };
             if !point.is_empty() {
                 if revealed {
-                    self.last_stone = Some(vec![(x, y)]);
+                    self.last_stone = Some(tiny_vec![[Point; 8] => (x, y)]);
                     return Ok(points_played);
                 }
                 return Err(MakeActionError::PointOccupied);

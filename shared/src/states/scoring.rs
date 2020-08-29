@@ -1,6 +1,6 @@
 use crate::game::{
     find_groups, ActionChange, ActionKind, Board, Color, GameState, Group, MakeActionResult, Point,
-    SharedState,
+    SharedState, GroupVec
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{HashSet, VecDeque};
@@ -10,7 +10,7 @@ pub struct ScoringState {
     pub groups: Vec<Group>,
     /// Vector of the board, marking who owns a point
     pub points: Board,
-    pub scores: Vec<i32>,
+    pub scores: GroupVec<i32>,
     // TODO: use smallvec?
     pub players_accepted: Vec<bool>,
 }
@@ -19,7 +19,7 @@ impl ScoringState {
     pub fn new(board: &Board, seat_count: usize, scores: &[i32]) -> Self {
         let groups = find_groups(board);
         let points = score_board(board.width, board.height, &groups);
-        let mut scores = scores.to_vec();
+        let mut scores: GroupVec<i32> = scores.into();
         for color in &points.points {
             if !color.is_empty() {
                 scores[color.0 as usize - 1] += 2;
