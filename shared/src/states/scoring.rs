@@ -1,6 +1,6 @@
 use crate::game::{
-    find_groups, ActionChange, ActionKind, Board, Color, GameState, Group, MakeActionResult, Point,
-    SharedState, GroupVec
+    find_groups, ActionChange, ActionKind, Board, Color, GameState, Group, GroupVec,
+    MakeActionResult, Point, SharedState,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{HashSet, VecDeque};

@@ -5,7 +5,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
 use bitmaps::Bitmap;
-use tinyvec::TinyVec ;
+use tinyvec::TinyVec;
 
 use crate::assume::AssumeFrom;
 use crate::states::{FreePlacement, PlayState, ScoringState};

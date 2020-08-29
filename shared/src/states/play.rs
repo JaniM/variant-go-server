@@ -1,6 +1,6 @@
 use crate::game::{
-    find_groups, ActionChange, ActionKind, BoardHistory, Color, GameState, MakeActionError,
-    MakeActionResult, Point, Seat, SharedState, GroupVec
+    find_groups, ActionChange, ActionKind, BoardHistory, Color, GameState, GroupVec,
+    MakeActionError, MakeActionResult, Point, Seat, SharedState,
 };
 use serde::{Deserialize, Serialize};
 
