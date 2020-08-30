@@ -1,11 +1,13 @@
 use crate::game::{
-    find_groups, ActionChange, ActionKind, BoardHistory, Color, GameState, GroupVec,
-    MakeActionError, MakeActionResult, Point, Seat, SharedState,
+    find_groups, ActionChange, ActionKind, Board, BoardHistory, Color, GameState, Group, GroupVec,
+    MakeActionError, MakeActionResult, Point, Seat, SharedState, VisibilityBoard,
 };
 use serde::{Deserialize, Serialize};
 
 use bitmaps::Bitmap;
 use tinyvec::tiny_vec;
+
+type Revealed = bool;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PlayState {
@@ -78,7 +80,7 @@ impl PlayState {
                 return Err(MakeActionError::OutOfBounds);
             }
 
-            // TODO: don't repeat yourshared
+            // TODO: don't repeat yourself
             let point = shared.board.point_mut((x, y));
             let revealed = if let Some(visibility) = &mut shared.board_visibility {
                 let revealed = !visibility.get_point((x, y)).is_empty();
@@ -102,88 +104,70 @@ impl PlayState {
         Ok(points_played)
     }
 
-    pub fn make_action_place(
-        &mut self,
+    fn capture(
+        &self,
         shared: &mut SharedState,
-        (x, y): (u32, u32),
-    ) -> MakeActionResult {
+        points_played: &mut GroupVec<Point>,
+    ) -> (usize, Revealed) {
         let active_seat = get_active_seat(shared);
-
-        let points_played = self.place_stone(shared, (x, y))?;
-        if points_played.is_empty() {
-            return Ok(ActionChange::None);
-        }
+        let mut captures = 0;
+        let mut revealed = false;
 
         let groups = find_groups(&shared.board);
-        let dead = groups.iter().filter(|g| g.liberties == 0);
-        let opp_died = dead.clone().any(|g| g.team != active_seat.team);
+        let dead_opponents = groups
+            .iter()
+            .filter(|g| g.liberties == 0 && g.team != active_seat.team);
 
-        let mut captures = 0;
+        let board = &mut shared.board;
 
-        for group in dead {
-            // If the opponent died, suicide is ignored
-            if opp_died && group.team == active_seat.team {
-                continue;
-            }
-
-            // Suicide is illegal, bail out
-            if !opp_died {
-                // TODO: don't repeat yourshared
-                shared.board = shared
-                    .board_history
-                    .last()
-                    .expect("board_history.last() shouldn't be None")
-                    .board
-                    .clone();
-                if let Some(visibility) = &mut shared.board_visibility {
-                    let mut revealed = false;
-                    for &point in &group.points {
-                        revealed = revealed || !visibility.get_point(point).is_empty();
-                        *visibility.point_mut(point) = Bitmap::new();
-                        for point in shared.board.surrounding_points(point) {
-                            revealed = revealed || !visibility.get_point(point).is_empty();
-                            *visibility.point_mut(point) = Bitmap::new();
-                        }
-                    }
-                    if revealed {
-                        return Ok(ActionChange::None);
-                    }
-                }
-                return Err(MakeActionError::Suicide);
-            }
-
-            for &point in &group.points {
+        for group in dead_opponents {
+            for point in &group.points {
+                *board.point_mut(*point) = Color::empty();
                 captures += 1;
-                *shared.board.point_mut(point) = Color::empty();
-
-                if let Some(visibility) = &mut shared.board_visibility {
-                    *visibility.point_mut(point) = Bitmap::new();
-                    for point in shared.board.surrounding_points(point) {
-                        *visibility.point_mut(point) = Bitmap::new();
-                    }
-                }
             }
+            let reveals = reveal_group(&mut shared.board_visibility, group, board);
+            revealed = revealed || reveals;
 
             if let Some(ponnuki) = shared.mods.ponnuki_is_points {
-                if group.points.len() == 1 && group.team != active_seat.team {
-                    let p = group.points[0];
-                    let neighbours = shared.board.surrounding_points(p).collect::<Vec<_>>();
-                    if neighbours.len() == 4
-                        && neighbours
-                            .iter()
-                            .all(|x| shared.board.get_point(*x) == active_seat.team)
-                    {
-                        shared.points[(active_seat.team.0 - 1) as usize] += ponnuki;
-                    }
+                if group.points.len() == 1
+                    && board
+                        .surrounding_points(group.points[0])
+                        .all(|p| board.get_point(p) == active_seat.team)
+                {
+                    shared.points[active_seat.team.0 as usize - 1] += ponnuki;
                 }
             }
         }
 
-        let hash = shared.board.hash();
+        // TODO: only re-scan own previously dead grouos
+        let groups = find_groups(board);
+        let dead_own = groups
+            .iter()
+            .filter(|g| g.liberties == 0 && g.team == active_seat.team);
 
-        // Superko
-        // We only need to scan back capture_count boards, as per Ten 1p's clever idea.
-        // The board can't possibly repeat further back than the number of removed stones.
+        for group in dead_own {
+            for point in &group.points {
+                if points_played.contains(point) {
+                    points_played.retain(|x| x != point);
+                    *board.point_mut(*point) = Color::empty();
+                }
+            }
+            let reveals = reveal_group(&mut shared.board_visibility, group, board);
+            revealed = revealed || reveals;
+        }
+
+        (captures, revealed)
+    }
+
+    /// Superko
+    /// We only need to scan back capture_count boards, as per Ten 1p's clever idea.
+    /// The board can't possibly repeat further back than the number of removed stones.
+    fn superko(
+        &self,
+        shared: &mut SharedState,
+        captures: usize,
+        hash: u64,
+    ) -> MakeActionResult<()> {
         for BoardHistory {
             hash: old_hash,
             board: old_board,
@@ -209,6 +193,41 @@ impl PlayState {
                 return Err(MakeActionError::Ko);
             }
         }
+
+        Ok(())
+    }
+
+    pub fn make_action_place(
+        &mut self,
+        shared: &mut SharedState,
+        (x, y): (u32, u32),
+    ) -> MakeActionResult {
+        // TODO: should use some kind of set to make suicide prevention faster
+        let mut points_played = self.place_stone(shared, (x, y))?;
+        if points_played.is_empty() {
+            return Ok(ActionChange::None);
+        }
+
+        let (captures, revealed) = self.capture(shared, &mut points_played);
+
+        if points_played.is_empty() {
+            let BoardHistory { board, points, .. } = shared
+                .board_history
+                .last()
+                .expect("board_history.last() shouldn't be None")
+                .clone();
+            shared.board = board;
+            shared.points = points;
+
+            if revealed {
+                return Ok(ActionChange::None);
+            }
+            return Err(MakeActionError::Suicide);
+        }
+
+        let hash = shared.board.hash();
+
+        self.superko(shared, captures, hash)?;
 
         shared.turn += 1;
         if shared.turn >= shared.seats.len() {
@@ -337,4 +356,25 @@ fn get_active_seat(shared: &SharedState) -> Seat {
         .get(shared.turn)
         .expect("Game turn number invalid")
         .clone()
+}
+
+fn reveal_group(
+    visibility: &mut Option<VisibilityBoard>,
+    group: &Group,
+    board: &Board,
+) -> Revealed {
+    let mut revealed = false;
+
+    if let Some(visibility) = visibility {
+        for &point in &group.points {
+            revealed = revealed || !visibility.get_point(point).is_empty();
+            *visibility.point_mut(point) = Bitmap::new();
+            for point in board.surrounding_points(point) {
+                revealed = revealed || !visibility.get_point(point).is_empty();
+                *visibility.point_mut(point) = Bitmap::new();
+            }
+        }
+    }
+
+    revealed
 }
