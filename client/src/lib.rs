@@ -436,7 +436,6 @@ impl Component for GameList {
                     </div>
                 </div>
                 <div style="width: 300px; overflow: hidden; border-left: 2px solid #dedede; padding: 10px; padding-left: 10px;">
-                    <div><a href="https://github.com/JaniM/variant-go-server" target="_blank">{"Github"}</a>{" / "}<a href="https://discord.gg/qzqwEV4" target="_blank">{"Discord"}</a></div>
                     <div>{"Seats"}</div>
                     <SeatList game=game profiles=&self.profiles user=&self.user />
                     {"Users"}
@@ -505,6 +504,8 @@ impl Component for GameList {
             class=class
             style="display: flex; flex-direction: row; min-height: 100vh;">
             <div style="width: 300px; border-right: 2px solid #dedede; padding: 10px; margin-right: 10px;">
+                <div><a href="https://github.com/JaniM/variant-go-server" target="_blank">{"Github"}</a>{" / "}<a href="https://discord.gg/qzqwEV4" target="_blank">{"Discord"}</a></div>
+                <hr>
                 <div style="width: 100%; margin-bottom: 10px;">
                     <button
                         style="width: 100%;"
