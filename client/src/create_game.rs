@@ -223,7 +223,7 @@ impl Component for CreateGameView {
             ChangeData::Select(elem) => {
                 let value = elem.selected_index();
                 Msg::SelectSize(match value {
-                    o => 9,
+                    9 => 9,
                     1 => 13,
                     2 => 19,
                     _ => unreachable!(),
