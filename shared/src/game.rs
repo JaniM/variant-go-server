@@ -326,7 +326,7 @@ impl Game {
             return None;
         }
 
-        if !(1..=4).contains(&seats.len()) || !(1..=3).contains(&komis.len()) {
+        if !(1..=7).contains(&seats.len()) || !(1..=3).contains(&komis.len()) {
             return None;
         }
 

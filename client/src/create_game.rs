@@ -12,6 +12,7 @@ pub enum Preset {
     Standard,
     Rengo2v2,
     ThreeColor,
+    ThreeColorRengo,
 }
 
 pub struct CreateGameView {
@@ -72,6 +73,7 @@ impl Component for CreateGameView {
                     Preset::Standard => (vec![1, 2], vec![0, 15], 19),
                     Preset::Rengo2v2 => (vec![1, 2, 1, 2], vec![0, 15], 19),
                     Preset::ThreeColor => (vec![1, 2, 3], vec![0, 0, 0], 13),
+                    Preset::ThreeColorRengo => (vec![1, 2, 3, 1, 2, 3], vec![0, 0, 0], 13)
                 };
                 self.seats = seats;
                 self.komis = komi;
@@ -211,6 +213,9 @@ impl Component for CreateGameView {
                 <li><a href="#" onclick=self.link.callback(|_| Msg::LoadPreset(Preset::ThreeColor))>
                     {"Three color go"}
                 </a></li>
+                <li><a href="#" onclick=self.link.callback(|_| Msg::LoadPreset(Preset::ThreeColorRengo))>
+                    {"Three color go (rengo)"}
+                </a></li>
             </ul>
         };
 
@@ -218,8 +223,9 @@ impl Component for CreateGameView {
             ChangeData::Select(elem) => {
                 let value = elem.selected_index();
                 Msg::SelectSize(match value {
-                    0 => 13,
-                    1 => 19,
+                    o => 9,
+                    1 => 13,
+                    2 => 19,
                     _ => unreachable!(),
                 })
             }
@@ -231,6 +237,7 @@ impl Component for CreateGameView {
                 ref=self.size_select_ref.clone()
                 onchange=select_size
             >
+                <option value=9 selected=self.size == 13>{ "9" }</option>
                 <option value=13 selected=self.size == 13>{ "13" }</option>
                 <option value=19 selected=self.size == 19>{ "19" }</option>
             </select>
