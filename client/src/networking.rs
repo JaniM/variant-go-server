@@ -5,7 +5,7 @@ use web_sys::{CloseEvent, ErrorEvent, MessageEvent, WebSocket};
 
 use std::cell::RefCell;
 
-use crate::utils::local_storage;
+use crate::utils::{self, local_storage};
 use shared::message::{ClientMessage, ServerMessage};
 
 macro_rules! console_log {
@@ -115,8 +115,7 @@ pub fn start_websocket(
 
         // TODO: use a proper router?
 
-        let window = web_sys::window().expect("Window not available");
-        let hash = window.location().hash().expect("url hash not available");
+        let hash = utils::get_hash();
         if hash.chars().next() == Some('#') {
             if let Ok(id) = hash[1..].parse::<u32>() {
                 send(ClientMessage::JoinGame(id));

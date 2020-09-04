@@ -192,13 +192,20 @@ impl Component for GameList {
 
         let game_store = game_store::GameStore::bridge(link.callback(Msg::GameStoreMsg));
 
+        let hash = utils::get_hash();
+        let game_loaded = hash.chars().next() == Some('#') && hash[1..].parse::<u32>().is_ok();
+
         GameList {
             link,
             games: vec![],
             game: None,
             user: None,
             profiles: HashMap::new(),
-            pane: Pane::Board,
+            pane: if game_loaded {
+                Pane::Board
+            } else {
+                Pane::CreateGame
+            },
             debounce_job: None,
             theme: Theme::get(),
             error: None,
@@ -450,9 +457,17 @@ impl Component for GameList {
 
         let right_panel = match self.pane {
             Pane::Board => gameview,
-            Pane::CreateGame => html!(<CreateGameView
-                user=self.user.as_ref().unwrap()
-                oncreate=self.link.callback(|_| Msg::SetPane(Pane::Board)) />),
+            Pane::CreateGame if self.user.is_some() => html! {
+                <>
+                    <CreateGameView
+                        user=self.user.as_ref().unwrap()
+                        oncreate=self.link.callback(|_| Msg::SetPane(Pane::Board)) />
+                    <div style="width: 300px; overflow: hidden; border-left: 2px solid #dedede; padding: 10px; padding-left: 10px;">
+                        <div><a href="https://github.com/JaniM/variant-go-server" target="_blank">{"Github"}</a>{" / "}<a href="https://discord.gg/qzqwEV4" target="_blank">{"Discord"}</a></div>
+                    </div>
+                </>
+            },
+            _ => html!(),
         };
 
         let select_theme = self.link.callback(|event| match event {
@@ -509,7 +524,7 @@ impl Component for GameList {
                     <button
                         style="width: 100%;"
                         onclick=self.link.callback(|_| Msg::StartGame)>
-                        { "Start game" }
+                        { "Create game" }
                     </button>
                 </div>
                 <div>{"Theme: "}{theme_selection}</div>

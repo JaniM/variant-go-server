@@ -9,6 +9,11 @@ pub fn set_panic_hook() {
     console_error_panic_hook::set_once();
 }
 
+pub fn get_hash() -> String {
+    let window = web_sys::window().expect("Window not available");
+    window.location().hash().expect("url hash not available")
+}
+
 pub fn set_hash(hash: &str) {
     let window = web_sys::window().expect("Window not available");
     window

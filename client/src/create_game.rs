@@ -73,7 +73,7 @@ impl Component for CreateGameView {
                     Preset::Standard => (vec![1, 2], vec![0, 15], 19),
                     Preset::Rengo2v2 => (vec![1, 2, 1, 2], vec![0, 15], 19),
                     Preset::ThreeColor => (vec![1, 2, 3], vec![0, 0, 0], 13),
-                    Preset::ThreeColorRengo => (vec![1, 2, 3, 1, 2, 3], vec![0, 0, 0], 13)
+                    Preset::ThreeColorRengo => (vec![1, 2, 3, 1, 2, 3], vec![0, 0, 0], 13),
                 };
                 self.seats = seats;
                 self.komis = komi;
@@ -246,7 +246,8 @@ impl Component for CreateGameView {
         let oncreate = self.link.callback(|_| Msg::OnCreate);
 
         html! {
-            <div>
+            <div style="flex-grow: 1; margin: 10px; display: flex; justify-content: center;">
+            <div style="width: 800px; height: 1000px; word-break: normal; margin: auto 0;">
                 <h2>{"Create game"}</h2>
                 <span>
                     {"Name "}
@@ -316,6 +317,23 @@ impl Component for CreateGameView {
                     <ul>{komis}</ul>
                 </div>
                 <button onclick=oncreate>{"Create"}</button>
+                <div>
+                <p>
+                    {r#"Every game mode uses Tromp-Taylor rules, which are quite close to Chinese rules. Area counting, captures give no points.
+                    Superko, so ko is only in effect when the board repeats - there is no direct ko in three color go."#}
+                </p>
+                <p>
+                    {r#"Hidden move go: Each team places stones before the game starts.
+                    The opponents and viewers can't see their stones. Stones are revealed if they cause a capture or prevent a move from being made."#}
+                </p>
+                <p>
+                    {r#"Pixel go: You place 2x2 blobs. Overlapping stones are ignored."#}
+                </p>
+                <p>
+                    {r#"Zen go: One extra player. You get a different color on every turn. There are no winners."#}
+                </p>
+                </div>
+            </div>
             </div>
         }
     }
