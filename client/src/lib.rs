@@ -514,7 +514,7 @@ impl Component for GameList {
                 </div>
                 <div>{"Theme: "}{theme_selection}</div>
                 <div>
-                    {"Nick: "}
+                    {"Nickname: "}
                     <TextInput value=nick onsubmit=nick_enter />
                 </div>
                 {"Games live: "}{self.games.len()}
