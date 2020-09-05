@@ -178,8 +178,6 @@ impl GameServer {
         let fut = async move {
             if let Some(room_addr) = room_addr {
                 let _ = room_addr.send(game_room::Leave { session_id }).await;
-            } else {
-                ()
             }
         };
 
@@ -360,7 +358,6 @@ impl Handler<ListRooms> for GameServer {
 
 /// Join room, send disconnect message to old room
 impl Handler<Join> for GameServer {
-    // Can this possibly be right?
     type Result = ActorResponse<Self, Addr<GameRoom>, ()>;
 
     fn handle(&mut self, msg: Join, _ctx: &mut Context<Self>) -> Self::Result {
@@ -397,8 +394,6 @@ impl Handler<CreateRoom> for GameServer {
                     mods,
                 },
         } = msg;
-
-        // TODO: prevent spamming rooms (allow only one?)
 
         if name.len() > 50 {
             return ActorResponse::reply(Err(Error::other("Name too long")));
@@ -449,10 +444,13 @@ impl Handler<CreateRoom> for GameServer {
                     .into_actor(act)
             })
             .then(move |res, act, ctx| {
-                // TODO: Figure out how to early exit here instead
                 let room_id = match res {
                     Ok(Ok(g)) => g.id as _,
-                    e => panic!("{:?}", e),
+                    _ => {
+                        return fut::Either::Left(
+                            async { Err(Error::other("Internal error")) }.into_actor(act),
+                        )
+                    }
                 };
 
                 let room = GameRoom {
@@ -478,7 +476,7 @@ impl Handler<CreateRoom> for GameServer {
 
                 act.send_global_message(Message::AnnounceRoom(room_id, name));
 
-                Box::new(
+                fut::Either::Right(
                     act.join_room(id, room_id)
                         .then(move |(), _, _| fut::ready(Ok((room_id, addr)))),
                 )
@@ -499,7 +497,7 @@ impl Handler<IdentifyAs> for GameServer {
         if let Some(nick) = &nick {
             let nick = nick.trim();
             if nick.len() >= 30 {
-                return ActorResponse::r#async(fut::err(Error::other("Nick too long")));
+                return ActorResponse::r#async(fut::err(Error::other("Nickname too long")));
             }
         }
 
@@ -532,9 +530,7 @@ impl Handler<IdentifyAs> for GameServer {
 
             if let Some(nick) = nick {
                 let nick = nick.trim();
-                if nick.len() >= 30 {
-                    return fut::err(Error::other("Nick too long"));
-                }
+                // The nick has already been sanitized at this point.
                 if nick.len() == 0 {
                     profile.nick = None;
                 } else {
@@ -575,8 +571,7 @@ impl Handler<QueryProfile> for GameServer {
 
         // TODO: Cache the profile here.
 
-        let db = self.db.clone();
-        let fut = db.send(db::GetUser(user_id));
+        let fut = self.db.send(db::GetUser(user_id));
 
         let fut = fut.into_actor(self).then(move |res, act, _| {
             let user = match res {
