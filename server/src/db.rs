@@ -39,6 +39,11 @@ impl Message for IdentifyUser {
     type Result = Result<User, ()>;
 }
 
+pub struct GetUser(pub u64);
+impl Message for GetUser {
+    type Result = Result<User, ()>;
+}
+
 #[derive(Queryable, Debug)]
 pub struct Game {
     pub id: i64,
@@ -121,6 +126,24 @@ impl Handler<IdentifyUser> for DbActor {
         };
 
         result.map_err(|_| ())
+    }
+}
+
+impl Handler<GetUser> for DbActor {
+    type Result = Result<User, ()>;
+
+    fn handle(&mut self, msg: GetUser, _ctx: &mut Self::Context) -> Self::Result {
+        use crate::schema::users::dsl::*;
+
+        let existing = users.find(msg.0 as i64).first::<User>(&self.connection);
+
+        match existing {
+            Ok(u) => Ok(u),
+            Err(e) => {
+                println!("{:?}", e);
+                Err(())
+            }
+        }
     }
 }
 

@@ -101,6 +101,14 @@ pub struct Room {
     pub name: String,
 }
 
+pub struct QueryProfile {
+    pub user_id: u64,
+}
+
+impl actix::Message for QueryProfile {
+    type Result = Result<Profile, ()>;
+}
+
 /// `GameServer` manages chat rooms and responsible for coordinating chat
 /// session. implementation is super primitive
 pub struct GameServer {
@@ -199,7 +207,7 @@ impl GameServer {
                 self.db
                     .send(db::GetGame(room_id as _))
                     .into_actor(self)
-                    .then(move |res, act, _| {
+                    .then(move |res, act, ctx| {
                         let db_game = match res {
                             Ok(Ok(db_game)) => db_game,
                             _ => return fut::err(()),
@@ -223,6 +231,7 @@ impl GameServer {
                             last_action: Instant::now(),
                             game,
                             db: act.db.clone(),
+                            server: ctx.address(),
                         };
 
                         let addr = room.start();
@@ -439,7 +448,7 @@ impl Handler<CreateRoom> for GameServer {
                     })
                     .into_actor(act)
             })
-            .then(move |res, act, _| {
+            .then(move |res, act, ctx| {
                 // TODO: Figure out how to early exit here instead
                 let room_id = match res {
                     Ok(Ok(g)) => g.id as _,
@@ -454,6 +463,7 @@ impl Handler<CreateRoom> for GameServer {
                     last_action: Instant::now(),
                     game,
                     db: act.db.clone(),
+                    server: ctx.address(),
                 };
 
                 let addr = room.start();
@@ -485,6 +495,13 @@ impl Handler<IdentifyAs> for GameServer {
         use message::Error;
 
         let IdentifyAs { id, token, nick } = msg;
+
+        if let Some(nick) = &nick {
+            let nick = nick.trim();
+            if nick.len() >= 30 {
+                return ActorResponse::r#async(fut::err(Error::other("Nick too long")));
+            }
+        }
 
         let rng = &mut self.rng;
 
@@ -541,6 +558,41 @@ impl Handler<IdentifyAs> for GameServer {
 
             // Announce profile update to users
             // TODO: only send the profile to users in relevant rooms
+            act.send_global_message(Message::UpdateProfile(profile.clone()));
+
+            fut::ok(profile)
+        });
+
+        ActorResponse::r#async(fut)
+    }
+}
+
+impl Handler<QueryProfile> for GameServer {
+    type Result = ActorResponse<Self, Profile, ()>;
+
+    fn handle(&mut self, msg: QueryProfile, _ctx: &mut Self::Context) -> Self::Result {
+        let QueryProfile { user_id } = msg;
+
+        // TODO: Cache the profile here.
+
+        let db = self.db.clone();
+        let fut = db.send(db::GetUser(user_id));
+
+        let fut = fut.into_actor(self).then(move |res, act, _| {
+            let user = match res {
+                Ok(Ok(u)) => u,
+                _ => return fut::err(()),
+            };
+
+            let profile = Profile {
+                user_id: user.id as u64,
+                token: Uuid::parse_str(&user.auth_token).unwrap_or_else(|_| Uuid::default()),
+                nick: user.nick,
+                last_game_time: None,
+            };
+
+            // TODO: only send the profile to users in relevant rooms
+            // TODO: don't send this here but in the room actor
             act.send_global_message(Message::UpdateProfile(profile.clone()));
 
             fut::ok(profile)

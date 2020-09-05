@@ -2,7 +2,7 @@ use actix::prelude::*;
 use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 
-use crate::db;
+use crate::{db, server};
 use shared::game;
 use shared::message;
 
@@ -52,6 +52,7 @@ pub struct GameRoom {
     pub last_action: Instant,
     pub game: game::Game,
     pub db: Addr<db::DbActor>,
+    pub server: Addr<server::GameServer>,
 }
 
 impl GameRoom {
@@ -111,6 +112,14 @@ impl Handler<Join> for GameRoom {
         });
 
         // TODO: Announce profile to room members
+
+        // Broadcast the profile of each seatholder
+        // .. this is not great
+        for seat in &self.game.shared.seats {
+            if let Some(user_id) = seat.player {
+                self.server.do_send(server::QueryProfile { user_id });
+            }
+        }
     }
 }
 
