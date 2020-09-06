@@ -62,7 +62,6 @@ pub fn start_websocket(
         // Handle difference Text/Binary,...
         if let Ok(abuf) = e.data().dyn_into::<js_sys::ArrayBuffer>() {
             let array = js_sys::Uint8Array::new(&abuf);
-            let len = array.byte_length() as usize;
             let msg = match serde_cbor::from_slice::<ServerMessage>(&array.to_vec()) {
                 Ok(v) => v,
                 Err(e) => {
@@ -94,7 +93,7 @@ pub fn start_websocket(
     onerror_callback.forget();
 
     let cloned_on_msg = on_msg.clone();
-    let onclose_callback = wrap(move |e: CloseEvent| {
+    let onclose_callback = wrap(move |_: CloseEvent| {
         cloned_on_msg(Err(ServerError::LostConnection));
         let _ = start_websocket(cloned_on_msg.clone());
     });

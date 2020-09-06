@@ -183,7 +183,7 @@ impl Component for Board {
 }
 
 impl Board {
-    fn render_gl(&mut self, timestamp: f64) -> Result<(), JsValue> {
+    fn render_gl(&mut self, _timestamp: f64) -> Result<(), JsValue> {
         // TODO: remove hardcoding for 19x19
         let shadow_stone_colors = ["#555555", "#bbbbbb", "#7b91bd"];
         let shadow_border_colors = ["#bbbbbb", "#555555", "#555555"];

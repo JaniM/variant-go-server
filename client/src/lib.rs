@@ -3,6 +3,7 @@
 mod agents;
 mod board;
 mod create_game;
+mod game_pane;
 mod game_view;
 mod networking;
 mod seats;
@@ -15,15 +16,14 @@ use wasm_bindgen::prelude::*;
 
 use crate::agents::game_store;
 use crate::create_game::CreateGameView;
+use crate::game_pane::GamePane;
 use crate::game_view::{GameView, Profile};
-use crate::seats::SeatList;
 use crate::text_input::TextInput;
 
 use shared::game;
 use shared::message::{self, ClientMessage, ServerMessage};
 
 use yew::prelude::*;
-use yew::services::keyboard::{KeyListenerHandle, KeyboardService};
 use yew::services::timeout::{TimeoutService, TimeoutTask};
 
 use store::ReadOnly;
@@ -64,7 +64,7 @@ impl Theme {
     }
 }
 
-struct GameList {
+struct GameApp {
     link: ComponentLink<Self>,
     // TODO: Use a proper struct, not magic tuples
     games: Vec<(u32, String)>,
@@ -76,7 +76,6 @@ struct GameList {
     theme: Theme,
     error: Option<(message::Error, TimeoutTask)>,
     #[allow(dead_code)]
-    key_listener: KeyListenerHandle,
     game_store: game_store::GameStore,
 }
 
@@ -84,8 +83,6 @@ enum Msg {
     StartGame,
     ChangeNick(String),
     JoinGame(u32),
-    Pass,
-    Cancel,
     SetGameStatus(GameView),
     GameStoreMsg(ReadOnly<game_store::GameStoreState>),
     SetGameHistory(Option<game::GameHistory>),
@@ -96,13 +93,10 @@ enum Msg {
     SetPane(Pane),
     SetTheme(Theme),
     SetError(Option<message::Error>),
-    GetBoardAt(u32),
-    ScanBoard(i32),
     Render,
-    None,
 }
 
-impl Component for GameList {
+impl Component for GameApp {
     type Message = Msg;
     type Properties = ();
     fn create(_: Self::Properties, link: ComponentLink<Self>) -> Self {
@@ -181,21 +175,12 @@ impl Component for GameList {
         })
         .unwrap();
 
-        let key_listener = KeyboardService::register_key_down(
-            &yew::utils::document(),
-            link.callback(|event: web_sys::KeyboardEvent| match event.key().as_str() {
-                "ArrowRight" => Msg::ScanBoard(1),
-                "ArrowLeft" => Msg::ScanBoard(-1),
-                _ => Msg::None,
-            }),
-        );
-
         let game_store = game_store::GameStore::bridge(link.callback(Msg::GameStoreMsg));
 
         let hash = utils::get_hash();
         let game_loaded = hash.chars().next() == Some('#') && hash[1..].parse::<u32>().is_ok();
 
-        GameList {
+        GameApp {
             link,
             games: vec![],
             game: None,
@@ -209,35 +194,40 @@ impl Component for GameList {
             debounce_job: None,
             theme: Theme::get(),
             error: None,
-            key_listener,
             game_store,
         }
     }
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
-            Msg::StartGame => self.pane = Pane::CreateGame,
-            Msg::ChangeNick(nick) => networking::send(ClientMessage::Identify {
-                token: networking::get_token(),
-                nick: Some(nick),
-            }),
+            Msg::StartGame => {
+                self.pane = Pane::CreateGame;
+                true
+            }
+            Msg::ChangeNick(nick) => {
+                networking::send(ClientMessage::Identify {
+                    token: networking::get_token(),
+                    nick: Some(nick),
+                });
+                false
+            }
             Msg::JoinGame(id) => {
                 networking::send(ClientMessage::JoinGame(id));
                 self.pane = Pane::Board;
+                true
             }
-            Msg::Pass => networking::send(ClientMessage::GameAction(message::GameAction::Pass)),
-            Msg::Cancel => networking::send(ClientMessage::GameAction(message::GameAction::Cancel)),
             Msg::SetGameStatus(game) => {
                 self.game_store.set_game(game);
-                return false;
+                false
             }
             Msg::GameStoreMsg(store) => {
                 let store = store.borrow();
                 self.game = store.game.clone();
+                true
             }
             Msg::SetGameHistory(view) => {
                 self.game_store.set_game_history(view);
-                return false;
+                false
             }
             Msg::AddGame(game) => {
                 self.games.push(game);
@@ -247,7 +237,7 @@ impl Component for GameList {
                         self.link.callback(|_| Msg::Render),
                     ));
                 }
-                return false;
+                false
             }
             Msg::RemoveGame(room_id) => {
                 self.games.retain(|g| g.0 != room_id);
@@ -257,18 +247,25 @@ impl Component for GameList {
                         self.game = None;
                     }
                 }
+                true
             }
             Msg::SetOwnProfile(profile) => {
                 self.profiles.insert(profile.user_id, profile.clone());
                 self.user = Some(profile);
+                true
             }
             Msg::SetProfile(profile) => {
                 self.profiles.insert(profile.user_id, profile);
+                true
             }
-            Msg::SetPane(pane) => self.pane = pane,
+            Msg::SetPane(pane) => {
+                self.pane = pane;
+                true
+            }
             Msg::SetTheme(theme) => {
                 self.theme = theme;
                 self.theme.save();
+                true
             }
             Msg::SetError(err) => {
                 self.error = err.map(|err| {
@@ -280,12 +277,7 @@ impl Component for GameList {
                         ),
                     )
                 });
-            }
-            Msg::GetBoardAt(turn) => {
-                self.game_store.get_board_at(turn);
-            }
-            Msg::ScanBoard(diff) => {
-                self.game_store.scan_board(diff);
+                true
             }
             Msg::Render => {
                 self.debounce_job = None;
@@ -296,12 +288,9 @@ impl Component for GameList {
                     .cloned()
                     .dedup_by(|x, y| x.0 == y.0)
                     .collect();
-            }
-            Msg::None => {
-                return false;
+                true
             }
         }
-        true
     }
 
     fn change(&mut self, _: Self::Properties) -> ShouldRender {
@@ -330,126 +319,13 @@ impl Component for GameList {
             .map(|x| &**x)
             .unwrap_or("");
         let nick_enter = self.link.callback(Msg::ChangeNick);
-        let pass = self.link.callback(|_| Msg::Pass);
-        let cancel = self.link.callback(|_| Msg::Cancel);
 
         let gameview = if let Some(game) = &self.game {
-            let userlist = game
-                .members
-                .iter()
-                .map(|id| {
-                    let nick = self
-                        .profiles
-                        .get(id)
-                        .and_then(|p| p.nick.as_ref())
-                        .map(|n| &**n)
-                        .unwrap_or("no nick");
-                    html!(
-                        <>
-                        <span style="padding: 0px 10px">
-                            {format!("{}", nick)}
-                        </span>
-                        <br />
-                        </>
-                    )
-                })
-                .collect::<Html>();
-
-            let status = match game.state {
-                game::GameState::FreePlacement(_) => "Free placement",
-                game::GameState::Play(_) => "Active",
-                game::GameState::Scoring(_) => "Scoring",
-                game::GameState::Done(_) => "Game over!",
-            };
-
-            let hidden_stones_left = if game.hidden_stones_left > 0 {
-                html!(<>{"Opponents' hidden stones left: "}{game.hidden_stones_left}</>)
-            } else {
-                html!()
-            };
-
-            let pass_button = match game.state {
-                game::GameState::FreePlacement(_) => html!(<button onclick=pass>{"Ready"}</button>),
-                game::GameState::Play(_) => html!(<button onclick=pass>{"Pass"}</button>),
-                game::GameState::Scoring(_) => html!(<button onclick=pass>{"Accept"}</button>),
-                game::GameState::Done(_) => html!(),
-            };
-
-            let cancel_button = match game.state {
-                game::GameState::FreePlacement(_) => {
-                    html!(<button onclick=cancel>{"Clear"}</button>)
-                }
-                game::GameState::Play(_) => html!(<button onclick=cancel>{"Undo"}</button>),
-                game::GameState::Scoring(_) => html!(<button onclick=cancel>{"Cancel"}</button>),
-                _ => html!(),
-            };
-
-            let game_length = game.move_number;
-            let view_turn = match &game.history {
-                Some(h) => h.move_number,
-                None => game.move_number,
-            };
-
-            let turn_bar = html! {
-                <div style="display: flex;">
-                    <div style="width: 200px;">
-                    <span>{"Turn "}{view_turn}{"/"}{game.move_number}</span>
-                    <span>{if game.history.is_some() { "(history)" } else { "" }}</span>
-                    </div>
-                    <div style="flex-grow: 1; display: flex; justify-content: center; margin-left: -200px;">
-                    <button
-                        onclick=self.link.callback(move |_| Msg::GetBoardAt(0))
-                        disabled={view_turn == 0} >
-                        {"<<<"}
-                    </button>
-                    <button
-                        onclick=self.link.callback(move |_|
-                            Msg::GetBoardAt(view_turn.saturating_sub(5)))
-                        disabled={view_turn == 0} >
-                        {"<<"}
-                    </button>
-                    <button
-                        onclick=self.link.callback(move |_| Msg::GetBoardAt(view_turn-1))
-                        disabled={view_turn == 0} >
-                        {"<"}
-                    </button>
-                    <button
-                        onclick=self.link.callback(move |_| Msg::GetBoardAt(view_turn+1))
-                        disabled={view_turn >= game.move_number} >
-                        {">"}
-                    </button>
-                    <button
-                        onclick=self.link.callback(move |_|
-                            Msg::GetBoardAt((view_turn+5).min(game_length)))
-                        disabled={view_turn >= game.move_number} >
-                        {">>"}
-                    </button>
-                    <button
-                        onclick=self.link.callback(|_| Msg::SetGameHistory(None))
-                        disabled={view_turn >= game.move_number} >
-                        {">>>"}
-                    </button>
-                    </div>
-                </div>
-            };
-
             html!(
-                <>
-                <div style="flex-grow: 1; margin: 10px; display: flex; justify-content: center;">
-                    <div style="width: 800px; margin: auto 0;">
-                        <div>{"Status:"} {status} {pass_button} {cancel_button} {hidden_stones_left}</div>
-                        <board::Board game=game/>
-                        {turn_bar}
-                    </div>
-                </div>
-                <div style="width: 300px; overflow: hidden; border-left: 2px solid #dedede; padding: 10px; padding-left: 10px;">
-                    <div><a href="https://github.com/JaniM/variant-go-server" target="_blank">{"Github"}</a>{" / "}<a href="https://discord.gg/qzqwEV4" target="_blank">{"Discord"}</a></div>
-                    <div>{"Seats"}</div>
-                    <SeatList game=game profiles=&self.profiles user=&self.user />
-                    {"Users"}
-                    <div>{userlist}</div>
-                </div>
-                </>
+                <GamePane
+                    user=&self.user
+                    profiles=&self.profiles
+                    game=game />
             )
         } else {
             html!(<p>{"Join a game!"}</p>)
@@ -550,7 +426,7 @@ pub fn run() -> Result<(), JsValue> {
     utils::set_panic_hook();
 
     yew::initialize();
-    App::<GameList>::new().mount_to_body();
+    App::<GameApp>::new().mount_to_body();
 
     Ok(())
 }
