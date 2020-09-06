@@ -26,6 +26,6 @@ pub struct Profile {
 
 impl Profile {
     pub fn nick_or<'a>(&'a self, default: &'a str) -> &'a str {
-        self.nick.as_ref().map(|x| &**x).unwrap_or(default)
+        self.nick.as_deref().unwrap_or(default)
     }
 }

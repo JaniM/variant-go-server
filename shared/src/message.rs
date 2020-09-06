@@ -58,6 +58,7 @@ impl Error {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+#[allow(clippy::large_enum_variant)]
 pub enum ServerMessage {
     Identify {
         token: String,

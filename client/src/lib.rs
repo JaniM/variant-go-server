@@ -50,7 +50,7 @@ impl std::fmt::Display for Theme {
 impl Theme {
     fn get() -> Theme {
         let val = utils::local_storage().get_item("theme").unwrap();
-        match val.as_ref().map(|x| &**x) {
+        match val.as_deref() {
             Some("White") => Theme::White,
             Some("Dark") => Theme::Dark,
             _ => Theme::White,
@@ -79,12 +79,13 @@ struct GameApp {
     game_store: game_store::GameStore,
 }
 
+#[allow(clippy::large_enum_variant)]
 enum Msg {
     StartGame,
     ChangeNick(String),
     JoinGame(u32),
     SetGameStatus(GameView),
-    GameStoreMsg(ReadOnly<game_store::GameStoreState>),
+    GameStoreEvent(ReadOnly<game_store::GameStoreState>),
     SetGameHistory(Option<game::GameHistory>),
     SetOwnProfile(Profile),
     SetProfile(Profile),
@@ -175,10 +176,10 @@ impl Component for GameApp {
         })
         .unwrap();
 
-        let game_store = game_store::GameStore::bridge(link.callback(Msg::GameStoreMsg));
+        let game_store = game_store::GameStore::bridge(link.callback(Msg::GameStoreEvent));
 
         let hash = utils::get_hash();
-        let game_loaded = hash.chars().next() == Some('#') && hash[1..].parse::<u32>().is_ok();
+        let game_loaded = hash.starts_with('a') && hash[1..].parse::<u32>().is_ok();
 
         GameApp {
             link,
@@ -220,7 +221,7 @@ impl Component for GameApp {
                 self.game_store.set_game(game);
                 false
             }
-            Msg::GameStoreMsg(store) => {
+            Msg::GameStoreEvent(store) => {
                 let store = store.borrow();
                 self.game = store.game.clone();
                 true

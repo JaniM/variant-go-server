@@ -13,7 +13,7 @@ fn establish_connection() -> PgConnection {
     dotenv().ok();
 
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    PgConnection::establish(&database_url).expect(&format!("Error connecting to {}", database_url))
+    PgConnection::establish(&database_url).unwrap_or_else(|_| panic!("Error connecting to {}", database_url))
 }
 
 #[derive(Queryable)]
@@ -105,7 +105,7 @@ impl Handler<IdentifyUser> for DbActor {
 
         let new_user = NewUser {
             auth_token: &msg.auth_token,
-            nick: msg.nick.as_ref().map(|x| &**x),
+            nick: msg.nick.as_deref(),
         };
 
         let existing = users
@@ -156,7 +156,7 @@ impl Handler<StoreGame> for DbActor {
         let new_game = NewGame {
             id: msg.id.map(|x| x as _),
             name: &msg.name,
-            replay: msg.replay.as_ref().map(|x| &**x),
+            replay: msg.replay.as_deref(),
         };
 
         let result = match msg.id {

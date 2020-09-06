@@ -46,7 +46,7 @@ pub enum ServerError {
 }
 
 pub fn start_websocket(
-    on_msg: impl (Fn(Result<ServerMessage, ServerError>) -> ()) + Clone + 'static,
+    on_msg: impl (Fn(Result<ServerMessage, ServerError>)) + Clone + 'static,
 ) -> Result<(), JsValue> {
     let window = web_sys::window().expect("Window not available");
     let host = window.location().hostname().expect("host not available");
@@ -100,10 +100,9 @@ pub fn start_websocket(
     ws.set_onclose(Some(onclose_callback.as_ref().unchecked_ref()));
     onclose_callback.forget();
 
-    let cloned_on_msg = on_msg.clone();
     let onopen_callback = wrap(move |_: JsValue| {
         console_log!("socket opened");
-        cloned_on_msg(Err(ServerError::Clear));
+        on_msg(Err(ServerError::Clear));
 
         // TODO: these should not be here
         send(ClientMessage::GetGameList);
@@ -115,7 +114,7 @@ pub fn start_websocket(
         // TODO: use a proper router?
 
         let hash = utils::get_hash();
-        if hash.chars().next() == Some('#') {
+        if hash.starts_with('a') {
             if let Ok(id) = hash[1..].parse::<u32>() {
                 send(ClientMessage::JoinGame(id));
             }
@@ -130,12 +129,12 @@ pub fn start_websocket(
 pub fn send(msg: impl Into<ClientMessage>) {
     HANDLER.with(|h| {
         let handler = h.borrow();
-        let mut vec = serde_cbor::to_vec(&msg.into()).expect("cbor serialization failed");
+        let vec = serde_cbor::to_vec(&msg.into()).expect("cbor serialization failed");
         match handler
             .ws
             .as_ref()
             .expect("ws not initialized")
-            .send_with_u8_array(&mut vec)
+            .send_with_u8_array(&vec)
         {
             Ok(_) => {}
             Err(err) => console_log!("error sending message: {:?}", err),

@@ -123,7 +123,7 @@ pub struct GameServer {
 impl Default for GameServer {
     fn default() -> GameServer {
         let rooms = HashMap::new();
-        let db = SyncArbiter::start(8, || db::DbActor::default());
+        let db = SyncArbiter::start(8, db::DbActor::default);
 
         GameServer {
             sessions: HashMap::new(),
@@ -147,7 +147,7 @@ impl GameServer {
     fn send_message(&self, session_id: usize, message: Message) {
         let session = self.sessions.get(&session_id);
         if let Some(session) = session {
-            let _ = session.client.do_send(message.clone());
+            let _ = session.client.do_send(message);
         }
     }
 
@@ -253,7 +253,7 @@ impl GameServer {
             )
         };
 
-        let fut = prefetch.then(move |res, act, _| {
+        prefetch.then(move |res, act, _| {
             if let Ok(room_addr) = res {
                 room_addr.do_send(game_room::Join {
                     session_id,
@@ -262,9 +262,7 @@ impl GameServer {
                 });
             }
             async {}.into_actor(act)
-        });
-
-        fut
+        })
     }
 }
 
@@ -531,7 +529,7 @@ impl Handler<IdentifyAs> for GameServer {
             if let Some(nick) = nick {
                 let nick = nick.trim();
                 // The nick has already been sanitized at this point.
-                if nick.len() == 0 {
+                if nick.is_empty() {
                     profile.nick = None;
                 } else {
                     profile.nick = Some(nick.to_owned());
@@ -545,7 +543,7 @@ impl Handler<IdentifyAs> for GameServer {
             let sessions = act
                 .sessions_by_user
                 .entry(user_id)
-                .or_insert_with(|| HashSet::new());
+                .or_insert_with(HashSet::new);
             sessions.insert(id);
 
             catch! {

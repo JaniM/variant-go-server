@@ -348,10 +348,10 @@ impl Game {
         };
 
         Some(Game {
-            state: state.clone(),
+            state,
             state_stack: Vec::new(),
             shared: SharedState {
-                seats: seats.into_iter().map(|&t| Seat::new(Color(t))).collect(),
+                seats: seats.iter().map(|&t| Seat::new(Color(t))).collect(),
                 points: komis.clone(),
                 turn: 0,
                 pass_count: 0,
