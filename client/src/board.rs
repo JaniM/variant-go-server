@@ -25,6 +25,7 @@ pub struct Board {
 #[derive(Properties, Clone, PartialEq)]
 pub struct Props {
     pub game: GameView,
+    pub size: i32,
 }
 
 pub enum Msg {
@@ -121,6 +122,10 @@ impl Component for Board {
     fn change(&mut self, props: Self::Properties) -> ShouldRender {
         if self.props != props {
             self.props = props;
+            if let Some(canvas) = &self.canvas {
+                canvas.set_width(self.props.size as u32);
+                canvas.set_height(self.props.size as u32);
+            }
             self.render_gl(0.0).unwrap();
             false
         } else {
@@ -177,7 +182,7 @@ impl Component for Board {
 
     fn view(&self) -> Html {
         html! {
-            <canvas ref={self.node_ref.clone()} width=800 height=800 />
+            <canvas ref={self.node_ref.clone()} width=self.props.size height=self.props.size />
         }
     }
 }

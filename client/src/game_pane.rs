@@ -1,6 +1,7 @@
 use yew::{
     prelude::*,
     services::keyboard::{KeyListenerHandle, KeyboardService},
+    services::resize::{ResizeService, ResizeTask, WindowDimensions},
 };
 use yewtil::NeqAssign;
 
@@ -22,7 +23,9 @@ pub struct GamePane {
     props: Props,
     callbacks: Callbacks,
     game_store: GameStore,
+    size: i32,
     _key_listener: KeyListenerHandle,
+    _resize_task: ResizeTask,
 }
 
 pub enum Msg {
@@ -31,6 +34,7 @@ pub enum Msg {
     GetBoardAt(u32),
     ScanBoard(i32),
     ResetHistory,
+    ResizeWindow(WindowDimensions),
     None,
 }
 
@@ -69,12 +73,19 @@ impl Component for GamePane {
             }),
         );
 
+        let resize_task = ResizeService::new().register(link.callback(Msg::ResizeWindow));
+        let dimensions =
+            WindowDimensions::get_dimensions(&web_sys::window().expect("window not found"));
+        let size = size_from_dimensions(dimensions);
+
         GamePane {
             link,
             props,
             callbacks,
             game_store,
+            size,
             _key_listener: key_listener,
+            _resize_task: resize_task,
         }
     }
 
@@ -90,6 +101,10 @@ impl Component for GamePane {
             }
             Msg::ResetHistory => {
                 self.game_store.set_game_history(None);
+            }
+            Msg::ResizeWindow(dimensions) => {
+                self.size = size_from_dimensions(dimensions);
+                return true;
             }
             Msg::None => {}
         }
@@ -219,12 +234,14 @@ impl Component for GamePane {
             </div>
         };
 
+        let game_container_style = format!("width: {}px; margin: auto 0;", self.size);
+
         html!(
             <>
             <div style="flex-grow: 1; margin: 10px; display: flex; justify-content: center;">
-                <div style="width: 800px; margin: auto 0;">
+                <div style=game_container_style>
                     <div>{"Status:"} {status} {pass_button} {cancel_button} {hidden_stones_left}</div>
-                    <board::Board game=game/>
+                    <board::Board game=game size=self.size/>
                     {turn_bar}
                 </div>
             </div>
@@ -238,4 +255,15 @@ impl Component for GamePane {
             </>
         )
     }
+}
+
+fn size_from_dimensions(dimensions: WindowDimensions) -> i32 {
+    // FIXME: This is naive and lazy but works well enough.
+    // The buffer is used for vertically surrounding elements.
+    let buffer = 200;
+    let mut size = i32::min(dimensions.width - 300, dimensions.height) - buffer;
+    if size < 200 {
+        size = 200;
+    }
+    size
 }
