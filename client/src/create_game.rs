@@ -37,6 +37,7 @@ pub enum Msg {
     ToggleZen,
     ToggleHiddenMove,
     ToggleOneColor,
+    ToggleNoHistory,
     SetHiddenMoveCount(u32),
     OnCreate,
 }
@@ -96,6 +97,10 @@ impl Component for CreateGameView {
             }
             Msg::TogglePixel => {
                 self.mods.pixel = !self.mods.pixel;
+                true
+            }
+            Msg::ToggleNoHistory => {
+                self.mods.no_history = !self.mods.no_history;
                 true
             }
             Msg::TogglePonnuki => {
@@ -313,6 +318,16 @@ impl Component for CreateGameView {
                                 checked=matches!(self.mods.visibility_mode, Some(game::VisibilityMode::OneColor))
                                 onclick=self.link.callback(move |_| Msg::ToggleOneColor) />
                             <label onclick=self.link.callback(move |_| Msg::ToggleOneColor)>{"One color go"}</label>
+                        </li>
+                        <li>
+                            <input
+                                type="checkbox"
+                                class="toggle"
+                                checked=self.mods.no_history
+                                onclick=self.link.callback(move |_| Msg::ToggleNoHistory) />
+                            <label onclick=self.link.callback(move |_| Msg::ToggleNoHistory)>
+                                {"No history (good for one color)"}
+                            </label>
                         </li>
                         <li>
                             <input

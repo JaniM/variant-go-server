@@ -229,6 +229,10 @@ pub struct GameModifier {
 
     #[serde(default)]
     pub visibility_mode: Option<VisibilityMode>,
+
+    /// Prevents looking at history during the game. Especially handy for one color go.
+    #[serde(default)]
+    pub no_history: bool,
 }
 
 pub type Visibility = Bitmap<typenum::U16>;
@@ -653,6 +657,11 @@ impl Game {
         } = &shared.board_history.get(turn as usize)?;
 
         let game_done = matches!(self.state, GameState::Done(_));
+
+        if !game_done && self.shared.mods.no_history {
+            return None;
+        }
+
         let (board, board_visibility, _hidden_stones_left) =
             self.get_board_view(player_id, state, board, board_visibility, game_done);
 

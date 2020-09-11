@@ -140,6 +140,8 @@ impl Component for GamePane {
             game::GameState::Done(_) => "Game over!",
         };
 
+        let game_done = matches!(game.state, game::GameState::Done(_));
+
         let hidden_stones_left = if game.hidden_stones_left > 0 {
             html!(<>{"Opponents' hidden stones left: "}{game.hidden_stones_left}</>)
         } else {
@@ -166,46 +168,54 @@ impl Component for GamePane {
             None => game.move_number,
         };
 
+        let turn_bar_buttons = if !game.mods.no_history || game_done {
+            html! {
+                <div style="flex-grow: 1; display: flex; justify-content: center; margin-left: -200px;">
+                    <button
+                        onclick=self.link.callback(move |_| Msg::GetBoardAt(0))
+                        disabled={view_turn == 0} >
+                        {"<<<"}
+                    </button>
+                    <button
+                        onclick=self.link.callback(move |_|
+                            Msg::GetBoardAt(view_turn.saturating_sub(5)))
+                        disabled={view_turn == 0} >
+                        {"<<"}
+                    </button>
+                    <button
+                        onclick=self.link.callback(move |_| Msg::GetBoardAt(view_turn-1))
+                        disabled={view_turn == 0} >
+                        {"<"}
+                    </button>
+                    <button
+                        onclick=self.link.callback(move |_| Msg::GetBoardAt(view_turn+1))
+                        disabled={view_turn >= game.move_number} >
+                        {">"}
+                    </button>
+                    <button
+                        onclick=self.link.callback(move |_|
+                            Msg::GetBoardAt((view_turn+5).min(game_length)))
+                        disabled={view_turn >= game.move_number} >
+                        {">>"}
+                    </button>
+                    <button
+                        onclick=self.link.callback(|_| Msg::ResetHistory)
+                        disabled={view_turn >= game.move_number} >
+                        {">>>"}
+                    </button>
+                </div>
+            }
+        } else {
+            html!()
+        };
+
         let turn_bar = html! {
             <div style="display: flex;">
                 <div style="width: 200px;">
                 <span>{"Turn "}{view_turn}{"/"}{game.move_number}</span>
                 <span>{if game.history.is_some() { "(history)" } else { "" }}</span>
                 </div>
-                <div style="flex-grow: 1; display: flex; justify-content: center; margin-left: -200px;">
-                <button
-                    onclick=self.link.callback(move |_| Msg::GetBoardAt(0))
-                    disabled={view_turn == 0} >
-                    {"<<<"}
-                </button>
-                <button
-                    onclick=self.link.callback(move |_|
-                        Msg::GetBoardAt(view_turn.saturating_sub(5)))
-                    disabled={view_turn == 0} >
-                    {"<<"}
-                </button>
-                <button
-                    onclick=self.link.callback(move |_| Msg::GetBoardAt(view_turn-1))
-                    disabled={view_turn == 0} >
-                    {"<"}
-                </button>
-                <button
-                    onclick=self.link.callback(move |_| Msg::GetBoardAt(view_turn+1))
-                    disabled={view_turn >= game.move_number} >
-                    {">"}
-                </button>
-                <button
-                    onclick=self.link.callback(move |_|
-                        Msg::GetBoardAt((view_turn+5).min(game_length)))
-                    disabled={view_turn >= game.move_number} >
-                    {">>"}
-                </button>
-                <button
-                    onclick=self.link.callback(|_| Msg::ResetHistory)
-                    disabled={view_turn >= game.move_number} >
-                    {">>>"}
-                </button>
-                </div>
+                {turn_bar_buttons}
             </div>
         };
 
