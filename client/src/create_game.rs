@@ -36,6 +36,7 @@ pub enum Msg {
     TogglePonnuki,
     ToggleZen,
     ToggleHiddenMove,
+    ToggleOneColor,
     SetHiddenMoveCount(u32),
     OnCreate,
 }
@@ -136,6 +137,13 @@ impl Component for CreateGameView {
                         rules.placement_count = count;
                     }
                     None => {}
+                };
+                true
+            }
+            Msg::ToggleOneColor => {
+                self.mods.visibility_mode = match self.mods.visibility_mode {
+                    Some(game::VisibilityMode::OneColor) => None,
+                    _ => Some(game::VisibilityMode::OneColor),
                 };
                 true
             }
@@ -297,6 +305,14 @@ impl Component for CreateGameView {
                                 checked=self.mods.zen_go.is_some()
                                 onclick=self.link.callback(move |_| Msg::ToggleZen) />
                             <label onclick=self.link.callback(move |_| Msg::ToggleZen)>{"Zen go"}</label>
+                        </li>
+                        <li>
+                            <input
+                                type="checkbox"
+                                class="toggle"
+                                checked=matches!(self.mods.visibility_mode, Some(game::VisibilityMode::OneColor))
+                                onclick=self.link.callback(move |_| Msg::ToggleOneColor) />
+                            <label onclick=self.link.callback(move |_| Msg::ToggleOneColor)>{"One color go"}</label>
                         </li>
                         <li>
                             <input

@@ -179,7 +179,7 @@ impl Component for GameApp {
         let game_store = game_store::GameStore::bridge(link.callback(Msg::GameStoreEvent));
 
         let hash = utils::get_hash();
-        let game_loaded = hash.starts_with('a') && hash[1..].parse::<u32>().is_ok();
+        let game_loaded = hash.starts_with('#') && hash[1..].parse::<u32>().is_ok();
 
         GameApp {
             link,

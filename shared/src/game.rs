@@ -201,6 +201,14 @@ pub struct HiddenMoveGo {
     pub teams_share_stones: bool,
 }
 
+/// Visibility modes describe how the game state should be displayed, without
+/// affecting the actual gameplay in any way.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum VisibilityMode {
+    /// Display all stones as the same color for both players.
+    OneColor,
+}
+
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct GameModifier {
     /// Pixel go is a game mode where you place 2x2 blobs instead of a single stone.
@@ -218,6 +226,9 @@ pub struct GameModifier {
 
     #[serde(default)]
     pub hidden_move: Option<HiddenMoveGo>,
+
+    #[serde(default)]
+    pub visibility_mode: Option<VisibilityMode>,
 }
 
 pub type Visibility = Bitmap<typenum::U16>;
@@ -539,14 +550,39 @@ impl Game {
             }
             GameState::Play(_) => {
                 let mut board = board.points.clone();
+                let board_visibility = board_visibility.clone();
+
+                let one_color = matches!(
+                    self.shared.mods.visibility_mode,
+                    Some(VisibilityMode::OneColor)
+                );
+
+                // Set color to white.
+                // TODO: Change this to black once the client supports selecting the color
+                const ONE_COLOR_TEAM: Color = Color(2);
+
+                // If the game is done, everything is visible.
                 if game_done {
-                    return (board, board_visibility.clone().map(|x| x.points), 0);
+                    return (board, board_visibility.map(|x| x.points), 0);
                 }
+
+                if one_color {
+                    for p in &mut board {
+                        if !p.is_empty() {
+                            *p = ONE_COLOR_TEAM;
+                        }
+                    }
+                };
+
                 if let Some(active_seat) = shared.seats.iter().find(|x| x.player == Some(player_id))
                 {
-                    let team = active_seat.team;
+                    let team = if !one_color {
+                        active_seat.team
+                    } else {
+                        ONE_COLOR_TEAM
+                    };
 
-                    if let Some(mut visibility) = board_visibility.clone() {
+                    if let Some(mut visibility) = board_visibility {
                         let mut hidden_stones_left = 0;
                         for (board, visibility) in board.iter_mut().zip(&mut visibility.points) {
                             if visibility.get(team.as_usize()) {

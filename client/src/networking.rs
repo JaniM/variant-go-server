@@ -114,7 +114,7 @@ pub fn start_websocket(
         // TODO: use a proper router?
 
         let hash = utils::get_hash();
-        if hash.starts_with('a') {
+        if hash.starts_with('#') {
             if let Ok(id) = hash[1..].parse::<u32>() {
                 send(ClientMessage::JoinGame(id));
             }
