@@ -231,7 +231,7 @@ impl Component for CreateGameView {
             ChangeData::Select(elem) => {
                 let value = elem.selected_index();
                 Msg::SelectSize(match value {
-                    9 => 9,
+                    0 => 9,
                     1 => 13,
                     2 => 19,
                     _ => unreachable!(),
@@ -245,7 +245,7 @@ impl Component for CreateGameView {
                 ref=self.size_select_ref.clone()
                 onchange=select_size
             >
-                <option value=9 selected=self.size == 13>{ "9" }</option>
+                <option value=9 selected=self.size == 9>{ "9" }</option>
                 <option value=13 selected=self.size == 13>{ "13" }</option>
                 <option value=19 selected=self.size == 19>{ "19" }</option>
             </select>
