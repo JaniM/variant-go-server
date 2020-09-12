@@ -41,6 +41,7 @@ pub enum Msg {
     ToggleOneColor,
     ToggleNoHistory,
     SetHiddenMoveCount(u32),
+    SetPonnukiValue(i32),
     OnCreate,
 }
 
@@ -143,6 +144,15 @@ impl Component for CreateGameView {
                 match &mut self.mods.hidden_move {
                     Some(rules) => {
                         rules.placement_count = count;
+                    }
+                    None => {}
+                };
+                true
+            }
+            Msg::SetPonnukiValue(value) => {
+                match &mut self.mods.ponnuki_is_points {
+                    Some(rule) => {
+                        *rule = value * 2;
                     }
                     None => {}
                 };
@@ -326,7 +336,19 @@ impl Component for CreateGameView {
                                 class="toggle"
                                 checked=self.mods.ponnuki_is_points.is_some()
                                 onclick=self.link.callback(move |_| Msg::TogglePonnuki) />
-                            <label onclick=self.link.callback(move |_| Msg::TogglePonnuki)>{"Ponnuki is 30 points"}</label>
+                            <label onclick=self.link.callback(move |_| Msg::TogglePonnuki)>{"Ponnuki is: "}</label>
+                            <input
+                                style="width: 3em;"
+                                type="number"
+                                value={self.mods.ponnuki_is_points.map_or(30, |x| x/2)}
+                                disabled=self.mods.ponnuki_is_points.is_none()
+                                onchange=self.link.callback(|data|
+                                    match data {
+                                        yew::events::ChangeData::Value(v) => Msg::SetPonnukiValue(v.parse().unwrap()),
+                                        _ => unreachable!(),
+                                    }
+                                ) />
+                            {"points (can be negative)"}
                         </li>
                     </ul>
                 </div>
@@ -369,6 +391,9 @@ impl Component for CreateGameView {
                 </p>
                 <p>
                     {r#"Zen go: One extra player. You get a different color on every turn. There are no winners."#}
+                </p>
+                <p>
+                    {r#"No history: No one can browse the past moves during the game."#}
                 </p>
                 </div>
             </div>
