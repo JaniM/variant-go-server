@@ -42,6 +42,7 @@ pub enum Msg {
     ToggleNoHistory,
     ToggleNPlusOne,
     SetHiddenMoveCount(u32),
+    SetNPlusOneCount(u8),
     SetPonnukiValue(i32),
     OnCreate,
 }
@@ -143,9 +144,7 @@ impl Component for CreateGameView {
             }
             Msg::ToggleNPlusOne => {
                 self.mods.n_plus_one = match &self.mods.n_plus_one {
-                    None => Some(game::NPlusOne {
-                        length: 4
-                    }),
+                    None => Some(game::NPlusOne { length: 4 }),
                     Some(_) => None,
                 };
                 true
@@ -154,6 +153,15 @@ impl Component for CreateGameView {
                 match &mut self.mods.hidden_move {
                     Some(rules) => {
                         rules.placement_count = count;
+                    }
+                    None => {}
+                };
+                true
+            }
+            Msg::SetNPlusOneCount(count) => {
+                match &mut self.mods.n_plus_one {
+                    Some(rules) => {
+                        rules.length = count;
                     }
                     None => {}
                 };
@@ -295,7 +303,7 @@ impl Component for CreateGameView {
                             <input
                                 style="width: 3em;"
                                 type="number"
-                                value={self.mods.hidden_move.as_ref().map(|x| x.placement_count).unwrap_or(0)}
+                                value={self.mods.hidden_move.as_ref().map_or(5, |x| x.placement_count)}
                                 disabled=self.mods.hidden_move.is_none()
                                 onchange=self.link.callback(|data|
                                     match data {
@@ -347,8 +355,19 @@ impl Component for CreateGameView {
                                 checked=self.mods.n_plus_one.is_some()
                                 onclick=self.link.callback(move |_| Msg::ToggleNPlusOne) />
                             <label onclick=self.link.callback(move |_| Msg::ToggleNPlusOne)>
-                                {"4+1"}
+                                {"N+1 "}
                             </label>
+                            <input
+                                style="width: 3em;"
+                                type="number"
+                                value={self.mods.n_plus_one.as_ref().map_or(4, |x| x.length)}
+                                disabled=self.mods.n_plus_one.is_none()
+                                onchange=self.link.callback(|data|
+                                    match data {
+                                        yew::events::ChangeData::Value(v) => Msg::SetNPlusOneCount(v.parse().unwrap()),
+                                        _ => unreachable!(),
+                                    }
+                                ) />
                         </li>
                         <li>
                             <input
@@ -416,7 +435,7 @@ impl Component for CreateGameView {
                     {r#"No history: No one can browse the past moves during the game."#}
                 </p>
                 <p>
-                    {r#"4+1: You get an extra turn when you make a row of exactly 4 stones."#}
+                    {r#"N+1: You get an extra turn when you make a row of exactly N stones."#}
                 </p>
                 </div>
             </div>
