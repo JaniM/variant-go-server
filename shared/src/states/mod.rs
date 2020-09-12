@@ -6,9 +6,9 @@ pub use self::free_placement::FreePlacement;
 pub use self::play::PlayState;
 pub use self::scoring::ScoringState;
 
-use serde::{Deserialize, Serialize};
 use crate::assume::AssumeFrom;
 use crate::game::Board;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum GameState {

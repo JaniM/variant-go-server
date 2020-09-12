@@ -6,8 +6,8 @@ use std::collections::{HashSet, VecDeque};
 use bitmaps::Bitmap;
 use tinyvec::TinyVec;
 
-use crate::states::PlayState;
 pub use crate::states::GameState;
+use crate::states::PlayState;
 pub use board::{Board, Point};
 
 #[derive(Debug, Copy, Clone, PartialEq, Hash, Serialize, Deserialize)]
@@ -26,11 +26,27 @@ impl Color {
     pub const fn as_usize(self) -> usize {
         self.0 as usize
     }
+
+    pub fn name(item: impl Into<Color>) -> &'static str {
+        match item.into().0 {
+            1 => "Black",
+            2 => "White",
+            3 => "Blue",
+            4 => "Red",
+            _ => "???",
+        }
+    }
 }
 
 impl Default for Color {
     fn default() -> Self {
         Color::empty()
+    }
+}
+
+impl From<u8> for Color {
+    fn from(v: u8) -> Self {
+        Color(v)
     }
 }
 
@@ -236,11 +252,13 @@ impl Game {
         size: (u8, u8),
         mods: GameModifier,
     ) -> Option<Game> {
-        if !seats.iter().all(|&t| t > 0 && t <= 3) {
+        if !seats.iter().all(|&t| t > 0 && t <= 4) {
             return None;
         }
 
-        if !(1..=7).contains(&seats.len()) || !(1..=3).contains(&komis.len()) {
+        // 7 = 3 colors, rengo
+        // 4 = 4 colors
+        if !(1..=7).contains(&seats.len()) || !(1..=4).contains(&komis.len()) {
             return None;
         }
 

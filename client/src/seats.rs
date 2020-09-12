@@ -5,6 +5,7 @@ use crate::game::GameState;
 use crate::game_view::*;
 use crate::message::{self, ClientMessage};
 use crate::networking;
+use shared::game::Color;
 
 pub struct SeatList {
     link: ComponentLink<Self>,
@@ -64,12 +65,7 @@ impl Component for SeatList {
             .iter()
             .enumerate()
             .map(|(idx, (occupant, color))| {
-                let colorname = match color {
-                    1 => "Black",
-                    2 => "White",
-                    3 => "Blue",
-                    _ => "???",
-                };
+                let colorname = Color::name(*color);
 
                 let scoretext = match scores {
                     Some(scores) => {
