@@ -8,7 +8,6 @@ use crate::game;
 //                              Client messages                              //
 ///////////////////////////////////////////////////////////////////////////////
 
-
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum GameAction {
     Place(u32, u32),
@@ -46,7 +45,6 @@ pub enum ClientMessage {
 ///////////////////////////////////////////////////////////////////////////////
 //                              Server messages                              //
 ///////////////////////////////////////////////////////////////////////////////
-
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Profile {

@@ -40,6 +40,7 @@ pub enum Msg {
     ToggleHiddenMove,
     ToggleOneColor,
     ToggleNoHistory,
+    ToggleNPlusOne,
     SetHiddenMoveCount(u32),
     SetPonnukiValue(i32),
     OnCreate,
@@ -135,6 +136,15 @@ impl Component for CreateGameView {
                     None => Some(game::HiddenMoveGo {
                         placement_count: 5,
                         teams_share_stones: true,
+                    }),
+                    Some(_) => None,
+                };
+                true
+            }
+            Msg::ToggleNPlusOne => {
+                self.mods.n_plus_one = match &self.mods.n_plus_one {
+                    None => Some(game::NPlusOne {
+                        length: 4
                     }),
                     Some(_) => None,
                 };
@@ -334,6 +344,16 @@ impl Component for CreateGameView {
                             <input
                                 type="checkbox"
                                 class="toggle"
+                                checked=self.mods.n_plus_one.is_some()
+                                onclick=self.link.callback(move |_| Msg::ToggleNPlusOne) />
+                            <label onclick=self.link.callback(move |_| Msg::ToggleNPlusOne)>
+                                {"4+1"}
+                            </label>
+                        </li>
+                        <li>
+                            <input
+                                type="checkbox"
+                                class="toggle"
                                 checked=self.mods.ponnuki_is_points.is_some()
                                 onclick=self.link.callback(move |_| Msg::TogglePonnuki) />
                             <label onclick=self.link.callback(move |_| Msg::TogglePonnuki)>{"Ponnuki is: "}</label>
@@ -394,6 +414,9 @@ impl Component for CreateGameView {
                 </p>
                 <p>
                     {r#"No history: No one can browse the past moves during the game."#}
+                </p>
+                <p>
+                    {r#"4+1: You get an extra turn when you make a row of exactly 4 stones."#}
                 </p>
                 </div>
             </div>

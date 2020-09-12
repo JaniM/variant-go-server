@@ -14,7 +14,6 @@ pub use board::{Board, Point};
 //                                    Data                                   //
 ///////////////////////////////////////////////////////////////////////////////
 
-
 pub type GroupVec<T> = TinyVec<[T; 8]>;
 
 pub type Visibility = Bitmap<typenum::U16>;
@@ -93,7 +92,6 @@ pub struct Group {
 //                                Game action                                //
 ///////////////////////////////////////////////////////////////////////////////
 
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ActionKind {
     Place(u32, u32),
@@ -128,7 +126,6 @@ impl GameAction {
 //                               Game modifiers                              //
 ///////////////////////////////////////////////////////////////////////////////
 
-
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ZenGo {
     pub color_count: u8,
@@ -146,6 +143,13 @@ pub struct HiddenMoveGo {
 pub enum VisibilityMode {
     /// Display all stones as the same color for both players.
     OneColor,
+}
+
+/// Based on the 4+1 variant where a player gets an extra turn if they make
+/// exactly four in a row. Adjusted for any N, giving N+1.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct NPlusOne {
+    pub length: u8,
 }
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
@@ -172,12 +176,14 @@ pub struct GameModifier {
     /// Prevents looking at history during the game. Especially handy for one color go.
     #[serde(default)]
     pub no_history: bool,
+
+    #[serde(default)]
+    pub n_plus_one: Option<NPlusOne>,
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 //                                   State                                   //
 ///////////////////////////////////////////////////////////////////////////////
-
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct BoardHistory {
@@ -186,6 +192,7 @@ pub struct BoardHistory {
     pub board_visibility: Option<VisibilityBoard>,
     pub state: GameState,
     pub points: GroupVec<i32>,
+    pub turn: usize,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -214,7 +221,6 @@ pub struct Game {
 ///////////////////////////////////////////////////////////////////////////////
 //                                  Actions                                  //
 ///////////////////////////////////////////////////////////////////////////////
-
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum TakeSeatError {
@@ -246,7 +252,6 @@ pub type MakeActionResult<T = ActionChange> = Result<T, MakeActionError>;
 ///////////////////////////////////////////////////////////////////////////////
 //                                  Outputs                                  //
 ///////////////////////////////////////////////////////////////////////////////
-
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct GameView {
@@ -284,7 +289,6 @@ struct GameReplay {
 ///////////////////////////////////////////////////////////////////////////////
 //                               Implementation                              //
 ///////////////////////////////////////////////////////////////////////////////
-
 
 impl Game {
     pub fn standard(
@@ -336,6 +340,7 @@ impl Game {
                     board_visibility: None,
                     state: GameState::play(seats.len()),
                     points: komis.clone(),
+                    turn: 0,
                 }],
                 capture_count: 0,
                 komis,

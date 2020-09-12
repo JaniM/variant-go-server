@@ -1,3 +1,5 @@
+mod n_plus_one;
+
 use crate::game::{
     find_groups, ActionChange, ActionKind, Board, BoardHistory, Color, GameState, Group, GroupVec,
     MakeActionError, MakeActionResult, Point, Seat, SharedState, VisibilityBoard,
@@ -229,9 +231,26 @@ impl PlayState {
 
         self.superko(shared, captures, hash)?;
 
-        shared.turn += 1;
-        if shared.turn >= shared.seats.len() {
-            shared.turn = 0;
+        let new_turn = if let Some(rule) = &shared.mods.n_plus_one {
+            use n_plus_one::NPlusOneResult::*;
+            match n_plus_one::check(
+                &points_played,
+                &shared.board,
+                shared.board_visibility.as_mut(),
+                rule,
+            ) {
+                ExtraTurn => true,
+                Nothing => false,
+            }
+        } else {
+            false
+        };
+
+        if !new_turn {
+            shared.turn += 1;
+            if shared.turn >= shared.seats.len() {
+                shared.turn = 0;
+            }
         }
 
         self.last_stone = Some(points_played);
@@ -245,6 +264,7 @@ impl PlayState {
             board_visibility: shared.board_visibility.clone(),
             state: GameState::Play(self.clone()),
             points: shared.points.clone(),
+            turn: shared.turn,
         });
         shared.capture_count += captures;
 
@@ -260,18 +280,19 @@ impl PlayState {
             }
         }
 
+        shared.turn += 1;
+        if shared.turn >= shared.seats.len() {
+            shared.turn = 0;
+        }
+
         shared.board_history.push(BoardHistory {
             hash: shared.board.hash(),
             board: shared.board.clone(),
             board_visibility: shared.board_visibility.clone(),
             state: GameState::Play(self.clone()),
             points: shared.points.clone(),
+            turn: shared.turn,
         });
-
-        shared.turn += 1;
-        if shared.turn >= shared.seats.len() {
-            shared.turn = 0;
-        }
 
         if self.players_passed.iter().all(|x| *x) {
             for passed in &mut self.players_passed {
@@ -305,11 +326,7 @@ impl PlayState {
         shared.board = history.board.clone();
         shared.board_visibility = history.board_visibility.clone();
         shared.points = history.points.clone();
-        shared.turn = if shared.turn == 0 {
-            shared.seats.len() - 1
-        } else {
-            shared.turn - 1
-        };
+        shared.turn = history.turn;
 
         *self = history.state.assume::<PlayState>().clone();
 

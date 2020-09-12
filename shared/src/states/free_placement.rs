@@ -130,6 +130,7 @@ impl FreePlacement {
                 board_visibility: shared.board_visibility.clone(),
                 state: state.clone(),
                 points: shared.points.clone(),
+                turn: 0,
             }];
 
             return Ok(ActionChange::SwapState(state));
