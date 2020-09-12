@@ -51,7 +51,7 @@ pub fn check(
             }
         }
 
-        line_points.drain(..);
+        line_points.clear();
 
         // Horizontal /////////////////////////////////////////////////////////
 
@@ -76,6 +76,8 @@ pub fn check(
                 }
             }
         }
+
+        line_points.clear();
 
         matched = vertical_match || horizontal_match;
     }
