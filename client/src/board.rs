@@ -20,6 +20,8 @@ pub struct Board {
     render_loop: Option<Box<dyn Task>>,
     mouse_pos: Option<(f64, f64)>,
     selection_pos: Option<(u32, u32)>,
+    width: u32,
+    height: u32,
 }
 
 #[derive(Properties, Clone, PartialEq)]
@@ -49,6 +51,8 @@ impl Component for Board {
             render_loop: None,
             mouse_pos: None,
             selection_pos: None,
+            width: 0,
+            height: 0,
         }
     }
 
@@ -99,6 +103,9 @@ impl Component for Board {
             closure.forget();
         }
 
+        self.width = canvas.width();
+        self.height = canvas.height();
+
         self.canvas = Some(canvas);
         self.canvas2d = Some(canvas2d);
 
@@ -132,7 +139,12 @@ impl Component for Board {
                 canvas.set_width(scaled_size as u32);
                 canvas.set_height(scaled_size as u32);
                 let _ = canvas.style().set_property("width", &format!("{}px", size));
-                let _ = canvas.style().set_property("height", &format!("{}px", size));
+                let _ = canvas
+                    .style()
+                    .set_property("height", &format!("{}px", size));
+
+                self.width = size as u32;
+                self.height = size as u32;
             }
             self.render_gl(0.0).unwrap();
             false
@@ -143,19 +155,16 @@ impl Component for Board {
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         let game = &self.props.game;
-        let canvas = &self.canvas;
-        let mouse_to_coord = |p: (f64, f64)| {
-            let canvas = canvas.as_ref().expect("Canvas not initialized!");
-            match game.mods.pixel {
-                true => (
-                    (p.0 / (canvas.width() as f64 / game.size.0 as f64) + 0.5) as u32,
-                    (p.1 / (canvas.width() as f64 / game.size.1 as f64) + 0.5) as u32,
-                ),
-                false => (
-                    (p.0 / (canvas.width() as f64 / game.size.0 as f64)) as u32,
-                    (p.1 / (canvas.width() as f64 / game.size.1 as f64)) as u32,
-                ),
-            }
+        let width = self.width as f64;
+        let mouse_to_coord = |p: (f64, f64)| match game.mods.pixel {
+            true => (
+                (p.0 / (width / game.size.0 as f64) + 0.5) as u32,
+                (p.1 / (width / game.size.1 as f64) + 0.5) as u32,
+            ),
+            false => (
+                (p.0 / (width / game.size.0 as f64)) as u32,
+                (p.1 / (width / game.size.1 as f64)) as u32,
+            ),
         };
 
         match msg {
