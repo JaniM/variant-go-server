@@ -24,6 +24,7 @@ pub struct GamePane {
     callbacks: Callbacks,
     game_store: GameStore,
     size: i32,
+    middle_pane_ref: NodeRef,
     _key_listener: KeyListenerHandle,
     _resize_task: ResizeTask,
 }
@@ -74,18 +75,23 @@ impl Component for GamePane {
         );
 
         let resize_task = ResizeService::new().register(link.callback(Msg::ResizeWindow));
-        let dimensions =
-            WindowDimensions::get_dimensions(&web_sys::window().expect("window not found"));
-        let size = size_from_dimensions(dimensions);
 
         GamePane {
             link,
             props,
             callbacks,
             game_store,
-            size,
+            size: 800,
+            middle_pane_ref: NodeRef::default(),
             _key_listener: key_listener,
             _resize_task: resize_task,
+        }
+    }
+
+    fn rendered(&mut self, first_render: bool) {
+        if first_render {
+            let dimensions = WindowDimensions::get_dimensions(&web_sys::window().unwrap());
+            self.link.send_message(Msg::ResizeWindow(dimensions));
         }
     }
 
@@ -103,7 +109,7 @@ impl Component for GamePane {
                 self.game_store.set_game_history(None);
             }
             Msg::ResizeWindow(dimensions) => {
-                self.size = size_from_dimensions(dimensions);
+                self.size = size_from_dimensions(&self.middle_pane_ref, dimensions);
                 return true;
             }
             Msg::None => {}
@@ -234,18 +240,19 @@ impl Component for GamePane {
             </div>
         };
 
-        let game_container_style = format!("width: {}px; margin: auto 0;", self.size);
+        let game_container_style = "margin: auto 0;"; //format!("width: {}px; margin: auto 0;", self.size);
 
         html!(
             <>
-            <div style="flex-grow: 1; margin: 10px; display: flex; justify-content: center;">
+            <div ref=self.middle_pane_ref.clone()
+                 style="flex-grow: 1; margin: 10px; display: flex; justify-content: center;">
                 <div style=game_container_style>
                     <div>{"Status:"} {status} {pass_button} {cancel_button} {hidden_stones_left}</div>
                     <board::Board game=game size=self.size/>
                     {turn_bar}
                 </div>
             </div>
-            <div style="width: 300px; overflow: hidden; border-left: 2px solid #dedede; padding: 10px; padding-left: 10px;">
+            <div style="width: 300px; flex-shrink: 0; overflow: hidden; border-left: 2px solid #dedede; padding: 10px;">
                 <div><a href="https://github.com/JaniM/variant-go-server" target="_blank">{"Github"}</a>{" / "}<a href="https://discord.gg/qzqwEV4" target="_blank">{"Discord"}</a></div>
                 <div>{"Seats"}</div>
                 <SeatList game=game profiles=profiles user=user />
@@ -257,13 +264,27 @@ impl Component for GamePane {
     }
 }
 
-fn size_from_dimensions(dimensions: WindowDimensions) -> i32 {
-    // FIXME: This is naive and lazy but works well enough.
-    // The buffer is used for vertically surrounding elements.
-    let buffer = 200;
-    let mut size = i32::min(dimensions.width - 300, dimensions.height) - buffer;
-    if size < 200 {
-        size = 200;
+fn size_from_dimensions(pane: &NodeRef, window: WindowDimensions) -> i32 {
+    use web_sys::Element;
+    let pane = pane.cast::<Element>().expect("Pane not initialized");
+    let mut width = pane.client_width();
+    let mut height = pane.client_height();
+    let buffer = 50;
+
+    // This is a hack to make the canvas fit when the window is shrank.
+    let sidebars = 600;
+    if width > window.width - sidebars {
+        width = window.width - sidebars;
     }
+
+    if height > window.height {
+        height = window.height - 10;
+    }
+
+    let mut size = i32::min(width, height) - buffer;
+    if size < 500 {
+        size = 500;
+    }
+
     size
 }

@@ -123,8 +123,16 @@ impl Component for Board {
         if self.props != props {
             self.props = props;
             if let Some(canvas) = &self.canvas {
-                canvas.set_width(self.props.size as u32);
-                canvas.set_height(self.props.size as u32);
+                let window = web_sys::window().unwrap();
+                let pixel_ratio = window.device_pixel_ratio();
+
+                let size = self.props.size;
+                let scaled_size = size as f64 * pixel_ratio;
+
+                canvas.set_width(scaled_size as u32);
+                canvas.set_height(scaled_size as u32);
+                let _ = canvas.style().set_property("width", &format!("{}px", size));
+                let _ = canvas.style().set_property("height", &format!("{}px", size));
             }
             self.render_gl(0.0).unwrap();
             false

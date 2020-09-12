@@ -38,6 +38,7 @@ features = [
   "Attr",
   "CanvasRenderingContext2d",
   "CloseEvent",
+  "CssStyleDeclaration",
   'Document',
   'Element',
   "Event",
