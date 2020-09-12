@@ -4,6 +4,11 @@ use std::borrow::Cow;
 
 use crate::game;
 
+///////////////////////////////////////////////////////////////////////////////
+//                              Client messages                              //
+///////////////////////////////////////////////////////////////////////////////
+
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum GameAction {
     Place(u32, u32),
@@ -37,6 +42,11 @@ pub enum ClientMessage {
     GameAction(GameAction),
     StartGame(StartGame),
 }
+
+///////////////////////////////////////////////////////////////////////////////
+//                              Server messages                              //
+///////////////////////////////////////////////////////////////////////////////
+
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Profile {

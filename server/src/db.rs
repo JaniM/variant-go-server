@@ -16,6 +16,13 @@ fn establish_connection() -> PgConnection {
     PgConnection::establish(&database_url).unwrap_or_else(|_| panic!("Error connecting to {}", database_url))
 }
 
+///////////////////////////////////////////////////////////////////////////////
+//                              Database models                              //
+///////////////////////////////////////////////////////////////////////////////
+
+
+// User ///////////////////////////////////////////////////////////////////////
+
 #[derive(Queryable)]
 pub struct User {
     pub id: i64,
@@ -30,19 +37,7 @@ pub struct NewUser<'a> {
     pub nick: Option<&'a str>,
 }
 
-pub struct IdentifyUser {
-    pub auth_token: String,
-    pub nick: Option<String>,
-}
-
-impl Message for IdentifyUser {
-    type Result = Result<User, ()>;
-}
-
-pub struct GetUser(pub u64);
-impl Message for GetUser {
-    type Result = Result<User, ()>;
-}
+// Game ///////////////////////////////////////////////////////////////////////
 
 #[derive(Queryable, Debug)]
 pub struct Game {
@@ -59,6 +54,29 @@ pub struct NewGame<'a> {
     pub replay: Option<&'a [u8]>,
 }
 
+///////////////////////////////////////////////////////////////////////////////
+//                               Actor messages                              //
+///////////////////////////////////////////////////////////////////////////////
+
+
+// User ///////////////////////////////////////////////////////////////////////
+
+pub struct IdentifyUser {
+    pub auth_token: String,
+    pub nick: Option<String>,
+}
+
+impl Message for IdentifyUser {
+    type Result = Result<User, ()>;
+}
+
+pub struct GetUser(pub u64);
+impl Message for GetUser {
+    type Result = Result<User, ()>;
+}
+
+// Game ///////////////////////////////////////////////////////////////////////
+
 pub struct StoreGame {
     pub id: Option<u64>,
     pub name: String,
@@ -74,6 +92,11 @@ pub struct GetGame(pub u64);
 impl Message for GetGame {
     type Result = Result<Game, ()>;
 }
+
+///////////////////////////////////////////////////////////////////////////////
+//                                   Actor                                   //
+///////////////////////////////////////////////////////////////////////////////
+
 
 pub struct DbActor {
     connection: PgConnection,

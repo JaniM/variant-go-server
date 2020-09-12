@@ -10,6 +10,18 @@ pub use crate::states::GameState;
 use crate::states::PlayState;
 pub use board::{Board, Point};
 
+///////////////////////////////////////////////////////////////////////////////
+//                                    Data                                   //
+///////////////////////////////////////////////////////////////////////////////
+
+
+pub type GroupVec<T> = TinyVec<[T; 8]>;
+
+pub type Visibility = Bitmap<typenum::U16>;
+pub type VisibilityBoard = Board<Bitmap<typenum::U16>>;
+
+// Color //////////////////////////////////////////////////////////////////////
+
 #[derive(Debug, Copy, Clone, PartialEq, Hash, Serialize, Deserialize)]
 #[repr(transparent)]
 pub struct Color(pub u8);
@@ -50,6 +62,8 @@ impl From<u8> for Color {
     }
 }
 
+// Seat ///////////////////////////////////////////////////////////////////////
+
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Seat {
     pub player: Option<u64>,
@@ -64,6 +78,21 @@ impl Seat {
         }
     }
 }
+
+// Group //////////////////////////////////////////////////////////////////////
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Group {
+    pub points: GroupVec<Point>,
+    pub liberties: i32,
+    pub team: Color,
+    pub alive: bool,
+}
+
+///////////////////////////////////////////////////////////////////////////////
+//                                Game action                                //
+///////////////////////////////////////////////////////////////////////////////
+
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ActionKind {
@@ -95,15 +124,10 @@ impl GameAction {
     }
 }
 
-pub type GroupVec<T> = TinyVec<[T; 8]>;
+///////////////////////////////////////////////////////////////////////////////
+//                               Game modifiers                              //
+///////////////////////////////////////////////////////////////////////////////
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Group {
-    pub points: GroupVec<Point>,
-    pub liberties: i32,
-    pub team: Color,
-    pub alive: bool,
-}
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ZenGo {
@@ -150,8 +174,10 @@ pub struct GameModifier {
     pub no_history: bool,
 }
 
-pub type Visibility = Bitmap<typenum::U16>;
-pub type VisibilityBoard = Board<Bitmap<typenum::U16>>;
+///////////////////////////////////////////////////////////////////////////////
+//                                   State                                   //
+///////////////////////////////////////////////////////////////////////////////
+
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct BoardHistory {
@@ -185,6 +211,11 @@ pub struct Game {
     pub actions: Vec<GameAction>,
 }
 
+///////////////////////////////////////////////////////////////////////////////
+//                                  Actions                                  //
+///////////////////////////////////////////////////////////////////////////////
+
+
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum TakeSeatError {
     DoesNotExist,
@@ -211,6 +242,11 @@ pub enum ActionChange {
 }
 
 pub type MakeActionResult<T = ActionChange> = Result<T, MakeActionError>;
+
+///////////////////////////////////////////////////////////////////////////////
+//                                  Outputs                                  //
+///////////////////////////////////////////////////////////////////////////////
+
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct GameView {
@@ -244,6 +280,11 @@ struct GameReplay {
     seats: GroupVec<u8>,
     size: (u8, u8),
 }
+
+///////////////////////////////////////////////////////////////////////////////
+//                               Implementation                              //
+///////////////////////////////////////////////////////////////////////////////
+
 
 impl Game {
     pub fn standard(

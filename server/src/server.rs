@@ -15,6 +15,13 @@ macro_rules! catch {
     };
 }
 
+///////////////////////////////////////////////////////////////////////////////
+//                               Actor messages                              //
+///////////////////////////////////////////////////////////////////////////////
+
+
+// Output /////////////////////////////////////////////////////////////////////
+
 #[derive(Message, Clone)]
 #[rtype(result = "()")]
 pub enum Message {
@@ -25,6 +32,8 @@ pub enum Message {
     Identify(Profile),
     UpdateProfile(Profile),
 }
+
+// Client lifetime ////////////////////////////////////////////////////////////
 
 /// New chat session is created
 #[derive(Message)]
@@ -40,6 +49,8 @@ pub struct Connect {
 pub struct Disconnect {
     pub id: usize,
 }
+
+// Rooms //////////////////////////////////////////////////////////////////////
 
 /// List of available rooms
 pub struct ListRooms;
@@ -71,6 +82,8 @@ impl actix::Message for CreateRoom {
     type Result = Result<(u32, Addr<GameRoom>), message::Error>;
 }
 
+// User management ////////////////////////////////////////////////////////////
+
 pub struct IdentifyAs {
     pub id: usize,
     pub token: Option<String>,
@@ -80,6 +93,19 @@ pub struct IdentifyAs {
 impl actix::Message for IdentifyAs {
     type Result = Result<Profile, message::Error>;
 }
+
+pub struct QueryProfile {
+    pub user_id: u64,
+}
+
+impl actix::Message for QueryProfile {
+    type Result = Result<Profile, ()>;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+//                                    Data                                   //
+///////////////////////////////////////////////////////////////////////////////
+
 
 #[derive(Clone)]
 pub struct Profile {
@@ -101,13 +127,10 @@ pub struct Room {
     pub name: String,
 }
 
-pub struct QueryProfile {
-    pub user_id: u64,
-}
+///////////////////////////////////////////////////////////////////////////////
+//                                   Actor                                   //
+///////////////////////////////////////////////////////////////////////////////
 
-impl actix::Message for QueryProfile {
-    type Result = Result<Profile, ()>;
-}
 
 /// `GameServer` manages chat rooms and responsible for coordinating chat
 /// session. implementation is super primitive
