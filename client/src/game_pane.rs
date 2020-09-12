@@ -278,7 +278,7 @@ fn size_from_dimensions(pane: &NodeRef, window: WindowDimensions) -> i32 {
     }
 
     if height > window.height {
-        height = window.height - 10;
+        height = window.height - 20;
     }
 
     let mut size = i32::min(width, height) - buffer;
