@@ -266,10 +266,10 @@ impl Component for CreateGameView {
         let oncreate = self.link.callback(|_| Msg::OnCreate);
 
         let options = html! {
-            <div style="padding: 1em;">
+            <div style="padding: 1em; flex-grow: 1;">
                 <div>
                     {"Presets:"} {presets}
-                    <span>{"Size:"} {size_selection}</span>
+                    <span>{"Size: "} {size_selection}</span>
                 </div>
                 <div>
                     {"Modifiers"}
@@ -348,7 +348,7 @@ impl Component for CreateGameView {
                                         _ => unreachable!(),
                                     }
                                 ) />
-                            {"points (can be negative)"}
+                            {" points (can be negative)"}
                         </li>
                     </ul>
                 </div>
