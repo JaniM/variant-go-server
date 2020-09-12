@@ -207,12 +207,12 @@ impl Component for Board {
 impl Board {
     fn render_gl(&mut self, _timestamp: f64) -> Result<(), JsValue> {
         // TODO: remove hardcoding for 19x19
-        let shadow_stone_colors = ["#555555", "#bbbbbb", "#7b91bd"];
-        let shadow_border_colors = ["#bbbbbb", "#555555", "#555555"];
-        let stone_colors = ["#000000", "#eeeeee", "#5074bc"];
-        let stone_colors_hidden = ["#00000080", "#eeeeee80", "#5074bc80"];
-        let border_colors = ["#555555", "#000000", "#000000"];
-        let dead_mark_color = ["#eeeeee", "#000000", "#000000"];
+        let shadow_stone_colors = ["#555555", "#bbbbbb", "#7b91bd", "#e09db4"];
+        let shadow_border_colors = ["#bbbbbb", "#555555", "#555555", "#555555"];
+        let stone_colors = ["#000000", "#eeeeee", "#5074bc", "#e0658f"];
+        let stone_colors_hidden = ["#00000080", "#eeeeee80", "#5074bc80", "#e0658f80"];
+        let border_colors = ["#555555", "#000000", "#000000", "#000000"];
+        let dead_mark_color = ["#eeeeee", "#000000", "#000000", "#000000"];
 
         let context = self
             .canvas2d

@@ -5,6 +5,7 @@ use crate::game_view::Profile;
 use crate::message::StartGame;
 use crate::networking;
 use crate::text_input::TextInput;
+use game::Color;
 use shared::game::{self, GameModifier};
 
 #[derive(Copy, Clone, PartialEq, Debug)]
@@ -12,7 +13,8 @@ pub enum Preset {
     Standard,
     Rengo2v2,
     ThreeColor,
-    ThreeColorRengo,
+    FourColor,
+    ThreeColorRengo, // why?
 }
 
 pub struct CreateGameView {
@@ -75,6 +77,7 @@ impl Component for CreateGameView {
                     Preset::Standard => (vec![1, 2], vec![0, 15], 19),
                     Preset::Rengo2v2 => (vec![1, 2, 1, 2], vec![0, 15], 19),
                     Preset::ThreeColor => (vec![1, 2, 3], vec![0, 0, 0], 13),
+                    Preset::FourColor => (vec![1, 2, 3, 4], vec![0, 0, 0, 0], 13),
                     Preset::ThreeColorRengo => (vec![1, 2, 3, 1, 2, 3], vec![0, 0, 0], 13),
                 };
                 self.seats = seats;
@@ -184,14 +187,7 @@ impl Component for CreateGameView {
             .iter()
             .enumerate()
             .map(|(idx, team)| {
-                let color = match team {
-                    1 => "Black",
-                    2 => "White",
-                    3 => "Blue",
-                    _ => "???",
-                };
-
-                let header = format!("Seat {} - {}", idx, color);
+                let header = format!("Seat {} - {}", idx, Color::name(*team));
 
                 html! { <li> {header} </li> }
             })
@@ -202,12 +198,7 @@ impl Component for CreateGameView {
             .iter()
             .enumerate()
             .map(|(idx, &amount)| {
-                let color = match idx + 1 {
-                    1 => "Black",
-                    2 => "White",
-                    3 => "Blue",
-                    _ => "???",
-                };
+                let color = Color::name(idx as u8 + 1);
 
                 let header = format!("{}: {:.1}", color, amount as f32 / 2.);
 
@@ -223,9 +214,15 @@ impl Component for CreateGameView {
                 <li><a href="#" onclick=self.link.callback(|_| Msg::LoadPreset(Preset::Rengo2v2))>
                     {"Rengo 2v2"}
                 </a></li>
-                <li><a href="#" onclick=self.link.callback(|_| Msg::LoadPreset(Preset::ThreeColor))>
-                    {"Three color go"}
-                </a></li>
+                <li>
+                    <a href="#" onclick=self.link.callback(|_| Msg::LoadPreset(Preset::ThreeColor))>
+                        {"Three color go"}
+                    </a>
+                    {" / "}
+                    <a href="#" onclick=self.link.callback(|_| Msg::LoadPreset(Preset::FourColor))>
+                        {"Four color go"}
+                    </a>
+                </li>
                 <li><a href="#" onclick=self.link.callback(|_| Msg::LoadPreset(Preset::ThreeColorRengo))>
                     {"Three color go (rengo)"}
                 </a></li>
