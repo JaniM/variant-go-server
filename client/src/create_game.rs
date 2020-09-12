@@ -255,14 +255,8 @@ impl Component for CreateGameView {
 
         let oncreate = self.link.callback(|_| Msg::OnCreate);
 
-        html! {
-            <div style="flex-grow: 1; margin: 10px; display: flex; justify-content: center;">
-            <div style="width: 800px; height: 1000px; word-break: normal; margin: auto 0;">
-                <h2>{"Create game"}</h2>
-                <span>
-                    {"Name "}
-                    <TextInput value=&self.name onsubmit=self.link.callback(Msg::SetName) />
-                </span>
+        let options = html! {
+            <div style="padding: 1em;">
                 <div>
                     {"Presets:"} {presets}
                     <span>{"Size:"} {size_selection}</span>
@@ -336,13 +330,29 @@ impl Component for CreateGameView {
                         </li>
                     </ul>
                 </div>
-                <div>
-                    {"Seats:"}
-                    <ul>{seats}</ul>
-                </div>
-                <div>
-                    {"Komis:"}
-                    <ul>{komis}</ul>
+            </div>
+        };
+
+        html! {
+            <div style="flex-grow: 1; margin: 10px; display: flex; justify-content: center;">
+            <div style="width: 800px; word-break: normal; margin: auto 0;">
+                <h2>{"Create game"}</h2>
+                <span>
+                    {"Name "}
+                    <TextInput value=&self.name onsubmit=self.link.callback(Msg::SetName) />
+                </span>
+                <div style="display: flex;">
+                    {options}
+                    <div style="border-left: 1px solid #dedede; padding: 1em;">
+                        <div>
+                            {"Seats:"}
+                            <ul>{seats}</ul>
+                        </div>
+                        <div>
+                            {"Komis:"}
+                            <ul>{komis}</ul>
+                        </div>
+                    </div>
                 </div>
                 <button onclick=oncreate>{"Create"}</button>
                 <div>
