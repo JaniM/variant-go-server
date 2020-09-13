@@ -268,17 +268,13 @@ fn size_from_dimensions(pane: &NodeRef, window: WindowDimensions) -> i32 {
     use web_sys::Element;
     let pane = pane.cast::<Element>().expect("Pane not initialized");
     let mut width = pane.client_width();
-    let mut height = pane.client_height();
+    let height = window.height - 20;
     let buffer = 50;
 
     // This is a hack to make the canvas fit when the window is shrank.
     let sidebars = 600;
     if width > window.width - sidebars {
         width = window.width - sidebars;
-    }
-
-    if height > window.height {
-        height = window.height - 20;
     }
 
     let mut size = i32::min(width, height) - buffer;
