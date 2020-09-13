@@ -79,7 +79,7 @@ pub fn check(
 
         line_points.clear();
 
-        // Diagonal ///////////////////////////////////////////////////////////
+        // Diagonal top left - bottom right ///////////////////////////////////
 
         let mut p = point_played;
         while p.0 > 0 && p.1 > 0 {
@@ -101,9 +101,9 @@ pub fn check(
             p.1 += 1;
         }
 
-        let diagonal_match = line_points.len() == rule.length as usize;
+        let diagonal_tlbr_match = line_points.len() == rule.length as usize;
 
-        if diagonal_match {
+        if diagonal_tlbr_match {
             if let Some(visibility) = visibility.as_mut() {
                 for &p in &line_points {
                     *visibility.point_mut(p) = Visibility::new();
@@ -113,7 +113,53 @@ pub fn check(
 
         line_points.clear();
 
-        matched = matched || vertical_match || horizontal_match || diagonal_match;
+        // Diagonal bottom left - top right ///////////////////////////////////
+
+        let mut p = point_played;
+        while p.0 > 0 {
+            p.0 -= 1;
+            p.1 += 1;
+
+            if !board.point_within(p) {
+                break;
+            }
+
+            if add_point(&mut line_points, p) {
+                break;
+            }
+        }
+
+        let mut p = point_played;
+        while board.point_within(p) {
+            if add_point(&mut line_points, p) {
+                break;
+            }
+
+            if p.1 == 0 {
+                break;
+            }
+
+            p.0 += 1;
+            p.1 -= 1;
+        }
+
+        let diagonal_bltr_match = line_points.len() == rule.length as usize;
+
+        if diagonal_bltr_match {
+            if let Some(visibility) = visibility.as_mut() {
+                for &p in &line_points {
+                    *visibility.point_mut(p) = Visibility::new();
+                }
+            }
+        }
+
+        line_points.clear();
+
+        matched = matched
+            || vertical_match
+            || horizontal_match
+            || diagonal_tlbr_match
+            || diagonal_bltr_match;
     }
 
     if matched {
