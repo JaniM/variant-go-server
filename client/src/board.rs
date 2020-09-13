@@ -54,7 +54,7 @@ impl Component for Board {
             selection_pos: None,
             width: 0,
             height: 0,
-            edge_size: 30,
+            edge_size: 40,
         }
     }
 
@@ -330,7 +330,9 @@ impl Board {
 
         // Coordinates ////////////////////////////////////////////////////////
 
-        context.set_font("bold 20px serifd");
+        let from_edge = edge_size - 20.0;
+
+        context.set_font("bold 24px serifd");
 
         context.set_text_align("center");
         context.set_text_baseline("middle");
@@ -338,10 +340,10 @@ impl Board {
         for y in 0..game.size.1 {
             let text = (game.size.1 - y).to_string();
             let y = y as f64 + 0.5;
-            context.fill_text(&text, edge_size - 15.0, edge_size + y as f64 * size + 2.0)?;
+            context.fill_text(&text, from_edge, edge_size + y as f64 * size + 2.0)?;
             context.fill_text(
                 &text,
-                canvas.width() as f64 - edge_size + 15.0,
+                canvas.width() as f64 - from_edge,
                 edge_size + y as f64 * size + 2.0,
             )?;
         }
@@ -356,11 +358,11 @@ impl Board {
                 .unwrap()
                 .to_string();
             let x = x as f64 + 0.5;
-            context.fill_text(&letter, edge_size + x as f64 * size, edge_size - 10.0)?;
+            context.fill_text(&letter, edge_size + x as f64 * size, from_edge)?;
             context.fill_text(
                 &letter,
                 edge_size + x as f64 * size,
-                canvas.height() as f64 - edge_size + 15.0,
+                canvas.height() as f64 - from_edge,
             )?;
         }
 
