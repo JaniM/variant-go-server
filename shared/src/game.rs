@@ -552,7 +552,7 @@ impl Game {
                     if let Some(mut visibility) = board_visibility {
                         let mut hidden_stones_left = 0;
                         for (board, visibility) in board.iter_mut().zip(&mut visibility.points) {
-                            if visibility.get(team.as_usize()) {
+                            if visibility.get(active_seat.team.as_usize()) {
                                 *board = team;
                                 if visibility.len() > 1 {
                                     hidden_stones_left += 1;
