@@ -341,7 +341,7 @@ impl Board {
             context.fill_text(&text, edge_size - 15.0, edge_size + y as f64 * size + 2.0)?;
             context.fill_text(
                 &text,
-                self.width as f64 - edge_size + 15.0,
+                canvas.width() as f64 - edge_size + 15.0,
                 edge_size + y as f64 * size + 2.0,
             )?;
         }
@@ -360,7 +360,7 @@ impl Board {
             context.fill_text(
                 &letter,
                 edge_size + x as f64 * size,
-                self.height as f64 - edge_size + 15.0,
+                canvas.height() as f64 - edge_size + 15.0,
             )?;
         }
 
