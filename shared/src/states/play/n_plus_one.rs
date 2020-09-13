@@ -79,7 +79,41 @@ pub fn check(
 
         line_points.clear();
 
-        matched = vertical_match || horizontal_match;
+        // Diagonal ///////////////////////////////////////////////////////////
+
+        let mut p = point_played;
+        while p.0 > 0 && p.1 > 0 {
+            p.0 -= 1;
+            p.1 -= 1;
+
+            if add_point(&mut line_points, p) {
+                break;
+            }
+        }
+
+        let mut p = point_played;
+        while board.point_within(p) {
+            if add_point(&mut line_points, p) {
+                break;
+            }
+
+            p.0 += 1;
+            p.1 += 1;
+        }
+
+        let diagonal_match = line_points.len() == rule.length as usize;
+
+        if diagonal_match {
+            if let Some(visibility) = visibility.as_mut() {
+                for &p in &line_points {
+                    *visibility.point_mut(p) = Visibility::new();
+                }
+            }
+        }
+
+        line_points.clear();
+
+        matched = matched || vertical_match || horizontal_match || diagonal_match;
     }
 
     if matched {

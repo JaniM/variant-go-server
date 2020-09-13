@@ -435,7 +435,7 @@ impl Component for CreateGameView {
                     {r#"No history: No one can browse the past moves during the game."#}
                 </p>
                 <p>
-                    {r#"N+1: You get an extra turn when you make a row of exactly N stones."#}
+                    {r#"N+1: You get an extra turn when you make a row of exactly N stones horizontally, vertically or diagonally."#}
                 </p>
                 </div>
             </div>
