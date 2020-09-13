@@ -524,8 +524,8 @@ impl Board {
                     context.fill_rect(
                         edge_size + (x + 1. / 3.) * size,
                         edge_size + (y + 1. / 3.) * size,
-                        edge_size + (1. / 3.) * size,
-                        edge_size + (1. / 3.) * size,
+                        (1. / 3.) * size,
+                        (1. / 3.) * size,
                     );
                 }
             }
