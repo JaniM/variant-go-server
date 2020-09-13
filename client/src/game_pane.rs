@@ -240,7 +240,7 @@ impl Component for GamePane {
             </div>
         };
 
-        let game_container_style = "margin: auto 0;"; //format!("width: {}px; margin: auto 0;", self.size);
+        let game_container_style = format!("height: {}px; margin: auto 0;", self.size + 70);
 
         html!(
             <>
