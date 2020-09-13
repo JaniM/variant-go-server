@@ -25,6 +25,7 @@ pub struct GamePane {
     game_store: GameStore,
     size: i32,
     middle_pane_ref: NodeRef,
+    window_size: WindowDimensions,
     _key_listener: KeyListenerHandle,
     _resize_task: ResizeTask,
 }
@@ -83,6 +84,10 @@ impl Component for GamePane {
             game_store,
             size: 800,
             middle_pane_ref: NodeRef::default(),
+            window_size: WindowDimensions {
+                width: 0,
+                height: 0,
+            },
             _key_listener: key_listener,
             _resize_task: resize_task,
         }
@@ -109,6 +114,10 @@ impl Component for GamePane {
                 self.game_store.set_game_history(None);
             }
             Msg::ResizeWindow(dimensions) => {
+                self.window_size = WindowDimensions {
+                    width: dimensions.width,
+                    height: dimensions.height,
+                };
                 self.size = size_from_dimensions(&self.middle_pane_ref, dimensions);
                 return true;
             }
@@ -240,16 +249,20 @@ impl Component for GamePane {
             </div>
         };
 
-        let game_container_style = format!("height: {}px; margin: auto 0;", self.size + 70);
+        let game_container_style = "margin: auto 0;";
+        let game_wrapper_style =
+            format!("height: {}px; display: flex;", self.window_size.height - 20);
 
         html!(
             <>
             <div ref=self.middle_pane_ref.clone()
                  style="flex-grow: 1; margin: 10px; display: flex; justify-content: center;">
-                <div style=game_container_style>
-                    <div>{"Status:"} {status} {pass_button} {cancel_button} {hidden_stones_left}</div>
-                    <board::Board game=game size=self.size/>
-                    {turn_bar}
+                <div style=game_wrapper_style>
+                    <div style=game_container_style>
+                        <div>{"Status:"} {status} {pass_button} {cancel_button} {hidden_stones_left}</div>
+                        <board::Board game=game size=self.size/>
+                        {turn_bar}
+                    </div>
                 </div>
             </div>
             <div style="width: 300px; flex-shrink: 0; overflow: hidden; border-left: 2px solid #dedede; padding: 10px;">
