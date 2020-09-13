@@ -54,7 +54,7 @@ impl Component for Board {
             selection_pos: None,
             width: 0,
             height: 0,
-            edge_size: 10,
+            edge_size: 30,
         }
     }
 
@@ -326,6 +326,42 @@ impl Board {
         };
         for &(x, y) in points {
             draw_stone((x as _, y as _), size / 4., true, false)?;
+        }
+
+        // Coordinates ////////////////////////////////////////////////////////
+
+        context.set_font("bold 20px serifd");
+
+        context.set_text_align("center");
+        context.set_text_baseline("middle");
+
+        for y in 0..game.size.1 {
+            let text = (game.size.1 - y).to_string();
+            let y = y as f64 + 0.5;
+            context.fill_text(&text, edge_size - 15.0, edge_size + y as f64 * size + 2.0)?;
+            context.fill_text(
+                &text,
+                self.width as f64 - edge_size + 15.0,
+                edge_size + y as f64 * size + 2.0,
+            )?;
+        }
+
+        context.set_text_align("center");
+        context.set_text_baseline("baseline");
+
+        for x in 0..game.size.0 {
+            let letter = ('A'..'I')
+                .chain('J'..'Z')
+                .nth(x as usize)
+                .unwrap()
+                .to_string();
+            let x = x as f64 + 0.5;
+            context.fill_text(&letter, edge_size + x as f64 * size, edge_size - 10.0)?;
+            context.fill_text(
+                &letter,
+                edge_size + x as f64 * size,
+                self.height as f64 - edge_size + 15.0,
+            )?;
         }
 
         // Mouse hover display ////////////////////////////////////////////////
