@@ -467,69 +467,73 @@ impl Board {
 
         // States /////////////////////////////////////////////////////////////
 
-        match &game.state {
-            GameState::Scoring(scoring) | GameState::Done(scoring) => {
-                for group in &scoring.groups {
-                    if group.alive {
-                        continue;
+        if game.history.is_none() {
+            match &game.state {
+                GameState::Scoring(scoring) | GameState::Done(scoring) => {
+                    for group in &scoring.groups {
+                        if group.alive {
+                            continue;
+                        }
+
+                        for &(x, y) in &group.points {
+                            context.set_line_width(2.0);
+                            context.set_stroke_style(&JsValue::from_str(
+                                dead_mark_color[group.team.0 as usize - 1],
+                            ));
+
+                            context.set_stroke_style(&JsValue::from_str(
+                                dead_mark_color[group.team.0 as usize - 1],
+                            ));
+
+                            context.begin_path();
+                            context.move_to(
+                                edge_size + (x as f64 + 0.2) * size,
+                                edge_size + (y as f64 + 0.2) * size,
+                            );
+                            context.line_to(
+                                edge_size + (x as f64 + 0.8) * size,
+                                edge_size + (y as f64 + 0.8) * size,
+                            );
+                            context.stroke();
+
+                            context.begin_path();
+                            context.move_to(
+                                edge_size + (x as f64 + 0.8) * size,
+                                edge_size + (y as f64 + 0.2) * size,
+                            );
+                            context.line_to(
+                                edge_size + (x as f64 + 0.2) * size,
+                                edge_size + (y as f64 + 0.8) * size,
+                            );
+                            context.stroke();
+                        }
                     }
 
-                    for &(x, y) in &group.points {
-                        context.set_line_width(2.0);
+                    for (idx, &color) in scoring.points.points.iter().enumerate() {
+                        let x = (idx % board_size) as f64;
+                        let y = (idx / board_size) as f64;
+
+                        if color.is_empty() {
+                            continue;
+                        }
+
+                        context
+                            .set_fill_style(&JsValue::from_str(stone_colors[color.0 as usize - 1]));
+
                         context.set_stroke_style(&JsValue::from_str(
-                            dead_mark_color[group.team.0 as usize - 1],
+                            border_colors[color.0 as usize - 1],
                         ));
 
-                        context.set_stroke_style(&JsValue::from_str(
-                            dead_mark_color[group.team.0 as usize - 1],
-                        ));
-
-                        context.begin_path();
-                        context.move_to(
-                            edge_size + (x as f64 + 0.2) * size,
-                            edge_size + (y as f64 + 0.2) * size,
+                        context.fill_rect(
+                            edge_size + (x + 1. / 3.) * size,
+                            edge_size + (y + 1. / 3.) * size,
+                            (1. / 3.) * size,
+                            (1. / 3.) * size,
                         );
-                        context.line_to(
-                            edge_size + (x as f64 + 0.8) * size,
-                            edge_size + (y as f64 + 0.8) * size,
-                        );
-                        context.stroke();
-
-                        context.begin_path();
-                        context.move_to(
-                            edge_size + (x as f64 + 0.8) * size,
-                            edge_size + (y as f64 + 0.2) * size,
-                        );
-                        context.line_to(
-                            edge_size + (x as f64 + 0.2) * size,
-                            edge_size + (y as f64 + 0.8) * size,
-                        );
-                        context.stroke();
                     }
                 }
-
-                for (idx, &color) in scoring.points.points.iter().enumerate() {
-                    let x = (idx % board_size) as f64;
-                    let y = (idx / board_size) as f64;
-
-                    if color.is_empty() {
-                        continue;
-                    }
-
-                    context.set_fill_style(&JsValue::from_str(stone_colors[color.0 as usize - 1]));
-
-                    context
-                        .set_stroke_style(&JsValue::from_str(border_colors[color.0 as usize - 1]));
-
-                    context.fill_rect(
-                        edge_size + (x + 1. / 3.) * size,
-                        edge_size + (y + 1. / 3.) * size,
-                        (1. / 3.) * size,
-                        (1. / 3.) * size,
-                    );
-                }
+                _ => {}
             }
-            _ => {}
         }
 
         let render_frame = self.link.callback(Msg::Render);
