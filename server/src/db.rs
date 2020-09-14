@@ -13,13 +13,13 @@ fn establish_connection() -> PgConnection {
     dotenv().ok();
 
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    PgConnection::establish(&database_url).unwrap_or_else(|_| panic!("Error connecting to {}", database_url))
+    PgConnection::establish(&database_url)
+        .unwrap_or_else(|_| panic!("Error connecting to {}", database_url))
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 //                              Database models                              //
 ///////////////////////////////////////////////////////////////////////////////
-
 
 // User ///////////////////////////////////////////////////////////////////////
 
@@ -58,7 +58,6 @@ pub struct NewGame<'a> {
 //                               Actor messages                              //
 ///////////////////////////////////////////////////////////////////////////////
 
-
 // User ///////////////////////////////////////////////////////////////////////
 
 pub struct IdentifyUser {
@@ -96,7 +95,6 @@ impl Message for GetGame {
 ///////////////////////////////////////////////////////////////////////////////
 //                                   Actor                                   //
 ///////////////////////////////////////////////////////////////////////////////
-
 
 pub struct DbActor {
     connection: PgConnection,

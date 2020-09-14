@@ -19,7 +19,6 @@ macro_rules! catch {
 //                               Actor messages                              //
 ///////////////////////////////////////////////////////////////////////////////
 
-
 // Output /////////////////////////////////////////////////////////////////////
 
 #[derive(Message, Clone)]
@@ -106,7 +105,6 @@ impl actix::Message for QueryProfile {
 //                                    Data                                   //
 ///////////////////////////////////////////////////////////////////////////////
 
-
 #[derive(Clone)]
 pub struct Profile {
     pub user_id: u64,
@@ -130,7 +128,6 @@ pub struct Room {
 ///////////////////////////////////////////////////////////////////////////////
 //                                   Actor                                   //
 ///////////////////////////////////////////////////////////////////////////////
-
 
 /// `GameServer` manages chat rooms and responsible for coordinating chat
 /// session. implementation is super primitive
