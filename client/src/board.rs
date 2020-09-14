@@ -158,10 +158,10 @@ impl Component for Board {
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         let game = &self.props.game;
         let edge_size = self.edge_size as f64;
-        let width = self.width as f64 - (edge_size);
-        let height = self.height as f64 - (edge_size);
+        let width = self.width as f64 - (2.0 * edge_size);
+        let height = self.height as f64 - (2.0 * edge_size);
         let mouse_to_coord = |mut p: (f64, f64)| -> Option<(u32, u32)> {
-            if p.0 < edge_size || p.1 < edge_size || p.0 > width || p.1 > height {
+            if p.0 < edge_size || p.1 < edge_size || p.0 > width + edge_size || p.1 > height + edge_size {
                 return None;
             }
 
