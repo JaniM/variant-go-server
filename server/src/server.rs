@@ -517,6 +517,9 @@ impl Handler<IdentifyAs> for GameServer {
             if nick.len() >= 30 {
                 return ActorResponse::r#async(fut::err(Error::other("Nickname too long")));
             }
+            if nick.is_empty() {
+                return ActorResponse::r#async(fut::err(Error::other("Nickname can't be empty")));
+            }
         }
 
         let rng = &mut self.rng;
