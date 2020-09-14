@@ -266,7 +266,13 @@ impl Component for GamePane {
                 </div>
             </div>
             <div style="width: 300px; flex-shrink: 0; overflow: hidden; border-left: 2px solid #dedede; padding: 10px;">
-                <div><a href="https://github.com/JaniM/variant-go-server" target="_blank">{"Github"}</a>{" / "}<a href="https://discord.gg/qzqwEV4" target="_blank">{"Discord"}</a></div>
+                <div>
+                    <a href="https://github.com/JaniM/variant-go-server" target="_blank">{"Github"}</a>
+                    {" / "}
+                    <a href="https://discord.gg/qzqwEV4" target="_blank">{"Discord"}</a>
+                    {" / "}
+                    <a href="https://www.patreon.com/variantgo" target="_blank">{"Support"}</a>
+                </div>
                 <div>{"Seats"}</div>
                 <SeatList game=game profiles=profiles user=user />
                 {"Users"}

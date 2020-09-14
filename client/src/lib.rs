@@ -340,7 +340,13 @@ impl Component for GameApp {
                         user=self.user.as_ref().unwrap()
                         oncreate=self.link.callback(|_| Msg::SetPane(Pane::Board)) />
                     <div style="width: 300px; overflow: hidden; border-left: 2px solid #dedede; padding: 10px; padding-left: 10px;">
-                        <div><a href="https://github.com/JaniM/variant-go-server" target="_blank">{"Github"}</a>{" / "}<a href="https://discord.gg/qzqwEV4" target="_blank">{"Discord"}</a></div>
+                        <div>
+                            <a href="https://github.com/JaniM/variant-go-server" target="_blank">{"Github"}</a>
+                            {" / "}
+                            <a href="https://discord.gg/qzqwEV4" target="_blank">{"Discord"}</a>
+                            {" / "}
+                            <a href="https://www.patreon.com/variantgo" target="_blank">{"Support"}</a>
+                        </div>
                     </div>
                 </>
             },
