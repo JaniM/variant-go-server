@@ -161,7 +161,11 @@ impl Component for Board {
         let width = self.width as f64 - (2.0 * edge_size);
         let height = self.height as f64 - (2.0 * edge_size);
         let mouse_to_coord = |mut p: (f64, f64)| -> Option<(u32, u32)> {
-            if p.0 < edge_size || p.1 < edge_size || p.0 > width + edge_size || p.1 > height + edge_size {
+            if p.0 < edge_size
+                || p.1 < edge_size
+                || p.0 > width + edge_size
+                || p.1 > height + edge_size
+            {
                 return None;
             }
 
