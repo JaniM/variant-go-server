@@ -95,6 +95,12 @@ async fn read_stdin(tx: futures_channel::mpsc::UnboundedSender<Message>) {
                     let end: u32 = words.next().and_then(|x| x.parse().ok()).unwrap_or(0);
                     (start..=end).map(ClientMessage::JoinGame).collect()
                 }
+                Some(x) if x.parse::<u32>().is_ok() => text
+                    .split(' ')
+                    .skip(1)
+                    .filter_map(|x| x.parse::<u32>().ok())
+                    .map(ClientMessage::JoinGame)
+                    .collect(),
                 _ => vec![],
             },
             _ => vec![],
