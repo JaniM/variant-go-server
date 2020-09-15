@@ -49,6 +49,11 @@ async fn read_stdin(tx: futures_channel::mpsc::UnboundedSender<Message>) {
     use tokio::io::{self, AsyncBufReadExt, BufReader};
 
     let token = std::env::var("ADMIN_TOKEN").unwrap();
+    tx.unbounded_send(Message::binary(pack(ClientMessage::Identify {
+        token: Some(token.clone()),
+        nick: None,
+    })))
+    .unwrap();
 
     let mut reader = BufReader::new(io::stdin());
     loop {
