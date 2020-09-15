@@ -381,6 +381,16 @@ impl Handler<Join> for GameServer {
     fn handle(&mut self, msg: Join, _ctx: &mut Context<Self>) -> Self::Result {
         let Join { id, room_id } = msg;
 
+        let session = match self.sessions.get(&id) {
+            Some(x) => x,
+            None => return ActorResponse::reply(Err(())),
+        };
+
+        match session.user_id {
+            Some(x) => x,
+            None => return ActorResponse::reply(Err(())),
+        };
+
         let result = self
             .leave_room(msg.id)
             .then(move |(), act, _ctx| act.join_room(id, room_id))
