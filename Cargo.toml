@@ -4,6 +4,7 @@ members = [
     "server",
     "shared",
     "store",
+    "repl",
 ]
 
 

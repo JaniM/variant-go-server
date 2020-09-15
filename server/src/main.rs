@@ -326,6 +326,12 @@ impl ClientWebSocket {
             ClientMessage::Identify { token, nick } => {
                 self.handle_identify(token, nick, ctx);
             }
+            ClientMessage::Admin(action) => {
+                self.server_addr.do_send(server::AdminMessage {
+                    client_id: self.id,
+                    action,
+                });
+            }
         };
     }
 }

@@ -54,6 +54,12 @@ pub struct Join {
     pub addr: Recipient<Message>,
 }
 
+// Control ////////////////////////////////////////////////////////////////////
+
+#[derive(Message)]
+#[rtype(result = "()")]
+pub struct Unload;
+
 ///////////////////////////////////////////////////////////////////////////////
 //                                   Actor                                   //
 ///////////////////////////////////////////////////////////////////////////////
@@ -215,5 +221,13 @@ impl Handler<GameAction> for GameRoom {
             members: self.users.iter().copied().collect(),
             view: self.game.get_view(user_id),
         });
+    }
+}
+
+impl Handler<Unload> for GameRoom {
+    type Result = ();
+
+    fn handle(&mut self, _: Unload, ctx: &mut Self::Context) -> Self::Result {
+        ctx.stop();
     }
 }

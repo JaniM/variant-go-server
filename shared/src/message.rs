@@ -27,6 +27,11 @@ pub struct StartGame {
     pub mods: game::GameModifier,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum AdminAction {
+    UnloadRoom(u32),
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, From)]
 pub enum ClientMessage {
     #[from(ignore)]
@@ -40,6 +45,7 @@ pub enum ClientMessage {
     JoinGame(u32),
     GameAction(GameAction),
     StartGame(StartGame),
+    Admin(AdminAction),
 }
 
 ///////////////////////////////////////////////////////////////////////////////

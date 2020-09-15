@@ -7,7 +7,7 @@ use uuid::Uuid;
 use crate::db;
 use crate::game_room::{self, GameRoom};
 use shared::game;
-use shared::message;
+use shared::message::{self, AdminAction};
 
 macro_rules! catch {
     ($($code:tt)+) => {
@@ -26,7 +26,6 @@ macro_rules! catch {
 pub enum Message {
     // TODO: Use a proper struct, not magic tuples
     AnnounceRoom(u32, String),
-    #[allow(dead_code)]
     CloseRoom(u32),
     Identify(Profile),
     UpdateProfile(Profile),
@@ -101,6 +100,15 @@ impl actix::Message for QueryProfile {
     type Result = Result<Profile, ()>;
 }
 
+// Admin //////////////////////////////////////////////////////////////////////
+
+#[derive(Message)]
+#[rtype(result = "()")]
+pub struct AdminMessage {
+    pub client_id: usize,
+    pub action: AdminAction,
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 //                                    Data                                   //
 ///////////////////////////////////////////////////////////////////////////////
@@ -137,13 +145,22 @@ pub struct GameServer {
     profiles: HashMap<u64, Profile>,
     rooms: HashMap<u32, Room>,
     rng: ThreadRng,
+    admin_token: Uuid,
     db: Addr<db::DbActor>,
 }
 
 impl Default for GameServer {
     fn default() -> GameServer {
+        dotenv::dotenv().ok();
+
         let rooms = HashMap::new();
         let db = SyncArbiter::start(8, db::DbActor::default);
+        let admin_token = std::env::var("ADMIN_TOKEN")
+            .map_err(|_| ())
+            .and_then(|x| Uuid::parse_str(&x).map_err(|_| ()))
+            .unwrap_or_else(|_| Uuid::from_bytes(rand::thread_rng().gen()));
+
+        println!("Admin token: {:?}", admin_token);
 
         GameServer {
             sessions: HashMap::new(),
@@ -151,6 +168,7 @@ impl Default for GameServer {
             profiles: HashMap::new(),
             rooms,
             rng: rand::thread_rng(),
+            admin_token,
             db,
         }
     }
@@ -625,5 +643,40 @@ impl Handler<QueryProfile> for GameServer {
         });
 
         ActorResponse::r#async(fut)
+    }
+}
+
+impl Handler<AdminMessage> for GameServer {
+    type Result = MessageResult<AdminMessage>;
+
+    fn handle(&mut self, msg: AdminMessage, _: &mut Context<Self>) -> Self::Result {
+        let AdminMessage { client_id, action } = msg;
+
+        macro_rules! r {
+            ($x:expr) => {
+                match $x {
+                    Some(x) => x,
+                    None => return MessageResult(()),
+                }
+            };
+        }
+
+        let session = r!(self.sessions.get(&client_id));
+        let user_id = r!(session.user_id);
+        let profile = r!(self.profiles.get(&user_id));
+
+        if profile.token != self.admin_token {
+            return MessageResult(());
+        }
+
+        match action {
+            AdminAction::UnloadRoom(room_id) => {
+                let room = r!(self.rooms.remove(&room_id));
+                room.addr.do_send(game_room::Unload);
+                self.send_global_message(Message::CloseRoom(room_id));
+            }
+        }
+
+        MessageResult(())
     }
 }
