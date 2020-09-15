@@ -10,6 +10,7 @@ use shared::message::{AdminAction, ClientMessage, ServerMessage};
 #[derive(Default)]
 struct RoomInfo {
     room_id: u32,
+    players: Vec<u64>,
     member_count: usize,
     move_count: usize,
 }
@@ -52,6 +53,7 @@ async fn main() {
                         room_id,
                         move_number,
                         members,
+                        seats,
                         ..
                     } => {
                         let mut state = state.lock().unwrap();
@@ -59,6 +61,11 @@ async fn main() {
                         room.room_id = room_id;
                         room.move_count = move_number as usize;
                         room.member_count = members.len() - 1; // Subtract self
+
+                        room.players = seats.into_iter().filter_map(|x| x.0).collect();
+                        room.players.sort_unstable();
+                        room.players.dedup();
+
                         println!(
                             "Visited room {}: {} players, {} moves",
                             room_id, room.member_count, room.move_count
@@ -156,19 +163,34 @@ async fn read_stdin(state: Arc<Mutex<State>>, tx: futures_channel::mpsc::Unbound
                     .map(|x| ClientMessage::JoinGame(x.room_id))
                     .collect()
             }
-            "prune" | "p" => match words.next() {
-                Some("below") | Some("b") => {
-                    let limit: usize = words.next().and_then(|x| x.parse().ok()).unwrap_or(0);
-                    let state = state.lock().unwrap();
-                    state
-                        .rooms
-                        .values()
-                        .filter(|x| x.move_count < limit && x.member_count == 0)
-                        .map(|x| ClientMessage::Admin(AdminAction::UnloadRoom(x.room_id)))
-                        .collect()
+            "prune" | "p" => {
+                let mut move_limit = None;
+                let mut solo = false;
+                while let Some(word) = words.next() {
+                    match word {
+                        "below" | "b" => {
+                            let limit: usize =
+                                words.next().and_then(|x| x.parse().ok()).unwrap_or(0);
+                            move_limit = Some(limit);
+                        }
+                        "solo" | "s" => {
+                            solo = true;
+                        }
+                        _ => break,
+                    }
                 }
-                _ => vec![],
-            },
+                let state = state.lock().unwrap();
+                state
+                    .rooms
+                    .values()
+                    .filter(|x| {
+                        (move_limit.is_none() || x.move_count < move_limit.unwrap_or(0))
+                            && x.member_count == 0
+                            && (!solo || x.players.len() < 2)
+                    })
+                    .map(|x| ClientMessage::Admin(AdminAction::UnloadRoom(x.room_id)))
+                    .collect()
+            }
             "quit" | "q" => std::process::exit(0),
             _ => vec![],
         };
