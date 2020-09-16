@@ -64,12 +64,6 @@ impl Store for GameStoreState {
                     return;
                 }
                 // TODO: This code needs a complete rework.
-                let min = self
-                    .history
-                    .iter()
-                    .find_position(|x| x.is_none())
-                    .map(|x| x.0)
-                    .unwrap_or(0);
                 let max = self
                     .history
                     .iter()
@@ -77,6 +71,13 @@ impl Store for GameStoreState {
                     .find_position(|x| x.is_none())
                     .map(|x| self.history.len() - x.0)
                     .unwrap_or(0);
+                let min = self
+                    .history
+                    .iter()
+                    .find_position(|x| x.is_none())
+                    .map(|x| x.0)
+                    .unwrap_or_else(|| (turn as usize).saturating_sub(5));
+
                 if (max as u32 <= turn + 5 && max as u32 >= turn)
                     || self.history.len() <= turn as usize + 5
                 {
