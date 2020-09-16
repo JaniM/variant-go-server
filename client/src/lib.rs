@@ -402,8 +402,8 @@ impl Component for GameApp {
         <div
             id="main"
             class=class
-            style="display: flex; flex-direction: row; min-height: 100vh;">
-            <div style="width: 300px; border-right: 2px solid #dedede; padding: 10px; margin-right: 10px;">
+            style="display: flex; flex-direction: row; height: 100%;">
+            <div style="width: 300px; border-right: 2px solid #dedede; padding: 10px; margin-right: 10px; max-height: 100%; overflow-y: auto;">
                 <div style="width: 100%; margin-bottom: 10px;">
                     <button
                         style="width: 100%;"
