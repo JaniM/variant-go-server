@@ -253,11 +253,37 @@ pub type MakeActionResult<T = ActionChange> = Result<T, MakeActionError>;
 //                                  Outputs                                  //
 ///////////////////////////////////////////////////////////////////////////////
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FreePlacementView {
+    pub players_ready: Vec<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum GameStateView {
+    FreePlacement(FreePlacementView),
+    Play(PlayState),
+    Scoring(ScoringState),
+    Done(ScoringState),
+}
+
+impl From<GameState> for GameStateView {
+    fn from(state: GameState) -> Self {
+        match state {
+            GameState::FreePlacement(state) => GameStateView::FreePlacement(FreePlacementView {
+                players_ready: state.players_ready,
+            }),
+            GameState::Play(state) => GameStateView::Play(state),
+            GameState::Scoring(state) => GameStateView::Scoring(state),
+            GameState::Done(state) => GameStateView::Done(state),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct GameView {
     // TODO: we need a separate state view since we have hidden information
     // currently players can cheat :F
-    pub state: GameState,
+    pub state: GameStateView,
     pub seats: GroupVec<Seat>,
     pub turn: u32,
     pub board: Vec<Color>,
@@ -597,7 +623,7 @@ impl Game {
             game_done,
         );
         GameView {
-            state: self.state.clone(),
+            state: self.state.clone().into(),
             seats: shared.seats.clone(),
             turn: shared.turn as _,
             board,

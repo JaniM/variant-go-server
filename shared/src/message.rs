@@ -96,7 +96,7 @@ pub enum ServerMessage {
         board_visibility: Option<Vec<u16>>,
         hidden_stones_left: u32,
         size: (u8, u8),
-        state: game::GameState,
+        state: game::GameStateView,
         mods: game::GameModifier,
         points: Vec<i32>,
         move_number: u32,

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use yew::prelude::*;
 
-use crate::game::GameState;
+use crate::game::GameStateView;
 use crate::game_view::*;
 use crate::message::{self, ClientMessage};
 use crate::networking;
@@ -56,7 +56,7 @@ impl Component for SeatList {
     fn view(&self) -> Html {
         let game = &self.props.game;
         let scores = match &self.props.game.state {
-            GameState::Scoring(state) | GameState::Done(state) => Some(&state.scores[..]),
+            GameStateView::Scoring(state) | GameStateView::Done(state) => Some(&state.scores[..]),
             _ => Some(&self.props.game.points[..]),
         };
 
@@ -97,9 +97,9 @@ impl Component for SeatList {
                     };
 
                     let passed = match &game.state {
-                        GameState::FreePlacement(state) if state.players_ready[idx] => " - ready!",
-                        GameState::Play(state) if state.players_passed[idx] => " - passed!",
-                        GameState::Scoring(state) if state.players_accepted[idx] => " - accepted!",
+                        GameStateView::FreePlacement(state) if state.players_ready[idx] => " - ready!",
+                        GameStateView::Play(state) if state.players_passed[idx] => " - passed!",
+                        GameStateView::Scoring(state) if state.players_accepted[idx] => " - accepted!",
                         _ => "",
                     };
 

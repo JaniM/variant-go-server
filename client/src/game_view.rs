@@ -1,4 +1,4 @@
-use crate::game::{GameHistory, GameModifier, GameState};
+use crate::game::{GameHistory, GameModifier, GameStateView};
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct GameView {
@@ -11,7 +11,7 @@ pub struct GameView {
     pub board_visibility: Option<Vec<u16>>,
     pub hidden_stones_left: u32,
     pub size: (u8, u8),
-    pub state: GameState,
+    pub state: GameStateView,
     pub mods: GameModifier,
     pub points: Vec<i32>,
     pub move_number: u32,

@@ -5,7 +5,7 @@ use web_sys::HtmlCanvasElement;
 use yew::services::{RenderService, Task};
 use yew::{html, Component, ComponentLink, Html, NodeRef, Properties, ShouldRender};
 
-use shared::game::{GameState, Visibility};
+use shared::game::{GameStateView, Visibility};
 use shared::message::{ClientMessage, GameAction};
 
 use crate::game_view::GameView;
@@ -449,7 +449,7 @@ impl Board {
 
         let last_stone = match (&game.state, &game.history) {
             (_, Some(h)) => h.last_stone.as_ref(),
-            (GameState::Play(state), _) => state.last_stone.as_ref(),
+            (GameStateView::Play(state), _) => state.last_stone.as_ref(),
             _ => None,
         };
 
@@ -473,7 +473,7 @@ impl Board {
 
         if game.history.is_none() {
             match &game.state {
-                GameState::Scoring(scoring) | GameState::Done(scoring) => {
+                GameStateView::Scoring(scoring) | GameStateView::Done(scoring) => {
                     for group in &scoring.groups {
                         if group.alive {
                             continue;

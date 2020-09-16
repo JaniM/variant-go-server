@@ -164,13 +164,13 @@ impl Component for GamePane {
             .collect::<Html>();
 
         let status = match game.state {
-            game::GameState::FreePlacement(_) => "Free placement",
-            game::GameState::Play(_) => "Active",
-            game::GameState::Scoring(_) => "Scoring",
-            game::GameState::Done(_) => "Game over!",
+            game::GameStateView::FreePlacement(_) => "Free placement",
+            game::GameStateView::Play(_) => "Active",
+            game::GameStateView::Scoring(_) => "Scoring",
+            game::GameStateView::Done(_) => "Game over!",
         };
 
-        let game_done = matches!(game.state, game::GameState::Done(_));
+        let game_done = matches!(game.state, game::GameStateView::Done(_));
 
         let hidden_stones_left = if game.hidden_stones_left > 0 {
             html!(<>{"Opponents' hidden stones left: "}{game.hidden_stones_left}</>)
@@ -179,16 +179,16 @@ impl Component for GamePane {
         };
 
         let pass_button = match game.state {
-            game::GameState::FreePlacement(_) => html!(<button onclick=pass>{"Ready"}</button>),
-            game::GameState::Play(_) => html!(<button onclick=pass>{"Pass"}</button>),
-            game::GameState::Scoring(_) => html!(<button onclick=pass>{"Accept"}</button>),
-            game::GameState::Done(_) => html!(),
+            game::GameStateView::FreePlacement(_) => html!(<button onclick=pass>{"Ready"}</button>),
+            game::GameStateView::Play(_) => html!(<button onclick=pass>{"Pass"}</button>),
+            game::GameStateView::Scoring(_) => html!(<button onclick=pass>{"Accept"}</button>),
+            game::GameStateView::Done(_) => html!(),
         };
 
         let cancel_button = match game.state {
-            game::GameState::FreePlacement(_) => html!(<button onclick=cancel>{"Clear"}</button>),
-            game::GameState::Play(_) => html!(<button onclick=cancel>{"Undo"}</button>),
-            game::GameState::Scoring(_) => html!(<button onclick=cancel>{"Cancel"}</button>),
+            game::GameStateView::FreePlacement(_) => html!(<button onclick=cancel>{"Clear"}</button>),
+            game::GameStateView::Play(_) => html!(<button onclick=cancel>{"Undo"}</button>),
+            game::GameStateView::Scoring(_) => html!(<button onclick=cancel>{"Cancel"}</button>),
             _ => html!(),
         };
 
