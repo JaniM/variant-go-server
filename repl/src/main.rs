@@ -10,6 +10,7 @@ use shared::message::{AdminAction, ClientMessage, ServerMessage};
 #[derive(Default)]
 struct RoomInfo {
     room_id: u32,
+    name: String,
     players: Vec<u64>,
     member_count: usize,
     move_count: usize,
@@ -18,6 +19,7 @@ struct RoomInfo {
 #[derive(Default)]
 struct State {
     rooms: HashMap<u32, RoomInfo>,
+    profiles: HashMap<u64, Option<String>>,
 }
 
 fn pack(msg: ClientMessage) -> Vec<u8> {
@@ -75,6 +77,7 @@ async fn main() {
                         let mut state = state.lock().unwrap();
                         let room = state.rooms.entry(room_id).or_insert_with(RoomInfo::default);
                         room.room_id = room_id;
+                        room.name = name.clone();
                         println!("New room {}: {:?}", room_id, name);
                     }
                     ServerMessage::CloseGame { room_id } => {
@@ -82,6 +85,10 @@ async fn main() {
                         if state.rooms.remove(&room_id).is_some() {
                             println!("Closed room {}", room_id);
                         }
+                    }
+                    ServerMessage::Profile(profile) => {
+                        let mut state = state.lock().unwrap();
+                        state.profiles.insert(profile.user_id, profile.nick);
                     }
                     _ => {}
                 }
@@ -106,6 +113,8 @@ async fn read_stdin(state: Arc<Mutex<State>>, tx: futures_channel::mpsc::Unbound
     })))
     .unwrap();
 
+    let mut selection = Vec::<u32>::new();
+
     let mut reader = BufReader::new(io::stdin());
     loop {
         let mut text = String::new();
@@ -118,6 +127,8 @@ async fn read_stdin(state: Arc<Mutex<State>>, tx: futures_channel::mpsc::Unbound
 
         let mut words = text.split(' ');
         let command = words.next().unwrap();
+
+        let state = state.lock().unwrap();
 
         let msgs = match command {
             "login" => vec![ClientMessage::Identify {
@@ -155,41 +166,85 @@ async fn read_stdin(state: Arc<Mutex<State>>, tx: futures_channel::mpsc::Unbound
                 _ => vec![],
             },
             "list" | "li" => vec![ClientMessage::GetGameList],
-            "visit" | "v" => {
-                let state = state.lock().unwrap();
-                state
-                    .rooms
-                    .values()
-                    .map(|x| ClientMessage::JoinGame(x.room_id))
-                    .collect()
-            }
-            "prune" | "p" => {
-                let mut move_limit = None;
-                let mut solo = false;
-                while let Some(word) = words.next() {
-                    match word {
-                        "below" | "b" => {
+            "visit" | "v" => state
+                .rooms
+                .values()
+                .map(|x| ClientMessage::JoinGame(x.room_id))
+                .collect(),
+            "prune" | "p" => selection
+                .drain(..)
+                .map(|id| ClientMessage::Admin(AdminAction::UnloadRoom(id)))
+                .collect(),
+            "select" | "s" => {
+                let changed = match words.next() {
+                    Some("all") | Some("a") => {
+                        selection = state.rooms.keys().copied().collect();
+                        true
+                    }
+                    Some("move") | Some("m") => match words.next() {
+                        Some("below") | Some("b") => {
                             let limit: usize =
                                 words.next().and_then(|x| x.parse().ok()).unwrap_or(0);
-                            move_limit = Some(limit);
+                            selection.retain(|id| state.rooms.get(id).unwrap().move_count < limit);
+                            true
                         }
-                        "solo" | "s" => {
-                            solo = true;
+                        Some("above") | Some("a") => {
+                            let limit: usize =
+                                words.next().and_then(|x| x.parse().ok()).unwrap_or(10000);
+                            selection.retain(|id| state.rooms.get(id).unwrap().move_count > limit);
+                            true
                         }
-                        _ => break,
+                        _ => false,
+                    },
+                    Some("name") | Some("n") => {
+                        let needle = words.collect::<Vec<_>>().join(" ").to_lowercase();
+                        selection.retain(|id| {
+                            state
+                                .rooms
+                                .get(id)
+                                .unwrap()
+                                .name
+                                .to_lowercase()
+                                .contains(&needle)
+                        });
+                        true
                     }
+                    Some("player") | Some("p") => match words.next() {
+                        Some("name") | Some("n") => {
+                            let needle = words.collect::<Vec<_>>().join(" ").to_lowercase();
+                            selection.retain(|id| {
+                                state
+                                    .rooms
+                                    .get(id)
+                                    .unwrap()
+                                    .players
+                                    .iter()
+                                    .flat_map(|id| state.profiles.get(id))
+                                    .flatten()
+                                    .any(|n| n.to_lowercase().contains(&needle))
+                            });
+                            true
+                        }
+                        Some("count") | Some("c") => {
+                            let limit: usize =
+                                words.next().and_then(|x| x.parse().ok()).unwrap_or(0);
+                            selection
+                                .retain(|id| state.rooms.get(id).unwrap().players.len() <= limit);
+                            true
+                        }
+                        _ => false,
+                    },
+                    Some("empty") | Some("e") => {
+                        selection.retain(|id| state.rooms.get(id).unwrap().member_count == 0);
+                        true
+                    }
+                    Some("list") | Some("l") => true,
+                    _ => false,
+                };
+                if changed {
+                    list_selection(&selection, &state);
                 }
-                let state = state.lock().unwrap();
-                state
-                    .rooms
-                    .values()
-                    .filter(|x| {
-                        (move_limit.is_none() || x.move_count < move_limit.unwrap_or(0))
-                            && x.member_count == 0
-                            && (!solo || x.players.len() < 2)
-                    })
-                    .map(|x| ClientMessage::Admin(AdminAction::UnloadRoom(x.room_id)))
-                    .collect()
+                vec![]
             }
             "quit" | "q" => std::process::exit(0),
             _ => vec![],
@@ -198,5 +253,18 @@ async fn read_stdin(state: Arc<Mutex<State>>, tx: futures_channel::mpsc::Unbound
         for msg in msgs {
             tx.unbounded_send(Message::binary(pack(msg))).unwrap();
         }
+    }
+}
+
+fn list_selection(selection: &[u32], state: &State) {
+    for id in selection {
+        let room = state.rooms.get(id).unwrap();
+        let names = room
+            .players
+            .iter()
+            .filter_map(|id| state.profiles.get(id))
+            .flatten()
+            .collect::<Vec<_>>();
+        println!("{:>4}: {:?} {:?}", id, room.name, names);
     }
 }
