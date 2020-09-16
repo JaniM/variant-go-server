@@ -1,4 +1,6 @@
 mod board;
+#[cfg(test)]
+mod tests;
 
 use serde::{Deserialize, Serialize};
 use std::collections::{HashSet, VecDeque};
@@ -8,6 +10,7 @@ use tinyvec::TinyVec;
 
 pub use crate::states::GameState;
 use crate::states::PlayState;
+use crate::states::ScoringState;
 pub use board::{Board, Point};
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -21,9 +24,15 @@ pub type VisibilityBoard = Board<Bitmap<typenum::U16>>;
 
 // Color //////////////////////////////////////////////////////////////////////
 
-#[derive(Debug, Copy, Clone, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Copy, Clone, PartialEq, Hash, Serialize, Deserialize)]
 #[repr(transparent)]
 pub struct Color(pub u8);
+
+impl std::fmt::Debug for Color {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(&self.0, f)
+    }
+}
 
 impl Color {
     pub const fn empty() -> Color {
@@ -157,6 +166,7 @@ pub struct GameModifier {
     /// Pixel go is a game mode where you place 2x2 blobs instead of a single stone.
     /// Overlapping existing stones are ignored.
     /// The blob must fit on the board.
+    #[serde(default)]
     pub pixel: bool,
 
     /// "Ponnuki is 30 points". Whenever a player captures a single stone, forming a ponnuki

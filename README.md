@@ -37,3 +37,7 @@ cd www
 npm i
 npm run start
 ```
+
+## Testing
+
+Game rules use snapshot tests powered by [insta](https://docs.rs/insta/0.16.1/insta/).
