@@ -32,6 +32,12 @@ pub enum AdminAction {
     UnloadRoom(u32),
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum ClientMode {
+    Client,
+    Integration,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, From)]
 pub enum ClientMessage {
     #[from(ignore)]
@@ -43,9 +49,26 @@ pub enum ClientMessage {
     GetGameList,
     #[from(ignore)]
     JoinGame(u32),
-    GameAction(GameAction),
+    /// `None` leaves all rooms
+    #[from(ignore)]
+    LeaveGame(Option<u32>),
+    #[from(ignore)]
+    GameAction {
+        room_id: Option<u32>,
+        action: GameAction,
+    },
     StartGame(StartGame),
     Admin(AdminAction),
+    Mode(ClientMode),
+}
+
+impl std::convert::From<GameAction> for ClientMessage {
+    fn from(action: GameAction) -> Self {
+        ClientMessage::GameAction {
+            room_id: None,
+            action,
+        }
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////

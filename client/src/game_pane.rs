@@ -186,7 +186,9 @@ impl Component for GamePane {
         };
 
         let cancel_button = match game.state {
-            game::GameStateView::FreePlacement(_) => html!(<button onclick=cancel>{"Clear"}</button>),
+            game::GameStateView::FreePlacement(_) => {
+                html!(<button onclick=cancel>{"Clear"}</button>)
+            }
             game::GameStateView::Play(_) => html!(<button onclick=cancel>{"Undo"}</button>),
             game::GameStateView::Scoring(_) => html!(<button onclick=cancel>{"Cancel"}</button>),
             _ => html!(),

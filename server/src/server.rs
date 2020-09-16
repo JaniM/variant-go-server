@@ -58,15 +58,25 @@ impl actix::Message for ListRooms {
     type Result = Vec<(u32, String)>;
 }
 
-/// Join room, if room does not exists create new one.
+/// Join room
 pub struct Join {
     /// Client id
     pub id: usize,
     pub room_id: u32,
+    pub leave_previous: bool,
 }
 
 impl actix::Message for Join {
     type Result = Result<Addr<GameRoom>, ()>;
+}
+
+#[derive(Message)]
+#[rtype(result = "()")]
+pub struct LeaveRoom {
+    /// Client id
+    pub id: usize,
+    /// Null for all
+    pub room_id: Option<u32>,
 }
 
 /// Create room, announce to clients
@@ -74,6 +84,7 @@ pub struct CreateRoom {
     /// Client id
     pub id: usize,
     pub room: message::StartGame,
+    pub leave_previous: bool,
 }
 
 impl actix::Message for CreateRoom {
@@ -125,9 +136,10 @@ pub struct Session {
     pub user_id: Option<u64>,
     pub client: Recipient<Message>,
     pub game_client: Recipient<game_room::Message>,
-    pub room_id: Option<u32>,
+    pub room_ids: Vec<u32>,
 }
 
+#[derive(Clone)]
 pub struct Room {
     pub addr: Addr<GameRoom>,
     pub name: String,
@@ -201,21 +213,31 @@ impl GameServer {
         }
     }
 
-    fn leave_room(&mut self, session_id: usize) -> impl ActorFuture<Output = (), Actor = Self> {
+    fn leave_room(
+        &mut self,
+        session_id: usize,
+        room_id: Option<u32>,
+    ) -> impl ActorFuture<Output = (), Actor = Self> {
         let session = self
             .sessions
             .get_mut(&session_id)
             .expect("session not found");
         let rooms = &self.rooms;
-        let room_addr = catch!(rooms.get(&session.room_id?)?.addr.clone());
-
-        if room_addr.is_some() {
-            session.room_id = None;
-        }
+        let rooms: Vec<_> = if let Some(room_id) = room_id {
+            session.room_ids.retain(|id| *id != room_id);
+            rooms.get(&room_id).cloned().into_iter().collect()
+        } else {
+            session
+                .room_ids
+                .drain(..)
+                .filter_map(|id| rooms.get(&id))
+                .cloned()
+                .collect()
+        };
 
         let fut = async move {
-            if let Some(room_addr) = room_addr {
-                let _ = room_addr.send(game_room::Leave { session_id }).await;
+            for room in rooms {
+                let _ = room.addr.send(game_room::Leave { session_id }).await;
             }
         };
 
@@ -236,7 +258,7 @@ impl GameServer {
         let addr = session.game_client.clone();
 
         let prefetch = if let Some(room_addr) = room_addr {
-            session.room_id = Some(room_id);
+            session.room_ids.push(room_id);
             fut::Either::Right(async move { Ok::<_, ()>(room_addr) }.into_actor(self))
         } else {
             fut::Either::Left(
@@ -284,7 +306,7 @@ impl GameServer {
                             .sessions
                             .get_mut(&session_id)
                             .expect("session not found");
-                        session.room_id = Some(room_id);
+                        session.room_ids.push(room_id);
 
                         fut::ok(addr)
                     }),
@@ -330,7 +352,7 @@ impl Handler<Connect> for GameServer {
                 user_id: None,
                 client: msg.addr,
                 game_client: msg.game_addr,
-                room_id: None,
+                room_ids: Vec::new(),
             },
         );
 
@@ -352,7 +374,7 @@ impl Handler<Disconnect> for GameServer {
     fn handle(&mut self, msg: Disconnect, ctx: &mut Context<Self>) {
         println!("Someone disconnected");
 
-        self.leave_room(msg.id)
+        self.leave_room(msg.id, None)
             .then(move |(), act, _| {
                 // remove address
                 if let Some(session) = act.sessions.remove(&msg.id) {
@@ -397,7 +419,11 @@ impl Handler<Join> for GameServer {
     type Result = ActorResponse<Self, Addr<GameRoom>, ()>;
 
     fn handle(&mut self, msg: Join, _ctx: &mut Context<Self>) -> Self::Result {
-        let Join { id, room_id } = msg;
+        let Join {
+            id,
+            room_id,
+            leave_previous,
+        } = msg;
 
         let session = match self.sessions.get(&id) {
             Some(x) => x,
@@ -409,8 +435,13 @@ impl Handler<Join> for GameServer {
             None => return ActorResponse::reply(Err(())),
         };
 
-        let result = self
-            .leave_room(msg.id)
+        let after_leave = if leave_previous {
+            fut::Either::Left(self.leave_room(msg.id, None))
+        } else {
+            fut::Either::Right(async {}.into_actor(self))
+        };
+
+        let result = after_leave
             .then(move |(), act, _ctx| act.join_room(id, room_id))
             .then(move |(), act, _ctx| {
                 fut::ready(match act.rooms.get(&room_id) {
@@ -420,6 +451,26 @@ impl Handler<Join> for GameServer {
             });
 
         ActorResponse::r#async(result)
+    }
+}
+
+impl Handler<LeaveRoom> for GameServer {
+    type Result = ();
+
+    fn handle(&mut self, msg: LeaveRoom, ctx: &mut Context<Self>) -> Self::Result {
+        let LeaveRoom { id, room_id } = msg;
+
+        let session = match self.sessions.get(&id) {
+            Some(x) => x,
+            None => return,
+        };
+
+        match session.user_id {
+            Some(x) => x,
+            None => return,
+        };
+
+        self.leave_room(msg.id, room_id).wait(ctx)
     }
 }
 
@@ -439,6 +490,7 @@ impl Handler<CreateRoom> for GameServer {
                     size,
                     mods,
                 },
+            leave_previous,
         } = msg;
 
         if name.len() > 50 {
@@ -478,8 +530,13 @@ impl Handler<CreateRoom> for GameServer {
         profile.last_game_time = Some(Instant::now());
 
         let cloned_name = name.clone();
-        let result = self
-            .leave_room(id)
+
+        let after_leave = if leave_previous {
+            fut::Either::Left(self.leave_room(msg.id, None))
+        } else {
+            fut::Either::Right(async {}.into_actor(self))
+        };
+        let result = after_leave
             .then(move |(), act, _| {
                 act.db
                     .send(db::StoreGame {

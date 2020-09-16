@@ -200,10 +200,10 @@ impl Component for Board {
                 self.mouse_pos = Some(p);
                 self.selection_pos = mouse_to_coord(p);
                 if let Some(selection_pos) = self.selection_pos {
-                    networking::send(ClientMessage::GameAction(GameAction::Place(
-                        selection_pos.0,
-                        selection_pos.1,
-                    )));
+                    networking::send(ClientMessage::GameAction {
+                        room_id: None,
+                        action: GameAction::Place(selection_pos.0, selection_pos.1),
+                    });
                 }
             }
             Msg::MouseLeave => {

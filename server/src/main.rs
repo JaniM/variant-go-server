@@ -6,6 +6,7 @@ mod game_room;
 mod schema;
 mod server;
 
+use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 use actix::prelude::*;
@@ -13,7 +14,7 @@ use actix_web::{middleware, web, App, Error, HttpRequest, HttpResponse, HttpServ
 use actix_web_actors::ws;
 
 use crate::server::GameServer;
-use shared::message::{self, ClientMessage, ServerMessage};
+use shared::message::{self, ClientMessage, ClientMode, ServerMessage};
 
 /// How often heartbeat pings are sent
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
@@ -31,8 +32,9 @@ async fn ws_index(
         hb: Instant::now(),
         id: 0,
         server_addr: server_addr.get_ref().clone(),
-        game_addr: None,
+        game_addr: HashMap::new(),
         room_id: None,
+        mode: ClientMode::Client,
     };
     let res = ws::start(actor, &r, stream);
     println!("{:?}", res);
@@ -50,8 +52,9 @@ struct ClientWebSocket {
     hb: Instant,
     id: usize,
     server_addr: Addr<GameServer>,
-    game_addr: Option<Addr<game_room::GameRoom>>,
+    game_addr: HashMap<u32, Addr<game_room::GameRoom>>,
     room_id: Option<u32>,
+    mode: ClientMode,
 }
 
 type Context = ws::WebsocketContext<ClientWebSocket>;
@@ -240,13 +243,17 @@ impl ClientWebSocket {
             .send(server::CreateRoom {
                 id: self.id,
                 room: msg,
+                leave_previous: match self.mode {
+                    ClientMode::Client => true,
+                    ClientMode::Integration => false,
+                },
             })
             .into_actor(self)
             .then(|res, act, ctx| {
                 match res {
                     Ok(Ok((id, addr))) => {
                         act.room_id = Some(id);
-                        act.game_addr = Some(addr);
+                        act.game_addr.insert(id, addr);
                     }
                     Ok(Err(err)) => {
                         ctx.binary(ServerMessage::Error(err).pack());
@@ -263,15 +270,30 @@ impl ClientWebSocket {
             .send(server::Join {
                 id: self.id,
                 room_id,
+                leave_previous: match self.mode {
+                    ClientMode::Client => true,
+                    ClientMode::Integration => false,
+                },
             })
             .into_actor(self)
             .then(move |res, act, _| {
                 if let Ok(Ok(addr)) = res {
                     act.room_id = Some(room_id);
-                    act.game_addr = Some(addr);
+                    act.game_addr.insert(room_id, addr);
                 }
                 fut::ready(())
             })
+            .wait(ctx);
+    }
+
+    fn handle_leave_game(&mut self, room_id: Option<u32>, ctx: &mut Context) {
+        self.server_addr
+            .send(server::LeaveRoom {
+                id: self.id,
+                room_id,
+            })
+            .into_actor(self)
+            .then(move |_res, _act, _| fut::ready(()))
             .wait(ctx);
     }
 
@@ -315,8 +337,11 @@ impl ClientWebSocket {
             ClientMessage::JoinGame(room_id) => {
                 self.handle_join_game(room_id, ctx);
             }
-            ClientMessage::GameAction(action) => {
-                if let Some(addr) = &self.game_addr {
+            ClientMessage::LeaveGame(room_id) => {
+                self.handle_leave_game(room_id, ctx);
+            }
+            ClientMessage::GameAction { room_id, action } => {
+                if let Some(addr) = &self.game_addr.get(&room_id.or(self.room_id).unwrap_or(0)) {
                     addr.do_send(game_room::GameAction {
                         id: self.id,
                         action,
@@ -331,6 +356,9 @@ impl ClientWebSocket {
                     client_id: self.id,
                     action,
                 });
+            }
+            ClientMessage::Mode(mode) => {
+                self.mode = mode;
             }
         };
     }

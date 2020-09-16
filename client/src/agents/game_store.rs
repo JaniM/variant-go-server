@@ -7,7 +7,7 @@ use crate::game_view::GameView;
 use crate::networking;
 use crate::utils;
 use shared::game::GameHistory;
-use shared::message::{ClientMessage, GameAction};
+use shared::message::GameAction;
 
 use store::{store, Bridgeable, Store, StoreBridge, StoreWrapper};
 
@@ -81,14 +81,14 @@ impl Store for GameStoreState {
                 if (max as u32 <= turn + 5 && max as u32 >= turn)
                     || self.history.len() <= turn as usize + 5
                 {
-                    networking::send(ClientMessage::GameAction(GameAction::BoardAt(
+                    networking::send(GameAction::BoardAt(
                         min as _,
                         if max > 0 {
                             (turn + 10).min(max as u32)
                         } else {
                             turn + 10
                         },
-                    )));
+                    ));
                     link.send_message(Action::SetHistoryPending(turn, true));
                 }
                 if let Some(view) = self.history.get(turn as usize).cloned().flatten() {

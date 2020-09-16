@@ -3,7 +3,7 @@ use yew::prelude::*;
 
 use crate::game::GameStateView;
 use crate::game_view::*;
-use crate::message::{self, ClientMessage};
+use crate::message;
 use crate::networking;
 use shared::game::Color;
 
@@ -34,12 +34,8 @@ impl Component for SeatList {
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
-            Msg::TakeSeat(idx) => networking::send(ClientMessage::GameAction(
-                message::GameAction::TakeSeat(idx),
-            )),
-            Msg::LeaveSeat(idx) => networking::send(ClientMessage::GameAction(
-                message::GameAction::LeaveSeat(idx),
-            )),
+            Msg::TakeSeat(idx) => networking::send(message::GameAction::TakeSeat(idx)),
+            Msg::LeaveSeat(idx) => networking::send(message::GameAction::LeaveSeat(idx)),
         }
         true
     }
@@ -97,9 +93,13 @@ impl Component for SeatList {
                     };
 
                     let passed = match &game.state {
-                        GameStateView::FreePlacement(state) if state.players_ready[idx] => " - ready!",
+                        GameStateView::FreePlacement(state) if state.players_ready[idx] => {
+                            " - ready!"
+                        }
                         GameStateView::Play(state) if state.players_passed[idx] => " - passed!",
-                        GameStateView::Scoring(state) if state.players_accepted[idx] => " - accepted!",
+                        GameStateView::Scoring(state) if state.players_accepted[idx] => {
+                            " - accepted!"
+                        }
                         _ => "",
                     };
 
