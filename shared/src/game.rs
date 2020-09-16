@@ -232,14 +232,14 @@ pub struct Game {
 //                                  Actions                                  //
 ///////////////////////////////////////////////////////////////////////////////
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
 pub enum TakeSeatError {
     DoesNotExist,
     NotOpen,
     CanOnlyHoldOne,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
 pub enum MakeActionError {
     NotPlayer,
     NotTurn,

@@ -81,10 +81,20 @@ pub struct Profile {
     pub nick: Option<String>,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, From)]
+pub enum GameError {
+    TakeSeat(game::TakeSeatError),
+    Action(game::MakeActionError),
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Error {
     /// This error means the client has to wait for x seconds before it can create a game
     GameStartTimer(u64),
+    Game {
+        room_id: u32,
+        error: GameError,
+    },
     Other(Cow<'static, str>),
 }
 

@@ -342,10 +342,22 @@ impl ClientWebSocket {
             }
             ClientMessage::GameAction { room_id, action } => {
                 if let Some(addr) = &self.game_addr.get(&room_id.or(self.room_id).unwrap_or(0)) {
-                    addr.do_send(game_room::GameAction {
+                    addr.send(game_room::GameAction {
                         id: self.id,
                         action,
-                    });
+                    })
+                    .into_actor(self)
+                    .then(|res, _act, ctx| {
+                        match res {
+                            Ok(Ok(())) => {}
+                            Ok(Err(err)) => {
+                                ctx.binary(ServerMessage::Error(err).pack());
+                            }
+                            _ => {}
+                        }
+                        fut::ready(())
+                    })
+                    .wait(ctx);
                 }
             }
             ClientMessage::Identify { token, nick } => {

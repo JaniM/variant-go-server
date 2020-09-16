@@ -31,11 +31,13 @@ pub enum Message {
 
 // Actions ////////////////////////////////////////////////////////////////////
 
-#[derive(Message)]
-#[rtype(result = "()")]
 pub struct GameAction {
     pub id: usize,
     pub action: message::GameAction,
+}
+
+impl actix::Message for GameAction {
+    type Result = Result<(), message::Error>;
 }
 
 // User lifecycle /////////////////////////////////////////////////////////////
@@ -144,58 +146,47 @@ impl Handler<Join> for GameRoom {
 }
 
 impl Handler<GameAction> for GameRoom {
-    type Result = ();
+    type Result = MessageResult<GameAction>;
 
-    fn handle(&mut self, msg: GameAction, _: &mut Context<Self>) {
+    fn handle(&mut self, msg: GameAction, _: &mut Context<Self>) -> MessageResult<GameAction> {
+        use message::Error;
+
         let GameAction { id, action } = msg;
 
         let &(user_id, ref addr) = match self.sessions.get(&id) {
             Some(x) => x,
-            None => return,
+            None => return MessageResult(Err(Error::other("No session"))),
         };
 
         self.last_action = Instant::now();
-        // TODO: Handle errors in game actions - currently they fail quietly
-        match action {
-            message::GameAction::Place(x, y) => {
-                let res = self
-                    .game
-                    .make_action(user_id, game::ActionKind::Place(x, y));
-                if res.is_err() {
-                    return;
-                }
-            }
-            message::GameAction::Pass => {
-                let res = self.game.make_action(user_id, game::ActionKind::Pass);
-                if res.is_err() {
-                    return;
-                }
-            }
-            message::GameAction::Cancel => {
-                let res = self.game.make_action(user_id, game::ActionKind::Cancel);
-                if res.is_err() {
-                    return;
-                }
-            }
-            message::GameAction::TakeSeat(seat_id) => {
-                let res = self.game.take_seat(user_id, seat_id as _);
-                if res.is_err() {
-                    return;
-                }
-            }
-            message::GameAction::LeaveSeat(seat_id) => {
-                let res = self.game.leave_seat(user_id, seat_id as _);
-                if res.is_err() {
-                    return;
-                }
-            }
+        let res = match action {
+            message::GameAction::Place(x, y) => self
+                .game
+                .make_action(user_id, game::ActionKind::Place(x, y))
+                .map_err(Into::into),
+            message::GameAction::Pass => self
+                .game
+                .make_action(user_id, game::ActionKind::Pass)
+                .map_err(Into::into),
+            message::GameAction::Cancel => self
+                .game
+                .make_action(user_id, game::ActionKind::Cancel)
+                .map_err(Into::into),
+            message::GameAction::TakeSeat(seat_id) => self
+                .game
+                .take_seat(user_id, seat_id as _)
+                .map_err(Into::into),
+            message::GameAction::LeaveSeat(seat_id) => self
+                .game
+                .leave_seat(user_id, seat_id as _)
+                .map_err(Into::into),
             message::GameAction::BoardAt(start, end) => {
                 if start > end {
-                    return;
+                    return MessageResult(Ok(()));
                 }
                 // Prevent asking for a ridiculous amount.
                 if end as usize > self.game.shared.board_history.len() + 20 {
-                    return;
+                    return MessageResult(Ok(()));
                 }
                 for turn in (start..=end).rev() {
                     let view = self.game.get_view_at(user_id, turn);
@@ -206,8 +197,15 @@ impl Handler<GameAction> for GameRoom {
                         });
                     }
                 }
-                return;
+                return MessageResult(Ok(()));
             }
+        };
+
+        if let Err(err) = res {
+            return MessageResult(Err(Error::Game {
+                room_id: self.room_id,
+                error: err,
+            }));
         }
 
         self.db.do_send(db::StoreGame {
@@ -221,6 +219,8 @@ impl Handler<GameAction> for GameRoom {
             members: self.users.iter().copied().collect(),
             view: self.game.get_view(user_id),
         });
+
+        MessageResult(Ok(()))
     }
 }
 
