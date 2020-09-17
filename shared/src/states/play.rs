@@ -131,10 +131,15 @@ impl PlayState {
             revealed = revealed || reveals;
 
             if let Some(ponnuki) = shared.mods.ponnuki_is_points {
+                let surrounding_count = board.surrounding_points(group.points[0]).count();
                 if group.points.len() == 1
+                    && surrounding_count == 4
                     && board
                         .surrounding_points(group.points[0])
                         .all(|p| board.get_point(p) == active_seat.team)
+                    && board
+                        .surrounding_diagonal_points(group.points[0])
+                        .all(|p| board.get_point(p) != active_seat.team)
                 {
                     shared.points[active_seat.team.0 as usize - 1] += ponnuki;
                 }

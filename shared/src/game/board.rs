@@ -51,6 +51,25 @@ impl<T: Copy + Default> Board<T> {
         [(-1, 0), (1, 0), (0, -1), (0, 1)]
             .iter()
             .filter_map(move |&(dx, dy)| {
+                // TODO: separate this out
+                if (x + dx) >= 0 && x + dx < width as i32 && (y + dy) >= 0 && y + dy < height as i32
+                {
+                    Some(((x + dx) as u32, (y + dy) as u32))
+                } else {
+                    None
+                }
+            })
+    }
+
+    pub fn surrounding_diagonal_points(&self, p: Point) -> impl Iterator<Item = Point> {
+        let x = p.0 as i32;
+        let y = p.1 as i32;
+        let width = self.width;
+        let height = self.height;
+        [(-1, -1), (1, -1), (1, 1), (-1, 1)]
+            .iter()
+            .filter_map(move |&(dx, dy)| {
+                // TODO: separate this out
                 if (x + dx) >= 0 && x + dx < width as i32 && (y + dy) >= 0 && y + dy < height as i32
                 {
                     Some(((x + dx) as u32, (y + dy) as u32))
