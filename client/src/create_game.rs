@@ -298,7 +298,10 @@ impl Component for CreateGameView {
                                 class="toggle"
                                 checked=self.mods.hidden_move.is_some()
                                 onclick=self.link.callback(move |_| Msg::ToggleHiddenMove) />
-                            <label onclick=self.link.callback(move |_| Msg::ToggleHiddenMove)>{"Hidden move go"}</label>
+                            <label class="tooltip" onclick=self.link.callback(move |_| Msg::ToggleHiddenMove)>
+                                {"Hidden move go"}
+                                <span class="tooltiptext">{"Each team places stones before the game starts. The opponents and viewers can't see their stones. Stones are revealed if they cause a capture or prevent a move from being made."}</span>
+                            </label>
                             {" Placement stones: "}
                             <input
                                 style="width: 3em;"
@@ -318,8 +321,9 @@ impl Component for CreateGameView {
                                 class="toggle"
                                 checked=self.mods.pixel
                                 onclick=self.link.callback(move |_| Msg::TogglePixel) />
-                            <label onclick=self.link.callback(move |_| Msg::TogglePixel)>
+                            <label class="tooltip" onclick=self.link.callback(move |_| Msg::TogglePixel)>
                                 {"Pixel go"}
+                                <span class="tooltiptext">{"You place 2x2 blobs. Overlapping stones are ignored."}</span>
                             </label>
                         </li>
                         <li>
@@ -328,7 +332,10 @@ impl Component for CreateGameView {
                                 class="toggle"
                                 checked=self.mods.zen_go.is_some()
                                 onclick=self.link.callback(move |_| Msg::ToggleZen) />
-                            <label onclick=self.link.callback(move |_| Msg::ToggleZen)>{"Zen go"}</label>
+                            <label class="tooltip" onclick=self.link.callback(move |_| Msg::ToggleZen)>
+                                {"Zen go"}
+                                <span class="tooltiptext">{"One extra player. You get a different color on every turn. There are no winners."}</span>
+                            </label>
                         </li>
                         <li>
                             <input
@@ -336,7 +343,10 @@ impl Component for CreateGameView {
                                 class="toggle"
                                 checked=matches!(self.mods.visibility_mode, Some(game::VisibilityMode::OneColor))
                                 onclick=self.link.callback(move |_| Msg::ToggleOneColor) />
-                            <label onclick=self.link.callback(move |_| Msg::ToggleOneColor)>{"One color go"}</label>
+                            <label class="tooltip" onclick=self.link.callback(move |_| Msg::ToggleOneColor)>
+                                {"One color go"}
+                                <span class="tooltiptext">{"Everyone sees the stones as same color. Confusion ensues."}</span>
+                            </label>
                         </li>
                         <li>
                             <input
@@ -344,8 +354,9 @@ impl Component for CreateGameView {
                                 class="toggle"
                                 checked=self.mods.no_history
                                 onclick=self.link.callback(move |_| Msg::ToggleNoHistory) />
-                            <label onclick=self.link.callback(move |_| Msg::ToggleNoHistory)>
+                            <label class="tooltip" onclick=self.link.callback(move |_| Msg::ToggleNoHistory)>
                                 {"No history (good for one color)"}
+                                <span class="tooltiptext">{"No one can browse the past moves during the game."}</span>
                             </label>
                         </li>
                         <li>
@@ -354,9 +365,11 @@ impl Component for CreateGameView {
                                 class="toggle"
                                 checked=self.mods.n_plus_one.is_some()
                                 onclick=self.link.callback(move |_| Msg::ToggleNPlusOne) />
-                            <label onclick=self.link.callback(move |_| Msg::ToggleNPlusOne)>
-                                {"N+1 "}
+                            <label class="tooltip" onclick=self.link.callback(move |_| Msg::ToggleNPlusOne)>
+                                {"N+1"}
+                                <span class="tooltiptext">{"You get an extra turn when you make a row of exactly N stones horizontally, vertically or diagonally."}</span>
                             </label>
+                            {" "}
                             <input
                                 style="width: 3em;"
                                 type="number"
@@ -375,7 +388,11 @@ impl Component for CreateGameView {
                                 class="toggle"
                                 checked=self.mods.ponnuki_is_points.is_some()
                                 onclick=self.link.callback(move |_| Msg::TogglePonnuki) />
-                            <label onclick=self.link.callback(move |_| Msg::TogglePonnuki)>{"Ponnuki is: "}</label>
+                            <label class="tooltip" onclick=self.link.callback(move |_| Msg::TogglePonnuki)>
+                                {"Ponnuki is:"}
+                                <span class="tooltiptext">{"Ponnuki requires a capture and all diagonals must be empty or different color"}</span>
+                            </label>
+                            {" "}
                             <input
                                 style="width: 3em;"
                                 type="number"
@@ -420,22 +437,6 @@ impl Component for CreateGameView {
                 <p>
                     {r#"Every game mode uses Tromp-Taylor rules, which are quite close to Chinese rules. Area counting, captures give no points.
                     Superko, so ko is only in effect when the board repeats - there is no direct ko in three color go."#}
-                </p>
-                <p>
-                    {r#"Hidden move go: Each team places stones before the game starts.
-                    The opponents and viewers can't see their stones. Stones are revealed if they cause a capture or prevent a move from being made."#}
-                </p>
-                <p>
-                    {r#"Pixel go: You place 2x2 blobs. Overlapping stones are ignored."#}
-                </p>
-                <p>
-                    {r#"Zen go: One extra player. You get a different color on every turn. There are no winners."#}
-                </p>
-                <p>
-                    {r#"No history: No one can browse the past moves during the game."#}
-                </p>
-                <p>
-                    {r#"N+1: You get an extra turn when you make a row of exactly N stones horizontally, vertically or diagonally."#}
                 </p>
                 </div>
             </div>
