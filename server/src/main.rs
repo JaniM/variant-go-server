@@ -118,7 +118,7 @@ impl Handler<game_room::Message> for ClientWebSocket {
                         seats: view
                             .seats
                             .into_iter()
-                            .map(|x| (x.player, x.team.0))
+                            .map(|x| (x.player, x.team.0, x.resigned))
                             .collect(),
                         turn: view.turn,
                         board: view.board.into_iter().map(|x| x.0).collect(),

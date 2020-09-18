@@ -16,11 +16,13 @@ fn seats() {
             &[
                 Seat {
                     player: None,
-                    team: Color(1)
+                    team: Color(1),
+                    resigned: false,
                 },
                 Seat {
                     player: None,
-                    team: Color(2)
+                    team: Color(2),
+                    resigned: false,
                 },
             ][..]
         )
@@ -35,11 +37,13 @@ fn seats() {
             &[
                 Seat {
                     player: Some(100),
-                    team: Color(1)
+                    team: Color(1),
+                    resigned: false,
                 },
                 Seat {
                     player: Some(200),
-                    team: Color(2)
+                    team: Color(2),
+                    resigned: false,
                 },
             ][..]
         )

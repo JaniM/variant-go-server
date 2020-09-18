@@ -13,6 +13,7 @@ pub enum GameAction {
     Place(u32, u32),
     Pass,
     Cancel,
+    Resign,
     BoardAt(u32, u32),
     TakeSeat(u32),
     LeaveSeat(u32),
@@ -125,7 +126,7 @@ pub enum ServerMessage {
         room_id: u32,
         owner: u64,
         members: Vec<u64>,
-        seats: Vec<(Option<u64>, u8)>,
+        seats: Vec<(Option<u64>, u8, bool)>,
         turn: u32,
         // 19x19 vec, 0 = empty, 1 = black, 2 = white
         board: Vec<u8>,

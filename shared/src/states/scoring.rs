@@ -1,6 +1,6 @@
 use crate::game::{
     find_groups, ActionChange, ActionKind, Board, Color, GameState, Group, GroupVec,
-    MakeActionResult, Point, SharedState,
+    MakeActionResult, Point, Seat, SharedState,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{HashSet, VecDeque};
@@ -16,7 +16,7 @@ pub struct ScoringState {
 }
 
 impl ScoringState {
-    pub fn new(board: &Board, seat_count: usize, scores: &[i32]) -> Self {
+    pub fn new(board: &Board, seats: &[Seat], scores: &[i32]) -> Self {
         let groups = find_groups(board);
         let points = score_board(board.width, board.height, &groups);
         let mut scores: GroupVec<i32> = scores.into();
@@ -29,7 +29,7 @@ impl ScoringState {
             groups,
             points,
             scores,
-            players_accepted: vec![false; seat_count],
+            players_accepted: seats.iter().map(|s| s.resigned).collect(),
         }
     }
 
@@ -55,8 +55,8 @@ impl ScoringState {
             }
         }
 
-        for accept in &mut self.players_accepted {
-            *accept = false;
+        for (idx, accept) in self.players_accepted.iter_mut().enumerate() {
+            *accept = shared.seats[idx].resigned;
         }
 
         Ok(ActionChange::None)
@@ -84,6 +84,26 @@ impl ScoringState {
         }
     }
 
+    fn make_action_resign(&mut self, shared: &mut SharedState, player_id: u64) -> MakeActionResult {
+        // A single player can hold multiple seats so we have to mark every seat they hold
+        let seats = shared
+            .seats
+            .iter_mut()
+            .enumerate()
+            .filter(|x| x.1.player == Some(player_id));
+
+        for (seat_idx, seat) in seats {
+            seat.resigned = true;
+            self.players_accepted[seat_idx] = true;
+        }
+
+        if self.players_accepted.iter().all(|x| *x) {
+            Ok(ActionChange::SwapState(GameState::Done(self.clone())))
+        } else {
+            Ok(ActionChange::None)
+        }
+    }
+
     pub fn make_action(
         &mut self,
         shared: &mut SharedState,
@@ -94,6 +114,7 @@ impl ScoringState {
             ActionKind::Place(x, y) => self.make_action_place(shared, (x, y)),
             ActionKind::Pass => self.make_action_pass(shared, player_id),
             ActionKind::Cancel => Ok(ActionChange::PopState),
+            ActionKind::Resign => self.make_action_resign(shared, player_id),
         }
     }
 }

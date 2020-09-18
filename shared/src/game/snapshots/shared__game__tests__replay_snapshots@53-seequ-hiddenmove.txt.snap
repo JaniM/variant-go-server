@@ -681,11 +681,13 @@ GameView {
             1,
         ),
         team: 1,
+        resigned: false,
     }, Seat {
         player: Some(
             108,
         ),
         team: 2,
+        resigned: false,
     }],
     turn: 0,
     board: [

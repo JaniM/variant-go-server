@@ -67,7 +67,7 @@ impl Component for SeatList {
             .seats
             .iter()
             .enumerate()
-            .map(|(idx, (occupant, color))| {
+            .map(|(idx, (occupant, color, resigned))| {
                 let colorname = Color::name(*color);
 
                 let scoretext = match scores {
@@ -85,6 +85,12 @@ impl Component for SeatList {
                     }
                 } else {
                     html!()
+                };
+
+                let resigned_text = if *resigned {
+                    " - resigned!"
+                } else {
+                    ""
                 };
 
                 if let Some(id) = occupant {
@@ -122,14 +128,14 @@ impl Component for SeatList {
 
                     html! {
                         <div class=class style="margin: 5px 0;">
-                            {format!("{}: {} {}{}", colorname, nick, scoretext, passed)}
+                            {format!("{}: {} {}{}{}", colorname, nick, scoretext, passed, resigned_text)}
                             {leave}
                         </div>
                     }
                 } else {
                     html! {
                         <div style="margin: 5px 0;">
-                            {format!("{}: unoccupied{}", colorname, scoretext)}
+                            {format!("{}: unoccupied{}{}", colorname, scoretext, resigned_text)}
                             <button onclick=self.link.callback(move |_| Msg::TakeSeat(idx as _))>
                                 {"Take seat"}
                             </button>

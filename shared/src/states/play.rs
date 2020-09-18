@@ -2,12 +2,14 @@ mod n_plus_one;
 
 use crate::game::{
     find_groups, ActionChange, ActionKind, Board, BoardHistory, Color, GameState, Group, GroupVec,
-    MakeActionError, MakeActionResult, Point, Seat, SharedState, VisibilityBoard,
+    MakeActionError, MakeActionResult, Point, SharedState, VisibilityBoard,
 };
 use serde::{Deserialize, Serialize};
 
 use bitmaps::Bitmap;
 use tinyvec::tiny_vec;
+
+use super::ScoringState;
 
 type Revealed = bool;
 
@@ -16,6 +18,8 @@ pub struct PlayState {
     // TODO: use smallvec?
     pub players_passed: Vec<bool>,
     pub last_stone: Option<GroupVec<(u32, u32)>>,
+    /// Optimization for superko
+    pub capture_count: usize,
 }
 
 impl PlayState {
@@ -23,6 +27,7 @@ impl PlayState {
         PlayState {
             players_passed: vec![false; seat_count],
             last_stone: None,
+            capture_count: 0,
         }
     }
 
@@ -31,7 +36,7 @@ impl PlayState {
         shared: &mut SharedState,
         (x, y): Point,
     ) -> MakeActionResult<GroupVec<Point>> {
-        let active_seat = get_active_seat(shared);
+        let active_seat = shared.get_active_seat();
         let mut points_played = GroupVec::new();
 
         if shared.mods.pixel {
@@ -111,7 +116,7 @@ impl PlayState {
         shared: &mut SharedState,
         points_played: &mut GroupVec<Point>,
     ) -> (usize, Revealed) {
-        let active_seat = get_active_seat(shared);
+        let active_seat = shared.get_active_seat();
         let mut captures = 0;
         let mut revealed = false;
 
@@ -187,7 +192,7 @@ impl PlayState {
             .board_history
             .iter()
             .rev()
-            .take(shared.capture_count + captures)
+            .take(self.capture_count + captures)
         {
             if *old_hash == hash && old_board == &shared.board {
                 let BoardHistory {
@@ -208,7 +213,7 @@ impl PlayState {
         Ok(())
     }
 
-    pub fn make_action_place(
+    fn make_action_place(
         &mut self,
         shared: &mut SharedState,
         (x, y): (u32, u32),
@@ -255,33 +260,19 @@ impl PlayState {
             false
         };
 
-        if !new_turn {
-            shared.turn += 1;
-            if shared.turn >= shared.seats.len() {
-                shared.turn = 0;
-            }
-        }
-
         self.last_stone = Some(points_played);
         for passed in &mut self.players_passed {
             *passed = false;
         }
 
-        shared.board_history.push(BoardHistory {
-            hash,
-            board: shared.board.clone(),
-            board_visibility: shared.board_visibility.clone(),
-            state: GameState::Play(self.clone()),
-            points: shared.points.clone(),
-            turn: shared.turn,
-        });
-        shared.capture_count += captures;
+        self.next_turn(shared, new_turn);
+        self.capture_count += captures;
 
         Ok(ActionChange::None)
     }
 
-    pub fn make_action_pass(&mut self, shared: &mut SharedState) -> MakeActionResult {
-        let active_seat = get_active_seat(shared);
+    fn make_action_pass(&mut self, shared: &mut SharedState) -> MakeActionResult {
+        let active_seat = shared.get_active_seat();
 
         for (seat, passed) in shared.seats.iter().zip(self.players_passed.iter_mut()) {
             if seat.team == active_seat.team {
@@ -289,27 +280,20 @@ impl PlayState {
             }
         }
 
-        shared.turn += 1;
-        if shared.turn >= shared.seats.len() {
-            shared.turn = 0;
-        }
+        self.next_turn(shared, false);
 
-        shared.board_history.push(BoardHistory {
-            hash: shared.board.hash(),
-            board: shared.board.clone(),
-            board_visibility: shared.board_visibility.clone(),
-            state: GameState::Play(self.clone()),
-            points: shared.points.clone(),
-            turn: shared.turn,
-        });
-
-        if self.players_passed.iter().all(|x| *x) {
+        if shared
+            .seats
+            .iter()
+            .zip(&self.players_passed)
+            .all(|(s, &pass)| s.resigned || pass)
+        {
             for passed in &mut self.players_passed {
                 *passed = false;
             }
             return Ok(ActionChange::PushState(GameState::scoring(
                 &shared.board,
-                shared.seats.len(),
+                &shared.seats,
                 &shared.points,
             )));
         }
@@ -317,7 +301,7 @@ impl PlayState {
         Ok(ActionChange::None)
     }
 
-    pub fn make_action_cancel(&mut self, shared: &mut SharedState) -> MakeActionResult {
+    fn make_action_cancel(&mut self, shared: &mut SharedState) -> MakeActionResult {
         // Undo a turn
         if shared.board_history.len() < 2 {
             return Err(MakeActionError::OutOfBounds);
@@ -342,13 +326,42 @@ impl PlayState {
         Ok(ActionChange::None)
     }
 
+    fn make_action_resign(&mut self, shared: &mut SharedState) -> MakeActionResult {
+        let active_seat = shared
+            .seats
+            .get_mut(shared.turn)
+            .expect("Game turn number invalid");
+
+        active_seat.resigned = true;
+
+        if shared.seats.iter().filter(|s| !s.resigned).count() <= 1 {
+            return Ok(ActionChange::PushState(GameState::Done(ScoringState::new(
+                &shared.board,
+                &shared.seats,
+                &shared.points,
+            ))));
+        }
+
+        loop {
+            shared.turn += 1;
+            if shared.turn >= shared.seats.len() {
+                shared.turn = 0;
+            }
+            if !shared.get_active_seat().resigned {
+                break;
+            }
+        }
+
+        Ok(ActionChange::None)
+    }
+
     pub fn make_action(
         &mut self,
         shared: &mut SharedState,
         player_id: u64,
         action: ActionKind,
     ) -> MakeActionResult {
-        let active_seat = get_active_seat(shared);
+        let active_seat = shared.get_active_seat();
         if active_seat.player != Some(player_id) {
             return Err(MakeActionError::NotTurn);
         }
@@ -357,6 +370,7 @@ impl PlayState {
             ActionKind::Place(x, y) => self.make_action_place(shared, (x, y)),
             ActionKind::Pass => self.make_action_pass(shared),
             ActionKind::Cancel => self.make_action_cancel(shared),
+            ActionKind::Resign => self.make_action_resign(shared),
         };
 
         let res = res?;
@@ -364,6 +378,29 @@ impl PlayState {
         self.set_zen_teams(shared);
 
         Ok(res)
+    }
+
+    fn next_turn(&mut self, shared: &mut SharedState, new_turn: bool) {
+        if !new_turn {
+            loop {
+                shared.turn += 1;
+                if shared.turn >= shared.seats.len() {
+                    shared.turn = 0;
+                }
+                if !shared.get_active_seat().resigned {
+                    break;
+                }
+            }
+        }
+
+        shared.board_history.push(BoardHistory {
+            hash: shared.board.hash(),
+            board: shared.board.clone(),
+            board_visibility: shared.board_visibility.clone(),
+            state: GameState::Play(self.clone()),
+            points: shared.points.clone(),
+            turn: shared.turn,
+        });
     }
 
     fn set_zen_teams(&mut self, shared: &mut SharedState) {
@@ -374,14 +411,6 @@ impl PlayState {
             }
         }
     }
-}
-
-fn get_active_seat(shared: &SharedState) -> Seat {
-    shared
-        .seats
-        .get(shared.turn)
-        .expect("Game turn number invalid")
-        .clone()
 }
 
 fn reveal_group(

@@ -33,6 +33,7 @@ pub struct GamePane {
 pub enum Msg {
     Pass,
     Cancel,
+    Resign,
     GetBoardAt(u32),
     ScanBoard(i32),
     ResetHistory,
@@ -51,6 +52,7 @@ pub struct Props {
 struct Callbacks {
     pass: Callback<()>,
     cancel: Callback<()>,
+    resign: Callback<()>,
 }
 
 impl Component for GamePane {
@@ -61,6 +63,7 @@ impl Component for GamePane {
         let callbacks = Callbacks {
             pass: link.callback(|_| Msg::Pass),
             cancel: link.callback(|_| Msg::Cancel),
+            resign: link.callback(|_| Msg::Resign),
         };
 
         // Currently the state is passed back through props so we don't care about the output
@@ -104,6 +107,7 @@ impl Component for GamePane {
         match msg {
             Msg::Pass => networking::send(GameAction::Pass),
             Msg::Cancel => networking::send(GameAction::Cancel),
+            Msg::Resign => networking::send(GameAction::Resign),
             Msg::GetBoardAt(turn) => {
                 self.game_store.get_board_at(turn);
             }
@@ -136,12 +140,17 @@ impl Component for GamePane {
             game,
             profiles,
         } = &self.props;
-        let Callbacks { pass, cancel } = &self.callbacks;
+        let Callbacks {
+            pass,
+            cancel,
+            resign,
+        } = &self.callbacks;
 
         // FIXME: Reforming the callbacks prevents yew from optimizing for equality.
         // Either patch it upstream or make the callbacks have the proper shape.
         let pass = pass.reform(|_| ());
         let cancel = cancel.reform(|_| ());
+        let resign = resign.reform(|_| ());
 
         let userlist = game
             .members
@@ -191,6 +200,12 @@ impl Component for GamePane {
             }
             game::GameStateView::Play(_) => html!(<button onclick=cancel>{"Undo"}</button>),
             game::GameStateView::Scoring(_) => html!(<button onclick=cancel>{"Cancel"}</button>),
+            _ => html!(),
+        };
+
+        let resign_button = match game.state {
+            game::GameStateView::Play(_) => html!(<button onclick=resign>{"Resign"}</button>),
+            game::GameStateView::Scoring(_) => html!(<button onclick=resign>{"Resign"}</button>),
             _ => html!(),
         };
 
@@ -261,7 +276,7 @@ impl Component for GamePane {
                  style="flex-grow: 1; margin: 10px; display: flex; justify-content: center;">
                 <div style=game_wrapper_style>
                     <div style=game_container_style>
-                        <div>{"Status:"} {status} {pass_button} {cancel_button} {hidden_stones_left}</div>
+                        <div>{"Status:"} {status} {pass_button} {cancel_button} {resign_button} {hidden_stones_left}</div>
                         <board::Board game=game size=self.size/>
                         {turn_bar}
                     </div>

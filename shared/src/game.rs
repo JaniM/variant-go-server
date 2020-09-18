@@ -76,6 +76,7 @@ impl From<u8> for Color {
 pub struct Seat {
     pub player: Option<u64>,
     pub team: Color,
+    pub resigned: bool,
 }
 
 impl Seat {
@@ -83,6 +84,7 @@ impl Seat {
         Seat {
             player: None,
             team: color,
+            resigned: false,
         }
     }
 }
@@ -106,6 +108,7 @@ pub enum ActionKind {
     Place(u32, u32),
     Pass,
     Cancel,
+    Resign,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -221,8 +224,6 @@ pub struct SharedState {
     pub board: Board,
     pub board_visibility: Option<VisibilityBoard>,
     pub board_history: Vec<BoardHistory>,
-    /// Optimization for superko
-    pub capture_count: usize,
     pub komis: GroupVec<i32>,
     pub mods: GameModifier,
 }
@@ -233,6 +234,15 @@ pub struct Game {
     pub state_stack: Vec<GameState>,
     pub shared: SharedState,
     pub actions: Vec<GameAction>,
+}
+
+impl SharedState {
+    pub fn get_active_seat(&self) -> Seat {
+        self.seats
+            .get(self.turn)
+            .expect("Game turn number invalid")
+            .clone()
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -385,7 +395,6 @@ impl Game {
                     points: komis.clone(),
                     turn: 0,
                 }],
-                capture_count: 0,
                 komis,
                 mods,
             },

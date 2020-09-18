@@ -7,7 +7,7 @@ pub use self::play::PlayState;
 pub use self::scoring::ScoringState;
 
 use crate::assume::AssumeFrom;
-use crate::game::Board;
+use crate::game::{Board, Seat};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -37,8 +37,8 @@ impl GameState {
         GameState::Play(PlayState::new(seat_count))
     }
 
-    pub fn scoring(board: &Board, seat_count: usize, scores: &[i32]) -> Self {
-        GameState::Scoring(ScoringState::new(board, seat_count, scores))
+    pub fn scoring(board: &Board, seats: &[Seat], scores: &[i32]) -> Self {
+        GameState::Scoring(ScoringState::new(board, seats, scores))
     }
 }
 

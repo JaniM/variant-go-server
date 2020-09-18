@@ -5,7 +5,9 @@ pub struct GameView {
     pub room_id: u32,
     pub owner: u64,
     pub members: Vec<u64>,
-    pub seats: Vec<(Option<u64>, u8)>,
+    // id, color, resigned
+    // FIXME: This is horrible and makes the code hard to read
+    pub seats: Vec<(Option<u64>, u8, bool)>,
     pub turn: u32,
     // 19x19 vec, 0 = empty, 1 = black, 2 = white
     pub board: Vec<u8>,

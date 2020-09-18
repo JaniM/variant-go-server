@@ -184,6 +184,10 @@ impl Handler<GameAction> for GameRoom {
                 .game
                 .make_action(user_id, game::ActionKind::Cancel)
                 .map_err(Into::into),
+            message::GameAction::Resign => self
+                .game
+                .make_action(user_id, game::ActionKind::Resign)
+                .map_err(Into::into),
             message::GameAction::TakeSeat(seat_id) => {
                 if self.kicked_players.contains(&user_id) {
                     return MessageResult(Err(Error::other("Kicked from game")));

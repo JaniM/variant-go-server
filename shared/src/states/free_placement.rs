@@ -202,6 +202,10 @@ impl FreePlacement {
             ActionKind::Place(x, y) => self.make_action_place(shared, player_id, (x, y)),
             ActionKind::Pass => self.make_action_pass(shared, player_id),
             ActionKind::Cancel => self.make_action_cancel(shared, player_id),
+            ActionKind::Resign => {
+                // We don't allow resigning in free placement
+                Ok(ActionChange::None)
+            }
         }
     }
 }

@@ -16,6 +16,7 @@ GameView {
                     7,
                 )],
             ),
+            capture_count: 14,
         },
     ),
     seats: [Seat {
@@ -23,11 +24,13 @@ GameView {
             49,
         ),
         team: 1,
+        resigned: false,
     }, Seat {
         player: Some(
             47,
         ),
         team: 2,
+        resigned: false,
     }],
     turn: 1,
     board: [
