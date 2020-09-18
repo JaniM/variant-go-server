@@ -27,7 +27,6 @@ async fn ws_index(
     stream: web::Payload,
     server_addr: web::Data<Addr<GameServer>>,
 ) -> Result<HttpResponse, Error> {
-    println!("{:?}", r);
     let actor = ClientWebSocket {
         hb: Instant::now(),
         id: 0,
@@ -37,7 +36,6 @@ async fn ws_index(
         mode: ClientMode::Client,
     };
     let res = ws::start(actor, &r, stream);
-    println!("{:?}", res);
     res
 }
 
