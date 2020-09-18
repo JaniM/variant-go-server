@@ -44,6 +44,7 @@ pub struct Game {
     pub id: i64,
     pub name: String,
     pub replay: Option<Vec<u8>>,
+    pub owner: Option<i64>,
 }
 
 #[derive(Insertable, AsChangeset)]
@@ -52,6 +53,7 @@ pub struct NewGame<'a> {
     pub id: Option<i64>,
     pub name: &'a str,
     pub replay: Option<&'a [u8]>,
+    pub owner: Option<i64>,
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -78,6 +80,7 @@ impl Message for GetUser {
 
 pub struct StoreGame {
     pub id: Option<u64>,
+    pub owner: Option<u64>,
     pub name: String,
     pub replay: Option<Vec<u8>>,
 }
@@ -176,6 +179,7 @@ impl Handler<StoreGame> for DbActor {
 
         let new_game = NewGame {
             id: msg.id.map(|x| x as _),
+            owner: msg.owner.map(|x| x as _),
             name: &msg.name,
             replay: msg.replay.as_deref(),
         };

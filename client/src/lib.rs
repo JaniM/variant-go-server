@@ -118,6 +118,7 @@ impl Component for GameApp {
                 }
                 Ok(ServerMessage::GameStatus {
                     room_id,
+                    owner,
                     members,
                     seats,
                     board,
@@ -132,6 +133,7 @@ impl Component for GameApp {
                 }) => {
                     game.emit(GameView {
                         room_id,
+                        owner,
                         members,
                         seats,
                         board,

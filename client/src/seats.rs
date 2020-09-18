@@ -22,6 +22,7 @@ pub struct Props {
 pub enum Msg {
     TakeSeat(u32),
     LeaveSeat(u32),
+    KickSeat(usize),
 }
 
 impl Component for SeatList {
@@ -36,6 +37,12 @@ impl Component for SeatList {
         match msg {
             Msg::TakeSeat(idx) => networking::send(message::GameAction::TakeSeat(idx)),
             Msg::LeaveSeat(idx) => networking::send(message::GameAction::LeaveSeat(idx)),
+            Msg::KickSeat(idx) => {
+                let player = self.props.game.seats[idx].0;
+                if let Some(player) = player {
+                    networking::send(message::GameAction::KickPlayer(player));
+                }
+            }
         }
         true
     }
@@ -70,6 +77,16 @@ impl Component for SeatList {
                     None => "".to_owned(),
                 };
 
+                let kick = if self.props.user.as_ref().map(|x| x.user_id) == Some(game.owner) {
+                    html! {
+                        <button onclick=self.link.callback(move |_| Msg::KickSeat(idx))>
+                            {"Kick"}
+                        </button>
+                    }
+                } else {
+                    html!()
+                };
+
                 if let Some(id) = occupant {
                     let nick = self
                         .props
@@ -83,7 +100,7 @@ impl Component for SeatList {
                         {"Leave seat"}
                     </button>)
                     } else {
-                        html!()
+                        kick
                     };
 
                     let class = if game.turn == idx as u32 {

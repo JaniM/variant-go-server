@@ -20,6 +20,7 @@ pub enum Message {
     // TODO: Use a proper struct, not magic tuples
     GameStatus {
         room_id: u32,
+        owner: u64,
         members: Vec<u64>,
         view: game::GameView,
     },
@@ -68,6 +69,7 @@ pub struct Unload;
 
 pub struct GameRoom {
     pub room_id: u32,
+    pub owner: Option<u64>,
     pub sessions: HashMap<usize, (u64, Recipient<Message>)>,
     pub users: HashSet<u64>,
     pub name: String,
@@ -75,12 +77,30 @@ pub struct GameRoom {
     pub game: game::Game,
     pub db: Addr<db::DbActor>,
     pub server: Addr<server::GameServer>,
+
+    /// Kicked players are not visible to other users in the game and can not
+    /// hold seats. They can still follow the game.
+    pub kicked_players: HashSet<u64>,
 }
 
 impl GameRoom {
     fn send_room_messages(&self, mut create_msg: impl FnMut(u64) -> Message) {
         for (user_id, addr) in self.sessions.values() {
             let _ = addr.do_send(create_msg(*user_id));
+        }
+    }
+
+    fn view_for_user(&self, user_id: u64) -> Message {
+        Message::GameStatus {
+            room_id: self.room_id,
+            owner: self.owner.unwrap_or(0),
+            members: self
+                .users
+                .iter()
+                .copied()
+                .filter(|id| !self.kicked_players.contains(id))
+                .collect(),
+            view: self.game.get_view(user_id),
         }
     }
 }
@@ -105,11 +125,7 @@ impl Handler<Leave> for GameRoom {
             let sessions = &self.sessions;
             if !sessions.values().any(|(uid, _addr)| *uid == user_id) {
                 self.users.remove(&user_id);
-                self.send_room_messages(|user_id| Message::GameStatus {
-                    room_id: self.room_id,
-                    members: self.users.iter().copied().collect(),
-                    view: self.game.get_view(user_id),
-                });
+                self.send_room_messages(|user_id| self.view_for_user(user_id));
             }
         }
     }
@@ -127,11 +143,7 @@ impl Handler<Join> for GameRoom {
 
         self.sessions.insert(session_id, (user_id, addr));
         self.users.insert(user_id);
-        self.send_room_messages(|user_id| Message::GameStatus {
-            room_id: self.room_id,
-            members: self.users.iter().copied().collect(),
-            view: self.game.get_view(user_id),
-        });
+        self.send_room_messages(|user_id| self.view_for_user(user_id));
 
         // TODO: Announce profile to room members
 
@@ -172,10 +184,14 @@ impl Handler<GameAction> for GameRoom {
                 .game
                 .make_action(user_id, game::ActionKind::Cancel)
                 .map_err(Into::into),
-            message::GameAction::TakeSeat(seat_id) => self
-                .game
-                .take_seat(user_id, seat_id as _)
-                .map_err(Into::into),
+            message::GameAction::TakeSeat(seat_id) => {
+                if self.kicked_players.contains(&user_id) {
+                    return MessageResult(Err(Error::other("Kicked from game")));
+                }
+                self.game
+                    .take_seat(user_id, seat_id as _)
+                    .map_err(Into::into)
+            }
             message::GameAction::LeaveSeat(seat_id) => self
                 .game
                 .leave_seat(user_id, seat_id as _)
@@ -199,6 +215,21 @@ impl Handler<GameAction> for GameRoom {
                 }
                 return MessageResult(Ok(()));
             }
+            message::GameAction::KickPlayer(kick_player_id) => {
+                if self.owner != Some(user_id) {
+                    return MessageResult(Err(Error::other("Not room owner")));
+                }
+
+                for (idx, seat) in self.game.shared.seats.clone().into_iter().enumerate() {
+                    if seat.player == Some(kick_player_id) {
+                        let _ = self.game.leave_seat(kick_player_id, idx);
+                    }
+                }
+                if self.users.contains(&kick_player_id) {
+                    self.kicked_players.insert(kick_player_id);
+                }
+                Ok(())
+            }
         };
 
         if let Err(err) = res {
@@ -212,13 +243,10 @@ impl Handler<GameAction> for GameRoom {
             id: Some(self.room_id as _),
             name: self.name.clone(),
             replay: Some(self.game.dump()),
+            owner: self.owner,
         });
 
-        self.send_room_messages(|user_id| Message::GameStatus {
-            room_id: self.room_id,
-            members: self.users.iter().copied().collect(),
-            view: self.game.get_view(user_id),
-        });
+        self.send_room_messages(|user_id| self.view_for_user(user_id));
 
         MessageResult(Ok(()))
     }

@@ -16,6 +16,7 @@ pub enum GameAction {
     BoardAt(u32, u32),
     TakeSeat(u32),
     LeaveSeat(u32),
+    KickPlayer(u64),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -121,6 +122,7 @@ pub enum ServerMessage {
     },
     GameStatus {
         room_id: u32,
+        owner: u64,
         members: Vec<u64>,
         seats: Vec<(Option<u64>, u8)>,
         turn: u32,

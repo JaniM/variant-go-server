@@ -283,6 +283,7 @@ impl GameServer {
 
                         let room = GameRoom {
                             room_id,
+                            owner: db_game.owner.map(|x| x as _),
                             sessions: HashMap::new(),
                             users: HashSet::new(),
                             name: db_game.name.to_owned(),
@@ -290,6 +291,7 @@ impl GameServer {
                             game,
                             db: act.db.clone(),
                             server: ctx.address(),
+                            kicked_players: HashSet::new(),
                         };
 
                         let addr = room.start();
@@ -543,6 +545,7 @@ impl Handler<CreateRoom> for GameServer {
                         id: None,
                         replay: None,
                         name: cloned_name,
+                        owner: Some(user_id),
                     })
                     .into_actor(act)
             })
@@ -558,6 +561,7 @@ impl Handler<CreateRoom> for GameServer {
 
                 let room = GameRoom {
                     room_id,
+                    owner: Some(user_id),
                     sessions: HashMap::new(),
                     users: HashSet::new(),
                     name: name.clone(),
@@ -565,6 +569,7 @@ impl Handler<CreateRoom> for GameServer {
                     game,
                     db: act.db.clone(),
                     server: ctx.address(),
+                    kicked_players: HashSet::new(),
                 };
 
                 let addr = room.start();

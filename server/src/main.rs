@@ -99,12 +99,14 @@ impl Handler<game_room::Message> for ClientWebSocket {
         match msg {
             game_room::Message::GameStatus {
                 room_id,
+                owner,
                 members,
                 view,
             } => {
                 ctx.binary(
                     ServerMessage::GameStatus {
                         room_id,
+                        owner,
                         members,
                         seats: view
                             .seats

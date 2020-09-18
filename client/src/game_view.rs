@@ -3,6 +3,7 @@ use crate::game::{GameHistory, GameModifier, GameStateView};
 #[derive(Clone, PartialEq, Debug)]
 pub struct GameView {
     pub room_id: u32,
+    pub owner: u64,
     pub members: Vec<u64>,
     pub seats: Vec<(Option<u64>, u8)>,
     pub turn: u32,
