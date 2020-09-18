@@ -146,6 +146,10 @@ impl PlayState {
             }
         }
 
+        if shared.mods.captures_give_points.is_some() {
+            shared.points[active_seat.team.0 as usize - 1] += captures as i32 * 2;
+        }
+
         // TODO: only re-scan own previously dead grouos
         let groups = find_groups(board);
         let dead_own = groups

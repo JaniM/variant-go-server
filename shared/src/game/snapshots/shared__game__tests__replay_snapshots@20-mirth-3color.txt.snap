@@ -22,9 +22,6 @@ GameView {
                         12,
                     ), (
                         12,
-                        12,
-                    ), (
-                        12,
                         10,
                     ), (
                         10,
@@ -132,9 +129,6 @@ GameView {
                         1,
                         12,
                     ), (
-                        2,
-                        12,
-                    ), (
                         1,
                         11,
                     ), (
@@ -187,9 +181,6 @@ GameView {
                         9,
                     ), (
                         3,
-                        9,
-                    ), (
-                        5,
                         9,
                     ), (
                         3,
@@ -273,9 +264,6 @@ GameView {
                         10,
                         8,
                     ), (
-                        12,
-                        8,
-                    ), (
                         11,
                         7,
                     )],
@@ -290,9 +278,6 @@ GameView {
                     ), (
                         9,
                         6,
-                    ), (
-                        9,
-                        7,
                     )],
                     liberties: 4,
                     team: 2,
@@ -305,9 +290,6 @@ GameView {
                     ), (
                         7,
                         7,
-                    ), (
-                        8,
-                        7,
                     )],
                     liberties: 5,
                     team: 1,
@@ -319,9 +301,6 @@ GameView {
                         6,
                     ), (
                         0,
-                        6,
-                    ), (
-                        1,
                         6,
                     )],
                     liberties: 3,
@@ -340,9 +319,6 @@ GameView {
                         4,
                     ), (
                         10,
-                        5,
-                    ), (
-                        12,
                         5,
                     ), (
                         12,
@@ -387,9 +363,6 @@ GameView {
                         7,
                         5,
                     ), (
-                        8,
-                        5,
-                    ), (
                         7,
                         4,
                     )],
@@ -404,9 +377,6 @@ GameView {
                     ), (
                         5,
                         4,
-                    ), (
-                        5,
-                        5,
                     )],
                     liberties: 2,
                     team: 1,
@@ -888,6 +858,7 @@ GameView {
         visibility_mode: None,
         no_history: false,
         n_plus_one: None,
+        captures_give_points: None,
     },
     points: [0, 0, 0],
     move_number: 203,

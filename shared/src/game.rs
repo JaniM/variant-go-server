@@ -161,6 +161,9 @@ pub struct NPlusOne {
     pub length: u8,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CapturesGivePoints {}
+
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct GameModifier {
     /// Pixel go is a game mode where you place 2x2 blobs instead of a single stone.
@@ -189,6 +192,10 @@ pub struct GameModifier {
 
     #[serde(default)]
     pub n_plus_one: Option<NPlusOne>,
+
+    /// Captures giving points promotes more aggressive play.
+    #[serde(default)]
+    pub captures_give_points: Option<CapturesGivePoints>,
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -698,6 +705,8 @@ pub fn find_groups(board: &Board) -> Vec<Group> {
         if group.team.is_empty() {
             unreachable!("scanned an empty point");
         }
+
+        seen.insert(point);
 
         stack.push_back(point);
 

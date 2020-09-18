@@ -219,6 +219,7 @@ GameView {
                 length: 4,
             },
         ),
+        captures_give_points: None,
     },
     points: [0, 15],
     move_number: 87,

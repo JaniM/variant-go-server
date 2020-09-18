@@ -41,6 +41,7 @@ pub enum Msg {
     ToggleOneColor,
     ToggleNoHistory,
     ToggleNPlusOne,
+    ToggleCapturesGivePoints,
     SetHiddenMoveCount(u32),
     SetNPlusOneCount(u8),
     SetPonnukiValue(i32),
@@ -180,6 +181,13 @@ impl Component for CreateGameView {
                 self.mods.visibility_mode = match self.mods.visibility_mode {
                     Some(game::VisibilityMode::OneColor) => None,
                     _ => Some(game::VisibilityMode::OneColor),
+                };
+                true
+            }
+            Msg::ToggleCapturesGivePoints => {
+                self.mods.captures_give_points = match self.mods.captures_give_points {
+                    Some(game::CapturesGivePoints {}) => None,
+                    _ => Some(game::CapturesGivePoints {}),
                 };
                 true
             }
@@ -381,6 +389,17 @@ impl Component for CreateGameView {
                                         _ => unreachable!(),
                                     }
                                 ) />
+                        </li>
+                        <li>
+                            <input
+                                type="checkbox"
+                                class="toggle"
+                                checked=self.mods.captures_give_points.is_some()
+                                onclick=self.link.callback(move |_| Msg::ToggleCapturesGivePoints) />
+                            <label class="tooltip" onclick=self.link.callback(move |_| Msg::ToggleCapturesGivePoints)>
+                                {"Captures give points"}
+                                <span class="tooltiptext">{"Only the one to remove stones from the board gets the points. Promotos aggressive play. You only get points for removed stones, not dead stones in your territory."}</span>
+                            </label>
                         </li>
                         <li>
                             <input
