@@ -398,7 +398,7 @@ impl Component for CreateGameView {
                                 onclick=self.link.callback(move |_| Msg::ToggleCapturesGivePoints) />
                             <label class="tooltip" onclick=self.link.callback(move |_| Msg::ToggleCapturesGivePoints)>
                                 {"Captures give points"}
-                                <span class="tooltiptext">{"Only the one to remove stones from the board gets the points. Promotos aggressive play. You only get points for removed stones, not dead stones in your territory."}</span>
+                                <span class="tooltiptext">{"Only the one to remove stones from the board gets the points. Promotes aggressive play. You only get points for removed stones, not dead stones in your territory."}</span>
                             </label>
                         </li>
                         <li>
