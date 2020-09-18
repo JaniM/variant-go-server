@@ -96,6 +96,7 @@ pub enum Error {
         room_id: u32,
         error: GameError,
     },
+    RateLimit,
     Other(Cow<'static, str>),
 }
 

@@ -90,6 +90,9 @@ async fn main() {
                         let mut state = state.lock().unwrap();
                         state.profiles.insert(profile.user_id, profile.nick);
                     }
+                    ServerMessage::Error(e) => {
+                        println!("{:?}", e);
+                    }
                     _ => {}
                 }
             }

@@ -34,9 +34,12 @@ async fn ws_index(
         game_addr: HashMap::new(),
         room_id: None,
         mode: ClientMode::Client,
+        ratelimit_hb: Instant::now(),
+        ratelimit_counter: 0,
+        ratelimit_block_target: None,
+        is_admin: false,
     };
-    let res = ws::start(actor, &r, stream);
-    res
+    ws::start(actor, &r, stream)
 }
 
 // TODO: see https://github.com/actix/examples/blob/master/websocket-chat/src/main.rs
@@ -53,6 +56,12 @@ struct ClientWebSocket {
     game_addr: HashMap<u32, Addr<game_room::GameRoom>>,
     room_id: Option<u32>,
     mode: ClientMode,
+
+    ratelimit_hb: Instant,
+    ratelimit_counter: u64,
+    ratelimit_block_target: Option<Instant>,
+
+    is_admin: bool,
 }
 
 type Context = ws::WebsocketContext<ClientWebSocket>;
@@ -169,15 +178,44 @@ impl Handler<server::Message> for ClientWebSocket {
 
 impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for ClientWebSocket {
     fn handle(&mut self, msg: Result<ws::Message, ws::ProtocolError>, ctx: &mut Self::Context) {
+        use std::convert::TryInto;
+
+        let now = Instant::now();
+
+        if !self.is_admin {
+            let diff = now - self.ratelimit_hb;
+            // Subtract the counter by 1 every 100ms
+            self.ratelimit_counter = self
+                .ratelimit_counter
+                .saturating_sub((diff.as_millis() / 100).try_into().unwrap());
+            self.ratelimit_hb = now;
+
+            if let Some(target) = self.ratelimit_block_target {
+                if now < target {
+                    ctx.binary(ServerMessage::Error(message::Error::RateLimit).pack());
+                    return;
+                }
+                self.ratelimit_block_target = None;
+            }
+
+            self.ratelimit_counter += 1;
+
+            // Allow max 10 messages per second
+            if self.ratelimit_counter > 10 {
+                self.ratelimit_block_target = Some(now + Duration::from_secs(2));
+                return;
+            }
+        }
+
         match msg {
             Ok(ws::Message::Ping(msg)) => {
-                self.hb = Instant::now();
+                self.hb = now;
                 ctx.pong(&msg);
             }
             Ok(ws::Message::Pong(_)) => {
                 self.hb = Instant::now();
             }
-            Ok(ws::Message::Text(text)) => ctx.text(text),
+            Ok(ws::Message::Text(_)) => {}
             Ok(ws::Message::Binary(bin)) => {
                 let data = serde_cbor::from_slice::<ClientMessage>(&bin);
                 match data {
@@ -305,16 +343,19 @@ impl ClientWebSocket {
                 nick,
             })
             .into_actor(self)
-            .then(|res, _act, ctx| {
+            .then(|res, act, ctx| {
                 match res {
-                    Ok(Ok(res)) => ctx.binary(
-                        ServerMessage::Identify {
-                            user_id: res.user_id,
-                            token: res.token.to_string(),
-                            nick: res.nick,
-                        }
-                        .pack(),
-                    ),
+                    Ok(Ok(res)) => {
+                        act.is_admin = res.is_admin;
+                        ctx.binary(
+                            ServerMessage::Identify {
+                                user_id: res.user_id,
+                                token: res.token.to_string(),
+                                nick: res.nick,
+                            }
+                            .pack(),
+                        )
+                    }
                     Ok(Err(err)) => {
                         ctx.binary(ServerMessage::Error(err).pack());
                     }

@@ -130,6 +130,7 @@ pub struct Profile {
     pub token: Uuid,
     pub nick: Option<String>,
     pub last_game_time: Option<Instant>,
+    pub is_admin: bool,
 }
 
 pub struct Session {
@@ -637,6 +638,7 @@ impl Handler<IdentifyAs> for GameServer {
                 token,
                 nick: user.nick,
                 last_game_time: None,
+                is_admin: false,
             });
 
             if let Some(nick) = nick {
@@ -648,6 +650,8 @@ impl Handler<IdentifyAs> for GameServer {
                     profile.nick = Some(nick.to_owned());
                 }
             }
+
+            profile.is_admin = profile.token == act.admin_token;
 
             let profile = profile.clone();
 
@@ -690,11 +694,15 @@ impl Handler<QueryProfile> for GameServer {
                 _ => return fut::err(()),
             };
 
+            let token = Uuid::parse_str(&user.auth_token).unwrap_or_else(|_| Uuid::default());
+            let is_admin = token == act.admin_token;
+
             let profile = Profile {
                 user_id: user.id as u64,
-                token: Uuid::parse_str(&user.auth_token).unwrap_or_else(|_| Uuid::default()),
+                token,
                 nick: user.nick,
                 last_game_time: None,
+                is_admin,
             };
 
             // TODO: only send the profile to users in relevant rooms
@@ -727,7 +735,7 @@ impl Handler<AdminMessage> for GameServer {
         let user_id = r!(session.user_id);
         let profile = r!(self.profiles.get(&user_id));
 
-        if profile.token != self.admin_token {
+        if !profile.is_admin {
             return MessageResult(());
         }
 
