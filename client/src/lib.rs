@@ -387,6 +387,7 @@ impl Component for GameApp {
                     format!("You can only create a game every 2 minutes ({}s left)", x)
                 }
                 message::Error::Game { error, .. } => format!("{:?}", error),
+                message::Error::RateLimit => "You're too fast!".to_string(),
                 message::Error::Other(x) => x.to_string(),
             };
             html! {
