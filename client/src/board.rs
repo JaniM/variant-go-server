@@ -86,7 +86,11 @@ impl Component for Board {
         {
             let mouse_click = self.link.callback(Msg::Click);
             let closure = Closure::wrap(Box::new(move |event: web_sys::MouseEvent| {
-                mouse_click.emit((event.offset_x() as f64, event.offset_y() as f64));
+                // Only trigger for primary mouse button.
+                // See https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent/buttons
+                if event.buttons() == 1 {
+                    mouse_click.emit((event.offset_x() as f64, event.offset_y() as f64));
+                }
             }) as Box<dyn FnMut(_)>);
             canvas
                 .add_event_listener_with_callback("mousedown", closure.as_ref().unchecked_ref())
