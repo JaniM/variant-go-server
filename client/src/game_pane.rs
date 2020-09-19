@@ -1,3 +1,5 @@
+mod mode_list;
+
 use yew::{
     prelude::*,
     services::keyboard::{KeyListenerHandle, KeyboardService},
@@ -292,6 +294,8 @@ impl Component for GamePane {
                 </div>
                 <div>{"Seats"}</div>
                 <SeatList game=game profiles=profiles user=user />
+                {"Modifiers"}
+                <mode_list::ModeList mods=&game.mods />
                 {"Users"}
                 <div>{userlist}</div>
             </div>
