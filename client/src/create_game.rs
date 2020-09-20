@@ -308,7 +308,11 @@ impl Component for CreateGameView {
                                 onclick=self.link.callback(move |_| Msg::ToggleHiddenMove) />
                             <label class="tooltip" onclick=self.link.callback(move |_| Msg::ToggleHiddenMove)>
                                 {"Hidden move go"}
-                                <span class="tooltiptext">{"Each team places stones before the game starts. The opponents and viewers can't see their stones. Stones are revealed if they cause a capture or prevent a move from being made."}</span>
+                                <span class="tooltiptext">{r#"
+Each team places stones before the game starts.
+The opponents and viewers can't see their stones.
+Stones are revealed if they cause a capture or prevent a move from being made.
+If two players pick the same point, neither one gets a stone there, but they still see a marker for it."#}</span>
                             </label>
                             {" Placement stones: "}
                             <input
