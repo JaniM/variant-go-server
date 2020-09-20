@@ -29,6 +29,7 @@ pub struct Board {
 pub struct Props {
     pub game: GameView,
     pub size: i32,
+    pub show_hidden: bool,
 }
 
 pub enum Msg {
@@ -431,21 +432,25 @@ impl Board {
 
         // Hidden stones //////////////////////////////////////////////////////
 
-        for (idx, &colors) in board_visibility.iter().flatten().enumerate() {
-            let x = idx % board_size;
-            let y = idx / board_size;
+        if self.props.show_hidden {
+            for (idx, &colors) in board_visibility.iter().flatten().enumerate() {
+                let x = idx % board_size;
+                let y = idx / board_size;
 
-            let colors = Visibility::from_value(colors);
+                let colors = Visibility::from_value(colors);
 
-            if colors.is_empty() {
-                continue;
-            }
+                if colors.is_empty() {
+                    continue;
+                }
 
-            for color in &colors {
-                context.set_fill_style(&JsValue::from_str(stone_colors_hidden[color as usize - 1]));
-                context.set_stroke_style(&JsValue::from_str(border_colors[color as usize - 1]));
+                for color in &colors {
+                    context.set_fill_style(&JsValue::from_str(
+                        stone_colors_hidden[color as usize - 1],
+                    ));
+                    context.set_stroke_style(&JsValue::from_str(border_colors[color as usize - 1]));
 
-                draw_stone((x as _, y as _), size, true, true)?;
+                    draw_stone((x as _, y as _), size, true, true)?;
+                }
             }
         }
 

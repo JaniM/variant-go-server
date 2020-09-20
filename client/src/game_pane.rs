@@ -13,7 +13,7 @@ use crate::{
     agents::game_store,
     board,
     game_view::{GameView, Profile},
-    networking,
+    if_html, networking,
     seats::SeatList,
 };
 use game_store::GameStore;
@@ -28,6 +28,7 @@ pub struct GamePane {
     size: i32,
     middle_pane_ref: NodeRef,
     window_size: WindowDimensions,
+    show_hidden_moves: bool,
     _key_listener: KeyListenerHandle,
     _resize_task: ResizeTask,
 }
@@ -39,6 +40,7 @@ pub enum Msg {
     GetBoardAt(u32),
     ScanBoard(i32),
     ResetHistory,
+    ToggleHiddenMoves,
     ResizeWindow(WindowDimensions),
     None,
 }
@@ -93,6 +95,7 @@ impl Component for GamePane {
                 width: 0,
                 height: 0,
             },
+            show_hidden_moves: true,
             _key_listener: key_listener,
             _resize_task: resize_task,
         }
@@ -118,6 +121,10 @@ impl Component for GamePane {
             }
             Msg::ResetHistory => {
                 self.game_store.set_game_history(None);
+            }
+            Msg::ToggleHiddenMoves => {
+                self.show_hidden_moves = !self.show_hidden_moves;
+                return true;
             }
             Msg::ResizeWindow(dimensions) => {
                 self.window_size = WindowDimensions {
@@ -272,14 +279,32 @@ impl Component for GamePane {
         let game_wrapper_style =
             format!("height: {}px; display: flex;", self.window_size.height - 20);
 
+        let hidden_move_toggle = if_html!(game.mods.hidden_move.is_some() =>
+            <div style="flex-grow: 0;">
+                <input
+                    type="checkbox"
+                    class="toggle"
+                    checked=self.show_hidden_moves
+                    onclick=self.link.callback(move |_| Msg::ToggleHiddenMoves) />
+                <label onclick=self.link.callback(move |_| Msg::ToggleHiddenMoves)>
+                    {"Show hidden stones"}
+                </label>
+            </div>
+        );
+
         html!(
             <>
             <div ref=self.middle_pane_ref.clone()
                  style="flex-grow: 1; margin: 10px; display: flex; justify-content: center;">
                 <div style=game_wrapper_style>
                     <div style=game_container_style>
-                        <div>{"Status:"} {status} {pass_button} {cancel_button} {resign_button} {hidden_stones_left}</div>
-                        <board::Board game=game size=self.size/>
+                        <div style="display: flex;">
+                            <div style="flex-grow: 1;">
+                                {"Status:"} {status} {pass_button} {cancel_button} {resign_button} {hidden_stones_left}
+                            </div>
+                            {hidden_move_toggle}
+                        </div>
+                        <board::Board game=game size=self.size show_hidden=self.show_hidden_moves/>
                         {turn_bar}
                     </div>
                 </div>

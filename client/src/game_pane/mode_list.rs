@@ -1,6 +1,7 @@
 use yew::prelude::*;
 use yewtil::NeqAssign;
 
+use crate::if_html;
 use shared::game::{GameModifier, VisibilityMode};
 
 pub struct ModeList {
@@ -13,23 +14,6 @@ pub enum Msg {}
 #[derive(Properties, PartialEq, Clone)]
 pub struct Props {
     pub mods: GameModifier,
-}
-
-macro_rules! if_html {
-    (let $pat:pat = $cond:expr => $($body:tt)+) => {
-        if let $pat = $cond {
-            html!($($body)+)
-        } else {
-            html!()
-        }
-    };
-    ($cond:expr => $($body:tt)+) => {
-        if $cond {
-            html!($($body)+)
-        } else {
-            html!()
-        }
-    };
 }
 
 impl Component for ModeList {

@@ -8,6 +8,7 @@ mod game_view;
 mod networking;
 mod seats;
 mod text_input;
+#[macro_use]
 mod utils;
 
 use std::collections::HashMap;

@@ -26,3 +26,21 @@ pub fn local_storage() -> web_sys::Storage {
     let window = web_sys::window().expect("Window not available");
     window.local_storage().unwrap().unwrap()
 }
+
+#[macro_export]
+macro_rules! if_html {
+    (let $pat:pat = $cond:expr => $($body:tt)+) => {
+        if let $pat = $cond {
+            html!($($body)+)
+        } else {
+            html!()
+        }
+    };
+    ($cond:expr => $($body:tt)+) => {
+        if $cond {
+            html!($($body)+)
+        } else {
+            html!()
+        }
+    };
+}
