@@ -454,7 +454,7 @@ impl Component for CreateGameView {
                 <button onclick=oncreate>{"Create"}</button>
                 <div>
                 <p>
-                    {r#"Every game mode uses Tromp-Taylor rules, which are quite close to Chinese rules. Area counting, captures give no points.
+                    {r#"Every game mode uses Chinese rules. Area counting, captures give no points.
                     Superko, so ko is only in effect when the board repeats - there is no direct ko in three color go."#}
                 </p>
                 </div>
