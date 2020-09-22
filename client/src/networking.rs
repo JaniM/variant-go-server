@@ -49,11 +49,13 @@ pub fn start_websocket(
     on_msg: impl (Fn(Result<ServerMessage, ServerError>)) + Clone + 'static,
 ) -> Result<(), JsValue> {
     let window = web_sys::window().expect("Window not available");
-    let host = window.location().hostname().expect("host not available");
+    let hostname = window.location().hostname().expect("host not available");
 
-    let host = format!("wss://{}/ws/", host);
-    #[cfg(feature = "local")]
-    let host = format!("ws://{}:8088/ws/", host);
+    let host = if cfg!(feature = "local") {
+        format!("ws://{}:8088/ws/", hostname)
+    } else {
+        format!("wss://{}/ws/", hostname)
+    };
 
     let ws = WebSocket::new(&host)?;
 
