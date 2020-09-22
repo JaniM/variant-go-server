@@ -458,8 +458,9 @@ If two players pick the same point, neither one gets a stone there, but they sti
                 <button onclick=oncreate>{"Create"}</button>
                 <div>
                 <p>
-                    {r#"Every game mode uses Chinese rules. Area counting, captures give no points.
-                    Superko, so ko is only in effect when the board repeats - there is no direct ko in three color go."#}
+                    {r#"All game modes use area scoring (i.e. neutral intersections are worth points) and positional superko (board state can never repeat).
+                        In three-colour and four-colour go, a player who captures stones gets no advantage over a player who didn't, but the player whose stones are captured loses points.
+                        These rules are close to Chinese rules, just generalized by virtue of superko."#}
                 </p>
                 </div>
             </div>
