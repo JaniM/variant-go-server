@@ -224,17 +224,9 @@ impl PlayState {
         if let Some(rule) = &shared.mods.tetris {
             // This is valid because points_played is empty if the move is illegal.
             use tetris::TetrisResult::*;
-            match tetris::check(
-                &mut points_played,
-                &mut shared.board,
-                shared.board_visibility.as_mut(),
-                rule,
-            ) {
+            match tetris::check(&mut points_played, &mut shared.board, rule) {
                 Nothing => {}
-                Illegal(revealed) => {
-                    if revealed {
-                        return Ok(ActionChange::None);
-                    }
+                Illegal => {
                     return Err(MakeActionError::Illegal);
                 }
             }
