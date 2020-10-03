@@ -1,4 +1,5 @@
 mod n_plus_one;
+mod tetris;
 
 use crate::game::{
     find_groups, ActionChange, ActionKind, Board, BoardHistory, Color, GameState, Group, GroupVec,
@@ -132,7 +133,7 @@ impl PlayState {
                 *board.point_mut(*point) = Color::empty();
                 captures += 1;
             }
-            let reveals = reveal_group(&mut shared.board_visibility, group, board);
+            let reveals = reveal_group(shared.board_visibility.as_mut(), group, board);
             revealed = revealed || reveals;
 
             if let Some(ponnuki) = shared.mods.ponnuki_is_points {
@@ -168,7 +169,7 @@ impl PlayState {
                     *board.point_mut(*point) = Color::empty();
                 }
             }
-            let reveals = reveal_group(&mut shared.board_visibility, group, board);
+            let reveals = reveal_group(shared.board_visibility.as_mut(), group, board);
             revealed = revealed || reveals;
         }
 
@@ -220,6 +221,24 @@ impl PlayState {
     ) -> MakeActionResult {
         // TODO: should use some kind of set to make suicide prevention faster
         let mut points_played = self.place_stone(shared, (x, y))?;
+        if let Some(rule) = &shared.mods.tetris {
+            // This is valid because points_played is empty if the move is illegal.
+            use tetris::TetrisResult::*;
+            match tetris::check(
+                &mut points_played,
+                &mut shared.board,
+                shared.board_visibility.as_mut(),
+                rule,
+            ) {
+                Nothing => {}
+                Illegal(revealed) => {
+                    if revealed {
+                        return Ok(ActionChange::None);
+                    }
+                    return Err(MakeActionError::Illegal);
+                }
+            }
+        }
         if points_played.is_empty() {
             return Ok(ActionChange::None);
         }
@@ -413,8 +432,8 @@ impl PlayState {
     }
 }
 
-fn reveal_group(
-    visibility: &mut Option<VisibilityBoard>,
+pub(self) fn reveal_group(
+    visibility: Option<&mut VisibilityBoard>,
     group: &Group,
     board: &Board,
 ) -> Revealed {

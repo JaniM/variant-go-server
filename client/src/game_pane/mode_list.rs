@@ -60,6 +60,10 @@ impl Component for ModeList {
             <li>{format!("{}+1 go", r.length)}</li>
         );
 
+        let tetris = if_html!(mods.tetris.is_some() =>
+            <li>{"Tetris go"}</li>
+        );
+
         let captures_give_points = if_html!(
             mods.captures_give_points.is_some() =>
             <li>{"Captures give points"}</li>
@@ -74,6 +78,7 @@ impl Component for ModeList {
                 {one_color}
                 {no_history}
                 {n_plus_one}
+                {tetris}
                 {captures_give_points}
             </ul>
         }

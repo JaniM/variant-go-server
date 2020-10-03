@@ -42,6 +42,7 @@ pub enum Msg {
     ToggleNoHistory,
     ToggleNPlusOne,
     ToggleCapturesGivePoints,
+    ToggleTetris,
     SetHiddenMoveCount(u32),
     SetNPlusOneCount(u8),
     SetPonnukiValue(i32),
@@ -191,6 +192,13 @@ impl Component for CreateGameView {
                 };
                 true
             }
+            Msg::ToggleTetris => {
+                self.mods.tetris = match self.mods.tetris {
+                    Some(game::TetrisGo {}) => None,
+                    _ => Some(game::TetrisGo {}),
+                };
+                true
+            }
             Msg::OnCreate => {
                 if self.seats.is_empty() || self.komis.is_empty() {
                     return false;
@@ -290,6 +298,20 @@ impl Component for CreateGameView {
         };
 
         let oncreate = self.link.callback(|_| Msg::OnCreate);
+
+        let tetris = html! {
+            <li>
+                <input
+                    type="checkbox"
+                    class="toggle"
+                    checked=self.mods.tetris.is_some()
+                    onclick=self.link.callback(move |_| Msg::ToggleTetris) />
+                <label class="tooltip" onclick=self.link.callback(move |_| Msg::ToggleTetris)>
+                    {"Tetris go"}
+                    <span class="tooltiptext">{"You can't play a group of exactly 4 stones. Diagonals don't form a group."}</span>
+                </label>
+            </li>
+        };
 
         let options = html! {
             <div style="padding: 1em; flex-grow: 1;">
@@ -394,6 +416,7 @@ If two players pick the same point, neither one gets a stone there, but they sti
                                     }
                                 ) />
                         </li>
+                        {tetris}
                         <li>
                             <input
                                 type="checkbox"

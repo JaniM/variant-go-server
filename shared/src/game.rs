@@ -167,6 +167,9 @@ pub struct NPlusOne {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CapturesGivePoints {}
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TetrisGo {}
+
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct GameModifier {
     /// Pixel go is a game mode where you place 2x2 blobs instead of a single stone.
@@ -199,6 +202,9 @@ pub struct GameModifier {
     /// Captures giving points promotes more aggressive play.
     #[serde(default)]
     pub captures_give_points: Option<CapturesGivePoints>,
+
+    #[serde(default)]
+    pub tetris: Option<TetrisGo>,
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -264,6 +270,7 @@ pub enum MakeActionError {
     PointOccupied,
     Suicide,
     Ko,
+    Illegal,
     GameDone,
 }
 
