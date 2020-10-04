@@ -26,6 +26,7 @@ pub type VisibilityBoard = Board<Bitmap<typenum::U16>>;
 
 #[derive(Copy, Clone, PartialEq, Hash, Serialize, Deserialize)]
 #[repr(transparent)]
+#[serde(transparent)]
 pub struct Color(pub u8);
 
 impl std::fmt::Debug for Color {
