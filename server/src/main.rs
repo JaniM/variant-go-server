@@ -131,6 +131,7 @@ impl Handler<game_room::Message> for ClientWebSocket {
                         mods: view.mods,
                         points: view.points.to_vec(),
                         move_number: view.move_number,
+                        clock: view.clock,
                     }
                     .pack(),
                 );

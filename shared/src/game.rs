@@ -1,7 +1,9 @@
 mod board;
+pub mod clock;
 #[cfg(test)]
 mod tests;
 
+use clock::{ClockRule, GameClock, Millisecond};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashSet, VecDeque};
 
@@ -174,6 +176,11 @@ pub struct TetrisGo {}
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ToroidalGo {}
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Clock {
+    pub rule: ClockRule,
+}
+
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct GameModifier {
     /// Pixel go is a game mode where you place 2x2 blobs instead of a single stone.
@@ -212,6 +219,9 @@ pub struct GameModifier {
 
     #[serde(default)]
     pub toroidal: Option<ToroidalGo>,
+
+    #[serde(default)]
+    pub clock: Option<Clock>,
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -239,6 +249,7 @@ pub struct SharedState {
     pub board_history: Vec<BoardHistory>,
     pub komis: GroupVec<i32>,
     pub mods: GameModifier,
+    pub clock: Option<GameClock>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -334,6 +345,7 @@ pub struct GameView {
     pub mods: GameModifier,
     pub points: GroupVec<i32>,
     pub move_number: u32,
+    pub clock: Option<GameClock>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -391,6 +403,22 @@ impl Game {
             GameState::play(seats.len())
         };
 
+        let mut clock = mods
+            .clock
+            .as_ref()
+            .map(|r| GameClock::new(r.rule.clone(), seats.len()));
+
+        // TODO: PUZZLE use the original game creation time
+        if let Some(clock) = &mut clock {
+            use std::time;
+            clock.initialize_clocks(clock::Millisecond(
+                time::SystemTime::now()
+                    .duration_since(time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_millis() as i128,
+            ));
+        }
+
         Some(Game {
             state,
             state_stack: Vec::new(),
@@ -411,6 +439,7 @@ impl Game {
                 }],
                 komis,
                 mods,
+                clock,
             },
             actions: vec![],
         })
@@ -419,7 +448,9 @@ impl Game {
     /// Loads a game from a replay dump. Can fail at any point due to changed rules...
     /// Such is life.
     pub fn load(dump: &[u8]) -> Option<Game> {
-        let replay: GameReplay = serde_cbor::from_slice(dump).ok()?;
+        let mut replay: GameReplay = serde_cbor::from_slice(dump).ok()?;
+        // TODO: PUZZLE make replays conserve clocks
+        replay.mods.clock = None;
         let mut game = Game::standard(&replay.seats, replay.komis, replay.size, replay.mods)?;
 
         for action in replay.actions {
@@ -432,7 +463,8 @@ impl Game {
                     game.leave_seat(action.user_id, seat_id as _).ok()?;
                 }
                 Play(play) => {
-                    game.make_action(action.user_id, play).ok()?;
+                    game.make_action(action.user_id, play, Millisecond(0))
+                        .ok()?;
                 }
             }
         }
@@ -504,6 +536,7 @@ impl Game {
         &mut self,
         player_id: u64,
         action: ActionKind,
+        time: Millisecond,
     ) -> Result<(), MakeActionError> {
         if !self
             .shared
@@ -519,7 +552,32 @@ impl Game {
                 state.make_action(&mut self.shared, player_id, action.clone())
             }
             GameState::Play(state) => {
-                state.make_action(&mut self.shared, player_id, action.clone())
+                let seat_idx = self.shared.turn;
+                // If this is the first move, we want to reset the clock.
+                let start_clock = self.shared.board_history.len() == 1;
+                if start_clock {
+                    if let Some(clock) = &mut self.shared.clock {
+                        clock.initialize_clocks(time);
+                    }
+                }
+                let time_left = if let Some(clock) = &mut self.shared.clock {
+                    clock.advance_clock(seat_idx, time)
+                } else {
+                    Millisecond(0)
+                };
+
+                let res = if time_left.0 < -1000 {
+                    state.make_action(&mut self.shared, player_id, ActionKind::Resign)
+                } else {
+                    state.make_action(&mut self.shared, player_id, action.clone())
+                };
+
+                if res.is_ok() && !start_clock {
+                    if let Some(clock) = &mut self.shared.clock {
+                        clock.end_turn(seat_idx, time);
+                    }
+                }
+                res
             }
             GameState::Scoring(state) => {
                 state.make_action(&mut self.shared, player_id, action.clone())
@@ -539,6 +597,7 @@ impl Game {
                     }
                     ActionChange::PopState => {
                         self.state = self.state_stack.pop().expect("Empty state stack popped");
+                        // TODO: PUZZLE reset clocks so players don't run out of time
                     }
                     ActionChange::None => {}
                 }
@@ -673,6 +732,7 @@ impl Game {
             mods: shared.mods.clone(),
             points: shared.points.clone(),
             move_number: shared.board_history.len() as u32 - 1,
+            clock: shared.clock.clone(),
         }
     }
 

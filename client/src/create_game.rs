@@ -2,6 +2,7 @@ use web_sys::HtmlSelectElement;
 use yew::prelude::*;
 
 use crate::game_view::Profile;
+use crate::if_html;
 use crate::message::StartGame;
 use crate::networking;
 use crate::text_input::TextInput;
@@ -17,6 +18,18 @@ pub enum Preset {
     ThreeColorRengo, // why?
 }
 
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub enum ClockKind {
+    None,
+    Fischer,
+}
+
+#[derive(Copy, Clone, PartialEq, Debug, Default)]
+pub struct ClockSettings {
+    main_time: u32,
+    increment: u32,
+}
+
 pub struct CreateGameView {
     link: ComponentLink<Self>,
     name: String,
@@ -28,6 +41,8 @@ pub struct CreateGameView {
     size_select_ref: NodeRef,
     oncreate: Callback<()>,
     mods: GameModifier,
+    clock_kind: ClockKind,
+    clock_settings: ClockSettings,
 }
 
 pub enum Msg {
@@ -48,6 +63,8 @@ pub enum Msg {
     SetNPlusOneCount(u8),
     SetPonnukiValue(i32),
     SetKomi(usize, f32),
+    SetClockType(ClockKind),
+    SetClockSettings(ClockSettings),
     OnCreate,
 }
 
@@ -72,6 +89,11 @@ impl Component for CreateGameView {
             size_select_ref: NodeRef::default(),
             oncreate: props.oncreate,
             mods: GameModifier::default(),
+            clock_kind: ClockKind::Fischer,
+            clock_settings: ClockSettings {
+                main_time: 20,
+                increment: 20,
+            },
         };
         view.update(Msg::LoadPreset(Preset::Standard));
         view
@@ -216,9 +238,28 @@ impl Component for CreateGameView {
                 self.komis[seat_idx] = (value * 2.0) as i32;
                 true
             }
+            Msg::SetClockType(kind) => {
+                self.clock_kind = kind;
+                true
+            }
+            Msg::SetClockSettings(settings) => {
+                self.clock_settings = settings;
+                true
+            }
             Msg::OnCreate => {
                 if self.seats.is_empty() || self.komis.is_empty() {
                     return false;
+                }
+                if self.clock_kind == ClockKind::Fischer {
+                    use game::clock::*;
+                    self.mods.clock = Some(game::Clock {
+                        rule: ClockRule::Fischer(FischerClock {
+                            main_time: Millisecond(
+                                self.clock_settings.main_time as i128 * 60 * 1000,
+                            ),
+                            increment: Millisecond(self.clock_settings.increment as i128 * 1000),
+                        }),
+                    });
                 }
                 networking::send(StartGame {
                     name: self.name.clone(),
@@ -332,6 +373,67 @@ impl Component for CreateGameView {
                 <option value=13 selected=self.size == 13>{ "13" }</option>
                 <option value=19 selected=self.size == 19>{ "19" }</option>
             </select>
+        };
+
+        let select_clock_kind = self.link.callback(|event| match event {
+            ChangeData::Select(elem) => {
+                let value = elem.selected_index();
+                Msg::SetClockType(match value {
+                    0 => ClockKind::None,
+                    1 => ClockKind::Fischer,
+                    _ => unreachable!(),
+                })
+            }
+            _ => unreachable!(),
+        });
+
+        let clock_kind_selection = html! {
+            <select onchange=select_clock_kind>
+                <option value="None" selected=self.clock_kind == ClockKind::None>{ "None" }</option>
+                <option value="Fischer" selected=self.clock_kind == ClockKind::Fischer>{ "Fischer" }</option>
+            </select>
+        };
+
+        let clock_settings = self.clock_settings;
+        let set_main_time = self.link.callback(move |data| match data {
+            yew::events::ChangeData::Value(v) => Msg::SetClockSettings(ClockSettings {
+                main_time: v.parse().unwrap(),
+                ..clock_settings
+            }),
+            _ => unreachable!(),
+        });
+
+        let set_increment = self.link.callback(move |data| match data {
+            yew::events::ChangeData::Value(v) => Msg::SetClockSettings(ClockSettings {
+                increment: v.parse().unwrap(),
+                ..clock_settings
+            }),
+            _ => unreachable!(),
+        });
+
+        let clock_settings = html! {
+            <div>
+                <div>
+                    <span style="display: inline-block; width: 9em;">
+                        {"Main time (min)"}
+                    </span>
+                    <input
+                        style="width: 4em;"
+                        type="number"
+                        value={self.clock_settings.main_time}
+                        onchange=set_main_time />
+                </div>
+                <div>
+                    <span style="display: inline-block; width: 9em;">
+                        {"Increment (s)"}
+                    </span>
+                    <input
+                        style="width: 4em;"
+                        type="number"
+                        value={self.clock_settings.increment}
+                        onchange=set_increment />
+                </div>
+            </div>
         };
 
         let oncreate = self.link.callback(|_| Msg::OnCreate);
@@ -519,7 +621,7 @@ If two players pick the same point, neither one gets a stone there, but they sti
                 </span>
                 <div style="display: flex;">
                     {options}
-                    <div style="border-left: 1px solid #dedede; padding: 1em;">
+                    <div style="border-left: 1px solid #dedede; padding: 1em; min-width: 200px;">
                         <div>
                             {"Seats:"}
                             <ul>{seats}</ul>
@@ -527,6 +629,11 @@ If two players pick the same point, neither one gets a stone there, but they sti
                         <div>
                             {"Komis:"}
                             <ul>{komis}</ul>
+                        </div>
+                        <div>
+                            {"Clock: "}
+                            {clock_kind_selection}
+                            {if_html!(self.clock_kind == ClockKind::Fischer => {clock_settings})}
                         </div>
                     </div>
                 </div>

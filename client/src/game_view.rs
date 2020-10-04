@@ -1,4 +1,4 @@
-use crate::game::{GameHistory, GameModifier, GameStateView};
+use crate::game::{clock::GameClock, GameHistory, GameModifier, GameStateView};
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct GameView {
@@ -19,6 +19,7 @@ pub struct GameView {
     pub points: Vec<i32>,
     pub move_number: u32,
     pub history: Option<GameHistory>,
+    pub clock: Option<GameClock>,
 }
 
 #[derive(Clone, PartialEq)]

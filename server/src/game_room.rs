@@ -4,6 +4,7 @@ use std::time::Instant;
 
 use crate::{db, server};
 use shared::game;
+use shared::game::clock::Millisecond;
 use shared::message;
 
 // TODO: add room timeout
@@ -165,28 +166,37 @@ impl Handler<GameAction> for GameRoom {
 
         let GameAction { id, action } = msg;
 
+        // TODO: PUZZLE Add background timer for clock
+
         let &(user_id, ref addr) = match self.sessions.get(&id) {
             Some(x) => x,
             None => return MessageResult(Err(Error::other("No session"))),
         };
 
+        let current_time = Millisecond(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as i128,
+        );
+
         self.last_action = Instant::now();
         let res = match action {
             message::GameAction::Place(x, y) => self
                 .game
-                .make_action(user_id, game::ActionKind::Place(x, y))
+                .make_action(user_id, game::ActionKind::Place(x, y), current_time)
                 .map_err(Into::into),
             message::GameAction::Pass => self
                 .game
-                .make_action(user_id, game::ActionKind::Pass)
+                .make_action(user_id, game::ActionKind::Pass, current_time)
                 .map_err(Into::into),
             message::GameAction::Cancel => self
                 .game
-                .make_action(user_id, game::ActionKind::Cancel)
+                .make_action(user_id, game::ActionKind::Cancel, current_time)
                 .map_err(Into::into),
             message::GameAction::Resign => self
                 .game
-                .make_action(user_id, game::ActionKind::Resign)
+                .make_action(user_id, game::ActionKind::Resign, current_time)
                 .map_err(Into::into),
             message::GameAction::TakeSeat(seat_id) => {
                 if self.kicked_players.contains(&user_id) {

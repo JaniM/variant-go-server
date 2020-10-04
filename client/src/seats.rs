@@ -1,15 +1,64 @@
+use js_sys::Date;
 use std::collections::HashMap;
+use std::time::Duration;
 use yew::prelude::*;
 
 use crate::game::GameStateView;
 use crate::game_view::*;
 use crate::message;
 use crate::networking;
+use shared::game::clock::PlayerClock;
 use shared::game::Color;
+
+use yew::services::interval::{IntervalService, IntervalTask};
+
+struct Audio {
+    time_sound: Option<web_sys::HtmlAudioElement>,
+    /// Number of milliseconds since epoch
+    last_play: f64,
+}
+
+impl Audio {
+    fn new() -> Audio {
+        let path = "/sounds/countdownbeep.wav";
+
+        let time_sound = web_sys::HtmlAudioElement::new_with_src(path).ok();
+
+        Audio {
+            time_sound,
+            last_play: Date::now(),
+        }
+    }
+
+    fn play_beep(&mut self) {
+        let time = Date::now();
+        if time - self.last_play < 6000.0 {
+            return;
+        }
+        self.last_play = time;
+
+        if let Some(sound) = &self.time_sound {
+            sound.set_current_time(0.0);
+            // TODO: PUZZLE unhardcode this
+            sound.set_volume(0.25);
+            let _ = sound.play();
+        }
+    }
+
+    fn stop_beep(&mut self) {
+        self.last_play = 0.0;
+
+        if let Some(sound) = &self.time_sound {
+            let _ = sound.pause();
+        }
+    }
+}
 
 pub struct SeatList {
     link: ComponentLink<Self>,
     props: Props,
+    audio: Audio,
+    _interval: Option<IntervalTask>,
 }
 
 #[derive(Properties, Clone, PartialEq)]
@@ -23,6 +72,7 @@ pub enum Msg {
     TakeSeat(u32),
     LeaveSeat(u32),
     KickSeat(usize),
+    Refresh,
 }
 
 impl Component for SeatList {
@@ -30,7 +80,15 @@ impl Component for SeatList {
     type Properties = Props;
 
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
-        SeatList { link, props }
+        let interval = props.game.clock.as_ref().map(|_| {
+            IntervalService::spawn(Duration::from_millis(250), link.callback(|_| Msg::Refresh))
+        });
+        SeatList {
+            link,
+            props,
+            audio: Audio::new(),
+            _interval: interval,
+        }
     }
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
@@ -43,12 +101,52 @@ impl Component for SeatList {
                     networking::send(message::GameAction::KickPlayer(player));
                 }
             }
+            Msg::Refresh => {
+                let now = js_sys::Date::now() as i128;
+                let game = &self.props.game;
+                if !matches!(game.state, shared::game::GameStateView::Play(_)) {
+                    return true;
+                }
+                for (idx, clock) in self
+                    .props
+                    .game
+                    .clock
+                    .iter()
+                    .flat_map(|c| &c.clocks)
+                    .enumerate()
+                {
+                    if game.turn != idx as u32 || game.move_number == 0 {
+                        continue;
+                    }
+
+                    let time_left = match clock {
+                        PlayerClock::Plain {
+                            last_time,
+                            time_left,
+                        } => last_time.0 + time_left.0 - now,
+                    };
+
+                    if time_left < 5000 && time_left > 0 {
+                        self.audio.play_beep();
+                        break;
+                    }
+                }
+            }
         }
         true
     }
 
     fn change(&mut self, props: Self::Properties) -> ShouldRender {
         if self.props != props {
+            self._interval = props.game.clock.as_ref().map(|_| {
+                IntervalService::spawn(
+                    Duration::from_millis(250),
+                    self.link.callback(|_| Msg::Refresh),
+                )
+            });
+            if props.game.move_number != self.props.game.move_number {
+                self.audio.stop_beep();
+            }
             self.props = props;
             true
         } else {
@@ -62,6 +160,8 @@ impl Component for SeatList {
             GameStateView::Scoring(state) | GameStateView::Done(state) => Some(&state.scores[..]),
             _ => Some(&self.props.game.points[..]),
         };
+
+        let now = js_sys::Date::now() as i128;
 
         let list = game
             .seats
@@ -91,6 +191,28 @@ impl Component for SeatList {
                     " - resigned!"
                 } else {
                     ""
+                };
+
+                let time_left = if let (false, Some(clock)) = (resigned, &game.clock) {
+                    let clock = &clock.clocks[idx];
+                    let time_left = if game.turn == idx as u32 && game.move_number > 0 {
+                        match clock {
+                            PlayerClock::Plain { last_time, time_left } => last_time.0 + time_left.0 - now
+                        }
+                    } else {
+                        match clock {
+                            PlayerClock::Plain { time_left, .. } => time_left.0
+                        }
+                    };
+                    let minutes = time_left / (60 * 1000);
+                    let seconds = (time_left / 1000) % 60;
+                    if minutes > 0 {
+                        format!("- {}min {}s left", minutes, seconds)
+                    } else {
+                        format!("- {}s left", seconds)
+                    }
+                } else {
+                    "".to_string()
                 };
 
                 if let Some(id) = occupant {
@@ -127,9 +249,10 @@ impl Component for SeatList {
                     };
 
                     html! {
-                        <div class=class style="margin: 5px 0;">
+                        <div class=class style="margin: 5px 0; padding: 0px 5px; padding-top: 5px;">
                             {format!("{}: {} {}{}{}", colorname, nick, scoretext, passed, resigned_text)}
                             {leave}
+                            <div style="padding: 10px; font-size: large;">{time_left}</div>
                         </div>
                     }
                 } else {
@@ -139,6 +262,7 @@ impl Component for SeatList {
                             <button onclick=self.link.callback(move |_| Msg::TakeSeat(idx as _))>
                                 {"Take seat"}
                             </button>
+                            <div>{time_left}</div>
                         </div>
                     }
                 }

@@ -137,6 +137,7 @@ pub enum ServerMessage {
         mods: game::GameModifier,
         points: Vec<i32>,
         move_number: u32,
+        clock: Option<game::clock::GameClock>,
     },
     BoardAt(game::GameHistory),
     Profile(Profile),

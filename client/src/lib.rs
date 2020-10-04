@@ -131,6 +131,7 @@ impl Component for GameApp {
                     mods,
                     points,
                     move_number,
+                    clock,
                 }) => {
                     game.emit(GameView {
                         room_id,
@@ -147,6 +148,7 @@ impl Component for GameApp {
                         points,
                         move_number,
                         history: None,
+                        clock,
                     });
                 }
                 Ok(ServerMessage::BoardAt(view)) => {
