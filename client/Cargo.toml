@@ -55,6 +55,7 @@ features = [
   "HtmlElement",
   "HtmlInputElement",
   "Node",
+  "PointerEvent",
   "ProgressEvent",
   "Storage",
   "Text",

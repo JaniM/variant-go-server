@@ -35,7 +35,7 @@ pub struct Props {
 pub enum Msg {
     Render(f64),
     MouseMove((f64, f64)),
-    Click((f64, f64)),
+    Click((f64, f64, bool)),
     MouseLeave,
 }
 
@@ -88,18 +88,18 @@ impl Component for Board {
 
         {
             let mouse_click = self.link.callback(Msg::Click);
-            let closure = Closure::wrap(Box::new(move |event: web_sys::MouseEvent| {
-                // Only trigger for primary mouse button.
-                // See https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent/buttons
+            let closure = Closure::wrap(Box::new(move |event: web_sys::PointerEvent| {
+                // Only trigger for primary button.
+                // See https://developer.mozilla.org/en-US/docs/Web/API/Pointer_events
+                println!("{:?}", event);
                 let buttons = event.buttons();
-
-                // `buttons` is 0 on iOS devices.
-                if buttons == 0 || buttons == 1 {
-                    mouse_click.emit((event.offset_x() as f64, event.offset_y() as f64));
+                if event.is_primary() && (buttons == 0 || buttons == 1) {
+                    let is_touch = event.pointer_type() == "touch";
+                    mouse_click.emit((event.offset_x() as f64, event.offset_y() as f64, is_touch));
                 }
             }) as Box<dyn FnMut(_)>);
             canvas
-                .add_event_listener_with_callback("mousedown", closure.as_ref().unchecked_ref())
+                .add_event_listener_with_callback("pointerdown", closure.as_ref().unchecked_ref())
                 .unwrap();
             closure.forget();
         }
@@ -202,18 +202,23 @@ impl Component for Board {
                 self.selection_pos = mouse_to_coord(p);
                 self.render_gl(0.0).unwrap();
             }
-            Msg::Click(p) => {
+            Msg::Click((x, y, is_touch)) => {
+                let p = (x, y);
                 // Ignore clicks while viewing history
                 if self.props.game.history.is_some() {
                     return false;
                 }
                 self.mouse_pos = Some(p);
-                self.selection_pos = mouse_to_coord(p);
+                let coord = mouse_to_coord(p);
+                let send = !is_touch || self.selection_pos == coord;
+                self.selection_pos = coord;
                 if let Some(selection_pos) = self.selection_pos {
-                    networking::send(ClientMessage::GameAction {
-                        room_id: None,
-                        action: GameAction::Place(selection_pos.0, selection_pos.1),
-                    });
+                    if send {
+                        networking::send(ClientMessage::GameAction {
+                            room_id: None,
+                            action: GameAction::Place(selection_pos.0, selection_pos.1),
+                        });
+                    }
                 }
             }
             Msg::MouseLeave => {
