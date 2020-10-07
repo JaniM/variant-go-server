@@ -41,3 +41,8 @@ npm run start
 ## Testing
 
 Game rules use snapshot tests powered by [insta](https://docs.rs/insta/0.16.1/insta/).
+
+# Licensing
+
+The main project is dual licensed under MIT and Apache 2.0 licenses - the user is free to pick either one. 
+Sounds are borrowed from [Katrain](https://github.com/sanderland/katrain) and fall under the MIT license.

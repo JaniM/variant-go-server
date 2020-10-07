@@ -1,3 +1,4 @@
+use js_sys::Date;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::CanvasRenderingContext2d as Canvas2d;
@@ -11,6 +12,54 @@ use shared::message::{ClientMessage, GameAction};
 use crate::game_view::GameView;
 use crate::networking;
 
+// TODO: PUZZLE Move audio handling to its own agent.
+
+struct Audio {
+    stone_sounds: Vec<web_sys::HtmlAudioElement>,
+    /// Number of milliseconds since epoch
+    last_play: f64,
+}
+
+impl Audio {
+    fn new() -> Audio {
+        let stones = [
+            "/sounds/stone1.wav",
+            "/sounds/stone2.wav",
+            "/sounds/stone3.wav",
+            "/sounds/stone4.wav",
+            "/sounds/stone5.wav",
+        ];
+
+        let stone_sounds = stones
+            .iter()
+            .filter_map(|path| web_sys::HtmlAudioElement::new_with_src(*path).ok())
+            .collect();
+
+        Audio {
+            stone_sounds,
+            last_play: Date::now(),
+        }
+    }
+
+    fn play_stone(&mut self) {
+        let time = Date::now();
+        if time - self.last_play < 100.0 {
+            return;
+        }
+        self.last_play = time;
+
+        // Good enough randomness
+        let idx = (time % self.stone_sounds.len() as f64) as usize;
+
+        // We don't really care about playback errors.
+        let sound = &self.stone_sounds[idx];
+        sound.set_current_time(0.0);
+        // TODO: PUZZLE unhardcode this
+        sound.set_volume(0.25);
+        let _ = sound.play();
+    }
+}
+
 pub struct Board {
     props: Props,
     canvas: Option<HtmlCanvasElement>,
@@ -23,6 +72,7 @@ pub struct Board {
     width: u32,
     height: u32,
     edge_size: i32,
+    audio: Audio,
 }
 
 #[derive(Properties, Clone, PartialEq)]
@@ -56,6 +106,7 @@ impl Component for Board {
             width: 0,
             height: 0,
             edge_size: 40,
+            audio: Audio::new(),
         }
     }
 
@@ -140,6 +191,13 @@ impl Component for Board {
 
     fn change(&mut self, props: Self::Properties) -> ShouldRender {
         if self.props != props {
+            if self.props.game.move_number != props.game.move_number
+                || self.props.game.history.as_ref().map(|x| x.move_number)
+                    != props.game.history.as_ref().map(|x| x.move_number)
+            {
+                self.audio.play_stone();
+            }
+
             self.props = props;
             if let Some(canvas) = &self.canvas {
                 let window = web_sys::window().unwrap();
