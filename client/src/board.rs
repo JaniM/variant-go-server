@@ -84,12 +84,17 @@ impl Component for Board {
             closure.forget();
         }
 
+        // TODO: Add proper touch event handlers.
+
         {
             let mouse_click = self.link.callback(Msg::Click);
             let closure = Closure::wrap(Box::new(move |event: web_sys::MouseEvent| {
                 // Only trigger for primary mouse button.
                 // See https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent/buttons
-                if event.buttons() == 1 {
+                let buttons = event.buttons();
+
+                // `buttons` is 0 on iOS devices.
+                if buttons == 0 || buttons == 1 {
                     mouse_click.emit((event.offset_x() as f64, event.offset_y() as f64));
                 }
             }) as Box<dyn FnMut(_)>);
