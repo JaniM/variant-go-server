@@ -170,6 +170,9 @@ pub struct CapturesGivePoints {}
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TetrisGo {}
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ToroidalGo {}
+
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct GameModifier {
     /// Pixel go is a game mode where you place 2x2 blobs instead of a single stone.
@@ -205,6 +208,9 @@ pub struct GameModifier {
 
     #[serde(default)]
     pub tetris: Option<TetrisGo>,
+
+    #[serde(default)]
+    pub toroidal: Option<ToroidalGo>,
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -372,7 +378,7 @@ impl Game {
             return None;
         }
 
-        let board = Board::empty(size.0 as _, size.1 as _);
+        let board = Board::empty(size.0 as _, size.1 as _, mods.toroidal.is_some());
         let state = if let Some(rules) = &mods.hidden_move {
             GameState::free_placement(
                 seats.len(),

@@ -497,6 +497,7 @@ GameView {
             points: Board {
                 width: 13,
                 height: 13,
+                toroidal: false,
                 points: [
                     2,
                     2,
@@ -881,6 +882,8 @@ GameView {
         no_history: false,
         n_plus_one: None,
         captures_give_points: None,
+        tetris: None,
+        toroidal: None,
     },
     points: [0, 15],
     move_number: 126,

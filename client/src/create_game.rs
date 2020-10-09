@@ -43,6 +43,7 @@ pub enum Msg {
     ToggleNPlusOne,
     ToggleCapturesGivePoints,
     ToggleTetris,
+    ToggleToroidal,
     SetHiddenMoveCount(u32),
     SetNPlusOneCount(u8),
     SetPonnukiValue(i32),
@@ -199,6 +200,13 @@ impl Component for CreateGameView {
                 };
                 true
             }
+            Msg::ToggleToroidal => {
+                self.mods.toroidal = match self.mods.toroidal {
+                    Some(game::ToroidalGo {}) => None,
+                    _ => Some(game::ToroidalGo {}),
+                };
+                true
+            }
             Msg::OnCreate => {
                 if self.seats.is_empty() || self.komis.is_empty() {
                     return false;
@@ -313,6 +321,20 @@ impl Component for CreateGameView {
             </li>
         };
 
+        let toroidal = html! {
+            <li>
+                <input
+                    type="checkbox"
+                    class="toggle"
+                    checked=self.mods.toroidal.is_some()
+                    onclick=self.link.callback(move |_| Msg::ToggleToroidal) />
+                <label class="tooltip" onclick=self.link.callback(move |_| Msg::ToggleToroidal)>
+                    {"Toroidal go"}
+                    <span class="tooltiptext">{"Opposing edges are connected. First line doesn't exist."}</span>
+                </label>
+            </li>
+        };
+
         let options = html! {
             <div style="padding: 1em; flex-grow: 1;">
                 <div>
@@ -417,6 +439,7 @@ If two players pick the same point, neither one gets a stone there, but they sti
                                 ) />
                         </li>
                         {tetris}
+                        {toroidal}
                         <li>
                             <input
                                 type="checkbox"

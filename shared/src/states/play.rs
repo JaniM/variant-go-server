@@ -53,13 +53,10 @@ impl PlayState {
             let mut any_placed = false;
             let mut any_revealed = false;
             for &(x, y) in &[(x, y), (x + 1, y), (x, y + 1), (x + 1, y + 1)] {
-                if x < 0 || y < 0 {
-                    continue;
-                }
-                let coord = (x as u32, y as u32);
-                if !shared.board.point_within(coord) {
-                    continue;
-                }
+                let coord = match shared.board.wrap_point(x, y) {
+                    Some(x) => x,
+                    None => continue,
+                };
 
                 let point = shared.board.point_mut(coord);
                 if let Some(visibility) = &mut shared.board_visibility {

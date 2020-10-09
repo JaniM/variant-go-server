@@ -223,6 +223,8 @@ GameView {
             },
         ),
         captures_give_points: None,
+        tetris: None,
+        toroidal: None,
     },
     points: [0, 15],
     move_number: 87,

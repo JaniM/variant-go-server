@@ -19,7 +19,7 @@ pub fn check(
         let color = board.get_point(point_played);
 
         let add_point = |line_points: &mut Vec<Point>, p: Point| {
-            if board.get_point(p) == color {
+            if board.get_point(p) == color && !line_points.contains(&p) {
                 line_points.push(p);
                 false
             } else {
@@ -29,16 +29,20 @@ pub fn check(
 
         // Vertical ///////////////////////////////////////////////////////////
 
-        for y in (0..point_played.1).rev() {
-            if add_point(&mut line_points, (point_played.0, y)) {
+        let mut y = point_played.1 as i32 - 1;
+        while let Some(p) = board.wrap_point(point_played.0 as i32, y) {
+            if add_point(&mut line_points, p) {
                 break;
             }
+            y -= 1;
         }
 
-        for y in point_played.1..board.height {
-            if add_point(&mut line_points, (point_played.0, y)) {
+        let mut y = point_played.1 as i32;
+        while let Some(p) = board.wrap_point(point_played.0 as i32, y) {
+            if add_point(&mut line_points, p) {
                 break;
             }
+            y += 1;
         }
 
         let vertical_match = line_points.len() == rule.length as usize;
@@ -55,16 +59,20 @@ pub fn check(
 
         // Horizontal /////////////////////////////////////////////////////////
 
-        for x in (0..point_played.0).rev() {
-            if add_point(&mut line_points, (x, point_played.1)) {
+        let mut x = point_played.0 as i32 - 1;
+        while let Some(p) = board.wrap_point(x, point_played.1 as i32) {
+            if add_point(&mut line_points, p) {
                 break;
             }
+            x -= 1;
         }
 
-        for x in point_played.0..board.width {
-            if add_point(&mut line_points, (x, point_played.1)) {
+        let mut x = point_played.0 as i32;
+        while let Some(p) = board.wrap_point(x, point_played.1 as i32) {
+            if add_point(&mut line_points, p) {
                 break;
             }
+            x += 1;
         }
 
         let horizontal_match = line_points.len() == rule.length as usize;
@@ -81,24 +89,24 @@ pub fn check(
 
         // Diagonal top left - bottom right ///////////////////////////////////
 
-        let mut p = point_played;
-        while p.0 > 0 && p.1 > 0 {
-            p.0 -= 1;
-            p.1 -= 1;
-
+        let mut point = (point_played.0 as i32 - 1, point_played.1 as i32 - 1);
+        while let Some(p) = board.wrap_point(point.0, point.1) {
             if add_point(&mut line_points, p) {
                 break;
             }
+
+            point.0 -= 1;
+            point.1 -= 1;
         }
 
-        let mut p = point_played;
-        while board.point_within(p) {
+        let mut point = (point_played.0 as i32, point_played.1 as i32);
+        while let Some(p) = board.wrap_point(point.0, point.1) {
             if add_point(&mut line_points, p) {
                 break;
             }
 
-            p.0 += 1;
-            p.1 += 1;
+            point.0 += 1;
+            point.1 += 1;
         }
 
         let diagonal_tlbr_match = line_points.len() == rule.length as usize;
@@ -115,32 +123,24 @@ pub fn check(
 
         // Diagonal bottom left - top right ///////////////////////////////////
 
-        let mut p = point_played;
-        while p.0 > 0 {
-            p.0 -= 1;
-            p.1 += 1;
-
-            if !board.point_within(p) {
-                break;
-            }
-
+        let mut point = (point_played.0 as i32 - 1, point_played.1 as i32 + 1);
+        while let Some(p) = board.wrap_point(point.0, point.1) {
             if add_point(&mut line_points, p) {
                 break;
             }
+
+            point.0 -= 1;
+            point.1 += 1;
         }
 
-        let mut p = point_played;
-        while board.point_within(p) {
+        let mut point = (point_played.0 as i32, point_played.1 as i32);
+        while let Some(p) = board.wrap_point(point.0, point.1) {
             if add_point(&mut line_points, p) {
                 break;
             }
 
-            if p.1 == 0 {
-                break;
-            }
-
-            p.0 += 1;
-            p.1 -= 1;
+            point.0 += 1;
+            point.1 -= 1;
         }
 
         let diagonal_bltr_match = line_points.len() == rule.length as usize;

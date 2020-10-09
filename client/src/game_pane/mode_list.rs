@@ -98,6 +98,13 @@ If two players pick the same point, neither one gets a stone there, but they sti
             </label>
         );
 
+        let toroidal = if_html!(mods.toroidal.is_some() =>
+            <label class="tooltip">
+                {"Toroidal go"}
+                <span class=tooltip_class>{"Opposing edges are connected. First line doesn't exist."}</span>
+            </label>
+        );
+
         let captures_give_points = if_html!(
             mods.captures_give_points.is_some() =>
             <label class="tooltip">
@@ -116,6 +123,7 @@ If two players pick the same point, neither one gets a stone there, but they sti
                 <div>{no_history}</div>
                 <div>{n_plus_one}</div>
                 <div>{tetris}</div>
+                <div>{toroidal}</div>
                 <div>{captures_give_points}</div>
             </div>
         }

@@ -363,11 +363,20 @@ impl Board {
         context.set_stroke_style(&JsValue::from_str("#000000"));
         context.set_fill_style(&JsValue::from_str("#000000"));
 
+        let line_edge_size = if game.mods.toroidal.is_some() {
+            edge_size / 2.0
+        } else {
+            0.0
+        };
+
         for y in 0..game.size.1 {
             context.begin_path();
-            context.move_to(edge_size + size * 0.5, edge_size + (y as f64 + 0.5) * size);
+            context.move_to(
+                edge_size - line_edge_size + size * 0.5,
+                edge_size + (y as f64 + 0.5) * size,
+            );
             context.line_to(
-                edge_size + size * (board_size as f64 - 0.5),
+                edge_size + line_edge_size + size * (board_size as f64 - 0.5),
                 edge_size + (y as f64 + 0.5) * size,
             );
             context.stroke();
@@ -375,10 +384,13 @@ impl Board {
 
         for x in 0..game.size.0 {
             context.begin_path();
-            context.move_to(edge_size + (x as f64 + 0.5) * size, edge_size + size * 0.5);
+            context.move_to(
+                edge_size + (x as f64 + 0.5) * size,
+                edge_size - line_edge_size + size * 0.5,
+            );
             context.line_to(
                 edge_size + (x as f64 + 0.5) * size,
-                edge_size + size * (board_size as f64 - 0.5),
+                edge_size + line_edge_size + size * (board_size as f64 - 0.5),
             );
             context.stroke();
         }

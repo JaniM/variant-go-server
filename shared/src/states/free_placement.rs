@@ -140,7 +140,7 @@ impl FreePlacement {
     }
 
     fn build_board(&self, mut board: Board) -> (Board, VisibilityBoard) {
-        let mut visibility = VisibilityBoard::empty(board.width, board.height);
+        let mut visibility = VisibilityBoard::empty(board.width, board.height, board.toroidal);
 
         for view_board in &self.boards {
             for (a, b, v) in izip!(

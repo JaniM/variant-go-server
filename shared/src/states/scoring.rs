@@ -18,7 +18,7 @@ pub struct ScoringState {
 impl ScoringState {
     pub fn new(board: &Board, seats: &[Seat], scores: &[i32]) -> Self {
         let groups = find_groups(board);
-        let points = score_board(board.width, board.height, &groups);
+        let points = score_board(board, &groups);
         let mut scores: GroupVec<i32> = scores.into();
         for color in &points.points {
             if !color.is_empty() {
@@ -47,7 +47,7 @@ impl ScoringState {
 
         group.alive = !group.alive;
 
-        self.points = score_board(shared.board.width, shared.board.height, &self.groups);
+        self.points = score_board(&shared.board, &self.groups);
         self.scores = shared.points.clone();
         for color in &self.points.points {
             if !color.is_empty() {
@@ -120,8 +120,14 @@ impl ScoringState {
 }
 
 /// Scores a board by filling in fully surrounded empty spaces based on chinese rules
-fn score_board(width: u32, height: u32, groups: &[Group]) -> Board {
-    let mut board = Board::empty(width, height);
+fn score_board(board: &Board, groups: &[Group]) -> Board {
+    let &Board {
+        width,
+        height,
+        toroidal,
+        ..
+    } = board;
+    let mut board = Board::empty(width, height, toroidal);
 
     // Fill living groups to the board
     for group in groups {
