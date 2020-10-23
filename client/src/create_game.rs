@@ -47,6 +47,7 @@ pub enum Msg {
     SetHiddenMoveCount(u32),
     SetNPlusOneCount(u8),
     SetPonnukiValue(i32),
+    SetKomi(usize, f32),
     OnCreate,
 }
 
@@ -106,6 +107,10 @@ impl Component for CreateGameView {
             }
             Msg::TogglePixel => {
                 self.mods.pixel = !self.mods.pixel;
+                // TODO: This is a bit of a hack, change this later
+                if self.mods.pixel && self.komis.len() == 2 {
+                    self.komis[1] = 51; // 25.5, magic number given by Ten
+                }
                 true
             }
             Msg::ToggleNoHistory => {
@@ -207,6 +212,10 @@ impl Component for CreateGameView {
                 };
                 true
             }
+            Msg::SetKomi(seat_idx, value) => {
+                self.komis[seat_idx] = (value * 2.0) as i32;
+                true
+            }
             Msg::OnCreate => {
                 if self.seats.is_empty() || self.komis.is_empty() {
                     return false;
@@ -251,10 +260,30 @@ impl Component for CreateGameView {
             .enumerate()
             .map(|(idx, &amount)| {
                 let color = Color::name(idx as u8 + 1);
+                let komi = amount as f32 / 2.;
 
-                let header = format!("{}: {:.1}", color, amount as f32 / 2.);
+                let input = html! {
+                    <input
+                        style="width: 4em;"
+                        type="number"
+                        value=komi
+                        step="0.5"
+                        onchange=self.link.callback(move |data|
+                            match data {
+                                yew::events::ChangeData::Value(v) => Msg::SetKomi(idx, v.parse().unwrap()),
+                                _ => unreachable!(),
+                            }
+                        ) />
+                };
 
-                html! { <li> {header} </li> }
+                html! {
+                    <li>
+                        <span style="display: inline-block; width: 4em;">
+                            {color}
+                        </span>
+                        {input}
+                    </li>
+                }
             })
             .collect::<Html>();
 
