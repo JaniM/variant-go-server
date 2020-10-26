@@ -10,6 +10,8 @@ use crate::networking;
 use shared::game::clock::PlayerClock;
 use shared::game::Color;
 
+use crate::if_html;
+
 use yew::services::interval::{IntervalService, IntervalTask};
 
 struct Audio {
@@ -206,13 +208,13 @@ impl Component for SeatList {
                     };
                     let minutes = time_left / (60 * 1000);
                     let seconds = (time_left / 1000) % 60;
-                    if minutes > 0 {
+                    Some(if minutes > 0 {
                         format!("- {}min {}s left", minutes, seconds)
                     } else {
                         format!("- {}s left", seconds)
-                    }
+                    })
                 } else {
-                    "".to_string()
+                    None
                 };
 
                 if let Some(id) = occupant {
@@ -252,7 +254,9 @@ impl Component for SeatList {
                         <div class=class style="margin: 5px 0; padding: 0px 5px; padding-top: 5px;">
                             {format!("{}: {} {}{}{}", colorname, nick, scoretext, passed, resigned_text)}
                             {leave}
-                            <div style="padding: 10px; font-size: large;">{time_left}</div>
+                            {if_html!(let Some(t) = time_left =>
+                                <div style="padding: 10px; font-size: large;">{t}</div>
+                            )}
                         </div>
                     }
                 } else {
@@ -262,7 +266,9 @@ impl Component for SeatList {
                             <button onclick=self.link.callback(move |_| Msg::TakeSeat(idx as _))>
                                 {"Take seat"}
                             </button>
-                            <div>{time_left}</div>
+                            {if_html!(let Some(t) = time_left =>
+                                <div style="padding: 10px; font-size: large;">{t}</div>
+                            )}
                         </div>
                     }
                 }
