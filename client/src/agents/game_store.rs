@@ -6,7 +6,7 @@ use itertools::Itertools;
 use crate::game_view::GameView;
 use crate::networking;
 use crate::utils;
-use shared::game::GameHistory;
+use shared::game::{GameHistory, GameStateView};
 use shared::message::GameAction;
 
 use store::{store, Bridgeable, Store, StoreBridge, StoreWrapper};
@@ -124,7 +124,11 @@ impl Store for GameStoreState {
                 let move_number = game.move_number;
                 let old = std::mem::replace(&mut self.game, Some(game));
                 if let Some(old) = old {
-                    if old.room_id == room_id {
+                    let old_done = matches!(old.state, GameStateView::Done(_));
+                    let new_done =
+                        matches!(self.game.as_ref().unwrap().state, GameStateView::Done(_));
+
+                    if old.room_id == room_id && old_done == new_done {
                         self.game.as_mut().unwrap().history = old.history;
                         if move_number <= self.history.len() as u32 {
                             self.history.drain(move_number as usize..);
