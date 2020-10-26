@@ -300,7 +300,7 @@ impl Board {
     fn render_gl(&mut self, _timestamp: f64) -> Result<(), JsValue> {
         // Stone colors ///////////////////////////////////////////////////////
 
-        let shadow_stone_colors = ["#555555", "#bbbbbb", "#7b91bd", "#e09db4"];
+        let shadow_stone_colors = ["#000000a0", "#eeeeeea0", "#5074bca0", "#e0658fa0"];
         let shadow_border_colors = ["#bbbbbb", "#555555", "#555555", "#555555"];
         let stone_colors = ["#000000", "#eeeeee", "#5074bc", "#e0658f"];
         let stone_colors_hidden = ["#00000080", "#eeeeee80", "#5074bc80", "#e0658f80"];
