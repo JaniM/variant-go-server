@@ -387,7 +387,7 @@ impl Game {
         }
 
         // Don't allow huge boards
-        if size.0 > 19 || size.1 > 19 {
+        if size.0 > 25 || size.1 > 25 {
             return None;
         }
 
@@ -597,7 +597,10 @@ impl Game {
                     }
                     ActionChange::PopState => {
                         self.state = self.state_stack.pop().expect("Empty state stack popped");
-                        // TODO: PUZZLE reset clocks so players don't run out of time
+
+                        if let Some(clock) = &mut self.shared.clock {
+                            clock.initialize_clocks(time);
+                        }
                     }
                     ActionChange::None => {}
                 }
@@ -714,6 +717,7 @@ impl Game {
     pub fn get_view(&self, player_id: u64) -> GameView {
         let shared = &self.shared;
         let game_done = matches!(self.state, GameState::Done(_));
+        let game_active = matches!(self.state, GameState::Play(_));
         let (board, board_visibility, hidden_stones_left) = self.get_board_view(
             player_id,
             &self.state,
@@ -732,7 +736,11 @@ impl Game {
             mods: shared.mods.clone(),
             points: shared.points.clone(),
             move_number: shared.board_history.len() as u32 - 1,
-            clock: shared.clock.clone(),
+            clock: if game_active {
+                shared.clock.clone()
+            } else {
+                None
+            },
         }
     }
 

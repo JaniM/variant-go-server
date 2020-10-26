@@ -16,6 +16,7 @@ pub enum Preset {
     ThreeColor,
     FourColor,
     ThreeColorRengo, // why?
+    NGDTournament,
 }
 
 #[derive(Copy, Clone, PartialEq, Debug)]
@@ -43,6 +44,7 @@ pub struct CreateGameView {
     mods: GameModifier,
     clock_kind: ClockKind,
     clock_settings: ClockSettings,
+    preset: Preset,
 }
 
 pub enum Msg {
@@ -94,6 +96,7 @@ impl Component for CreateGameView {
                 main_time: 20,
                 increment: 20,
             },
+            preset: Preset::Standard,
         };
         view.update(Msg::LoadPreset(Preset::Standard));
         view
@@ -108,7 +111,9 @@ impl Component for CreateGameView {
                     Preset::ThreeColor => (vec![1, 2, 3], vec![0, 0, 0], 13),
                     Preset::FourColor => (vec![1, 2, 3, 4], vec![0, 0, 0, 0], 13),
                     Preset::ThreeColorRengo => (vec![1, 2, 3, 1, 2, 3], vec![0, 0, 0], 13),
+                    Preset::NGDTournament => (vec![1, 2], vec![0, 51], 19),
                 };
+                self.preset = preset;
                 self.seats = seats;
                 self.komis = komi;
                 self.size = size;
@@ -116,6 +121,16 @@ impl Component for CreateGameView {
                 self.mods.zen_go = None;
                 if let Some(select) = self.size_select_ref.cast::<HtmlSelectElement>() {
                     select.set_value(&size.to_string());
+                }
+
+                if preset == Preset::NGDTournament {
+                    self.mods = GameModifier {
+                        pixel: true,
+                        ..GameModifier::default()
+                    };
+                    self.clock_kind = ClockKind::Fischer;
+                    self.clock_settings.main_time = 5;
+                    self.clock_settings.increment = 10;
                 }
                 true
             }
@@ -165,7 +180,7 @@ impl Component for CreateGameView {
             Msg::ToggleHiddenMove => {
                 self.mods.hidden_move = match &self.mods.hidden_move {
                     None => Some(game::HiddenMoveGo {
-                        placement_count: 5,
+                        placement_count: 3,
                         teams_share_stones: true,
                     }),
                     Some(_) => None,
@@ -328,38 +343,49 @@ impl Component for CreateGameView {
             })
             .collect::<Html>();
 
+        let pc = |p: Preset| {
+            if self.preset == p {
+                "occupied preset-option"
+            } else {
+                "preset-option"
+            }
+        };
+
+        let ps = |p: Preset, name: &str| {
+            let class = pc(p);
+            html! {
+                <li class="preset-option">
+                    <a href="#" class=class onclick=self.link.callback(move |_| Msg::LoadPreset(p))>
+                        {name}
+                    </a>
+                </li>
+            }
+        };
+
         let presets = html! {
             <ul>
-                <li><a href="#" onclick=self.link.callback(|_| Msg::LoadPreset(Preset::Standard))>
-                    {"Standard"}
-                </a></li>
-                <li><a href="#" onclick=self.link.callback(|_| Msg::LoadPreset(Preset::Rengo2v2))>
-                    {"Rengo 2v2"}
-                </a></li>
-                <li>
-                    <a href="#" onclick=self.link.callback(|_| Msg::LoadPreset(Preset::ThreeColor))>
+                {ps(Preset::Standard, "Standard")}
+                {ps(Preset::Rengo2v2, "Rengo2v2")}
+                <li class="preset-option">
+                    <a href="#" class=pc(Preset::ThreeColor) onclick=self.link.callback(|_| Msg::LoadPreset(Preset::ThreeColor))>
                         {"Three color go"}
                     </a>
                     {" / "}
-                    <a href="#" onclick=self.link.callback(|_| Msg::LoadPreset(Preset::FourColor))>
+                    <a href="#" class=pc(Preset::FourColor) onclick=self.link.callback(|_| Msg::LoadPreset(Preset::FourColor))>
                         {"Four color go"}
                     </a>
                 </li>
-                <li><a href="#" onclick=self.link.callback(|_| Msg::LoadPreset(Preset::ThreeColorRengo))>
-                    {"Three color go (rengo)"}
-                </a></li>
+                {ps(Preset::ThreeColorRengo, "Three color go (rengo)")}
+                {ps(Preset::NGDTournament, "NGD PIxel Go Tournament settings")}
             </ul>
         };
 
-        let select_size = self.link.callback(|event| match event {
+        let sizes = [5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25];
+
+        let select_size = self.link.callback(move |event| match event {
             ChangeData::Select(elem) => {
                 let value = elem.selected_index();
-                Msg::SelectSize(match value {
-                    0 => 9,
-                    1 => 13,
-                    2 => 19,
-                    _ => unreachable!(),
-                })
+                Msg::SelectSize(sizes[value as usize])
             }
             _ => unreachable!(),
         });
@@ -369,9 +395,9 @@ impl Component for CreateGameView {
                 ref=self.size_select_ref.clone()
                 onchange=select_size
             >
-                <option value=9 selected=self.size == 9>{ "9" }</option>
-                <option value=13 selected=self.size == 13>{ "13" }</option>
-                <option value=19 selected=self.size == 19>{ "19" }</option>
+                {for sizes.iter().map(|&x| html!(
+                    <option value=x selected=self.size == x>{ x }</option>
+                ))}
             </select>
         };
 
@@ -493,7 +519,7 @@ If two players pick the same point, neither one gets a stone there, but they sti
                             <input
                                 style="width: 3em;"
                                 type="number"
-                                value={self.mods.hidden_move.as_ref().map_or(5, |x| x.placement_count)}
+                                value={self.mods.hidden_move.as_ref().map_or(3, |x| x.placement_count)}
                                 disabled=self.mods.hidden_move.is_none()
                                 onchange=self.link.callback(|data|
                                     match data {

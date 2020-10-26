@@ -442,7 +442,7 @@ impl Board {
 
         for x in 0..game.size.0 {
             let letter = ('A'..'I')
-                .chain('J'..'Z')
+                .chain('J'..='Z')
                 .nth(x as usize)
                 .unwrap()
                 .to_string();
