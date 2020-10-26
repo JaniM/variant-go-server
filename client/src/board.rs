@@ -228,6 +228,7 @@ impl Component for Board {
         let edge_size = self.edge_size as f64;
         let width = self.width as f64 - (2.0 * edge_size);
         let height = self.height as f64 - (2.0 * edge_size);
+        let is_scoring = matches!(game.state, GameStateView::Scoring(_));
         let mouse_to_coord = |mut p: (f64, f64)| -> Option<(u32, u32)> {
             if p.0 < edge_size
                 || p.1 < edge_size
@@ -239,7 +240,7 @@ impl Component for Board {
 
             p.0 -= edge_size;
             p.1 -= edge_size;
-            Some(match game.mods.pixel {
+            Some(match game.mods.pixel && !is_scoring {
                 true => (
                     (p.0 / (width / game.size.0 as f64) + 0.5) as u32,
                     (p.1 / (width / game.size.1 as f64) + 0.5) as u32,
@@ -457,35 +458,40 @@ impl Board {
 
         // Mouse hover display ////////////////////////////////////////////////
 
-        if let Some(selection_pos) = self.selection_pos {
-            let mut p = (selection_pos.0 as i32, selection_pos.1 as i32);
-            if game.mods.pixel {
-                p.0 -= 1;
-                p.1 -= 1;
-            }
-
-            // TODO: This allocation is horrible, figure out how to avoid it
-            // TODO: Also move these to shared
-            let points = match game.mods.pixel {
-                true => vec![
-                    (p.0, p.1),
-                    (p.0 + 1, p.1),
-                    (p.0, p.1 + 1),
-                    (p.0 + 1, p.1 + 1),
-                ],
-                false => vec![p],
-            };
-
-            let color = turn;
-            // Teams start from 1
-            context.set_fill_style(&JsValue::from_str(shadow_stone_colors[color as usize - 1]));
-            context.set_stroke_style(&JsValue::from_str(shadow_border_colors[color as usize - 1]));
-
-            for p in points {
-                if p.0 < 0 || p.1 < 0 || p.0 >= game.size.0 as i32 || p.1 >= game.size.1 as i32 {
-                    continue;
+        let is_scoring = matches!(game.state, GameStateView::Scoring(_));
+        if !is_scoring {
+            if let Some(selection_pos) = self.selection_pos {
+                let mut p = (selection_pos.0 as i32, selection_pos.1 as i32);
+                if game.mods.pixel {
+                    p.0 -= 1;
+                    p.1 -= 1;
                 }
-                draw_stone(p, size, true, true)?;
+
+                // TODO: This allocation is horrible, figure out how to avoid it
+                // TODO: Also move these to shared
+                let points = match game.mods.pixel {
+                    true => vec![
+                        (p.0, p.1),
+                        (p.0 + 1, p.1),
+                        (p.0, p.1 + 1),
+                        (p.0 + 1, p.1 + 1),
+                    ],
+                    false => vec![p],
+                };
+
+                let color = turn;
+                // Teams start from 1
+                context.set_fill_style(&JsValue::from_str(shadow_stone_colors[color as usize - 1]));
+                context
+                    .set_stroke_style(&JsValue::from_str(shadow_border_colors[color as usize - 1]));
+
+                for p in points {
+                    if p.0 < 0 || p.1 < 0 || p.0 >= game.size.0 as i32 || p.1 >= game.size.1 as i32
+                    {
+                        continue;
+                    }
+                    draw_stone(p, size, true, true)?;
+                }
             }
         }
 
