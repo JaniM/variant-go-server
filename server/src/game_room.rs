@@ -29,6 +29,10 @@ pub enum Message {
         room_id: u32,
         view: game::GameHistory,
     },
+    SGF {
+        room_id: u32,
+        sgf: String,
+    },
 }
 
 // Actions ////////////////////////////////////////////////////////////////////
@@ -227,6 +231,18 @@ impl Handler<GameAction> for GameRoom {
                         });
                     }
                 }
+                return MessageResult(Ok(()));
+            }
+            message::GameAction::RequestSGF => {
+                let game_done = matches!(self.game.state, game::GameState::Done(_));
+                if !game_done {
+                    return MessageResult(Err(Error::other("Game not finished")));
+                }
+                let sgf = game::export::sgf_export(&self.game);
+                let _ = addr.do_send(Message::SGF {
+                    room_id: self.room_id,
+                    sgf,
+                });
                 return MessageResult(Ok(()));
             }
             message::GameAction::KickPlayer(kick_player_id) => {

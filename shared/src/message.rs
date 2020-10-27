@@ -18,6 +18,7 @@ pub enum GameAction {
     TakeSeat(u32),
     LeaveSeat(u32),
     KickPlayer(u64),
+    RequestSGF,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -139,7 +140,14 @@ pub enum ServerMessage {
         move_number: u32,
         clock: Option<game::clock::GameClock>,
     },
-    BoardAt(game::GameHistory),
+    BoardAt {
+        room_id: u32,
+        view: game::GameHistory,
+    },
+    SGF {
+        room_id: u32,
+        sgf: String,
+    },
     Profile(Profile),
     MsgError(String),
     Error(Error),

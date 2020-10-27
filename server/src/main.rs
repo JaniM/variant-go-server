@@ -136,8 +136,11 @@ impl Handler<game_room::Message> for ClientWebSocket {
                     .pack(),
                 );
             }
-            game_room::Message::BoardAt { view, .. } => {
-                ctx.binary(ServerMessage::BoardAt(view).pack());
+            game_room::Message::BoardAt { view, room_id } => {
+                ctx.binary(ServerMessage::BoardAt { view, room_id }.pack());
+            }
+            game_room::Message::SGF { sgf, room_id } => {
+                ctx.binary(ServerMessage::SGF { sgf, room_id }.pack());
             }
         }
     }

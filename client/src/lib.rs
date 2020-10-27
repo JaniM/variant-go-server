@@ -151,7 +151,7 @@ impl Component for GameApp {
                         clock,
                     });
                 }
-                Ok(ServerMessage::BoardAt(view)) => {
+                Ok(ServerMessage::BoardAt { view, .. }) => {
                     set_game_history.emit(Some(view));
                 }
                 Ok(ServerMessage::Identify {
@@ -167,6 +167,13 @@ impl Component for GameApp {
                 }
                 Ok(ServerMessage::Error(err)) => {
                     set_error.emit(Some(err));
+                }
+                Ok(ServerMessage::SGF { sgf, room_id }) => {
+                    web_sys::console::log_1(&JsValue::from_str(&sgf));
+                    let res = utils::download_file(&format!("{}.sgf", room_id), &sgf);
+                    if let Err(e) = res {
+                        web_sys::console::log_1(&e);
+                    }
                 }
                 Err(networking::ServerError::LostConnection) => {
                     set_error.emit(Some(message::Error::other(

@@ -37,6 +37,8 @@ console_error_panic_hook = { version = "0.1.1", optional = true }
 version = "0.3"
 features = [
   "Attr",
+  "Blob",
+  "BlobPropertyBag",
   "CanvasRenderingContext2d",
   "CloseEvent",
   "CssStyleDeclaration",
@@ -61,6 +63,7 @@ features = [
   "ProgressEvent",
   "Storage",
   "Text",
+  "Url",
   "WebSocket",
   "Window"
 ]

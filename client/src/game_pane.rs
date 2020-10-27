@@ -42,6 +42,7 @@ pub enum Msg {
     ResetHistory,
     ToggleHiddenMoves,
     ResizeWindow(WindowDimensions),
+    GetSGF,
     None,
 }
 
@@ -134,6 +135,7 @@ impl Component for GamePane {
                 self.size = size_from_dimensions(&self.middle_pane_ref, dimensions);
                 return true;
             }
+            Msg::GetSGF => networking::send(GameAction::RequestSGF),
             Msg::None => {}
         }
         false
@@ -279,16 +281,27 @@ impl Component for GamePane {
         let game_wrapper_style =
             format!("height: {}px; display: flex;", self.window_size.height - 20);
 
-        let hidden_move_toggle = if_html!(game.mods.hidden_move.is_some() =>
-            <div style="flex-grow: 0;">
-                <input
-                    type="checkbox"
-                    class="toggle"
-                    checked=self.show_hidden_moves
-                    onclick=self.link.callback(move |_| Msg::ToggleHiddenMoves) />
-                <label onclick=self.link.callback(move |_| Msg::ToggleHiddenMoves)>
-                    {"Show hidden stones"}
-                </label>
+        let hidden_move_toggle = html!(
+            <div style="flex-grow: 0; display: flex;">
+                {if_html!(game.mods.hidden_move.is_some() =>
+                    <div>
+                        <input
+                            type="checkbox"
+                            class="toggle"
+                            checked=self.show_hidden_moves
+                            onclick=self.link.callback(move |_| Msg::ToggleHiddenMoves) />
+                        <label onclick=self.link.callback(move |_| Msg::ToggleHiddenMoves)>
+                            {"Show hidden stones"}
+                        </label>
+                    </div>
+                )}
+                {if_html!(game_done =>
+                    <div>
+                        <button onclick=self.link.callback(|_| Msg::GetSGF)>
+                            {"Download SGF"}
+                        </button>
+                    </div>
+                )}
             </div>
         );
 
