@@ -536,7 +536,7 @@ impl Game {
     pub fn make_action(
         &mut self,
         player_id: u64,
-        action: ActionKind,
+        mut action: ActionKind,
         time: Millisecond,
     ) -> Result<(), MakeActionError> {
         if !self
@@ -567,11 +567,11 @@ impl Game {
                     Millisecond(0)
                 };
 
-                let res = if time_left.0 < -1000 {
-                    state.make_action(&mut self.shared, player_id, ActionKind::Resign)
-                } else {
-                    state.make_action(&mut self.shared, player_id, action.clone())
-                };
+                if time_left.0 < -1000 {
+                    action = ActionKind::Resign;
+                }
+
+                let res = state.make_action(&mut self.shared, player_id, action.clone());
 
                 if res.is_ok() && !start_clock {
                     if let Some(clock) = &mut self.shared.clock {
