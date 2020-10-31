@@ -61,6 +61,7 @@ pub enum Msg {
     ToggleCapturesGivePoints,
     ToggleTetris,
     ToggleToroidal,
+    TogglePhantom,
     SetHiddenMoveCount(u32),
     SetNPlusOneCount(u8),
     SetPonnukiValue(i32),
@@ -246,6 +247,13 @@ impl Component for CreateGameView {
                 self.mods.toroidal = match self.mods.toroidal {
                     Some(game::ToroidalGo {}) => None,
                     _ => Some(game::ToroidalGo {}),
+                };
+                true
+            }
+            Msg::TogglePhantom => {
+                self.mods.phantom = match self.mods.phantom {
+                    Some(game::PhantomGo {}) => None,
+                    _ => Some(game::PhantomGo {}),
                 };
                 true
             }
@@ -492,6 +500,20 @@ impl Component for CreateGameView {
             </li>
         };
 
+        let phantom = html! {
+            <li>
+                <input
+                    type="checkbox"
+                    class="toggle"
+                    checked=self.mods.phantom.is_some()
+                    onclick=self.link.callback(move |_| Msg::TogglePhantom) />
+                <label class="tooltip" onclick=self.link.callback(move |_| Msg::TogglePhantom)>
+                    {"Phantom go"}
+                    <span class="tooltiptext">{"All stones are invisinle when placed. They become visible when they affect the game (like hidden move go). Atari also reveals."}</span>
+                </label>
+            </li>
+        };
+
         let options = html! {
             <div style="padding: 1em; flex-grow: 1;">
                 <div>
@@ -597,6 +619,7 @@ If two players pick the same point, neither one gets a stone there, but they sti
                         </li>
                         {tetris}
                         {toroidal}
+                        {phantom}
                         <li>
                             <input
                                 type="checkbox"

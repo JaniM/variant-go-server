@@ -182,6 +182,11 @@ pub struct Clock {
     pub rule: ClockRule,
 }
 
+/// All stones are invisinle when placed. They become visible when they
+/// affect the game (like hidden move go). Atari also reveals.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PhantomGo {}
+
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct GameModifier {
     /// Pixel go is a game mode where you place 2x2 blobs instead of a single stone.
@@ -223,6 +228,9 @@ pub struct GameModifier {
 
     #[serde(default)]
     pub clock: Option<Clock>,
+
+    #[serde(default)]
+    pub phantom: Option<PhantomGo>,
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -420,6 +428,16 @@ impl Game {
             ));
         }
 
+        let board_visibility = if mods.phantom.is_some() {
+            Some(VisibilityBoard::empty(
+                size.0 as _,
+                size.1 as _,
+                mods.toroidal.is_some(),
+            ))
+        } else {
+            None
+        };
+
         Some(Game {
             state,
             state_stack: Vec::new(),
@@ -429,11 +447,11 @@ impl Game {
                 turn: 0,
                 pass_count: 0,
                 board: board.clone(),
-                board_visibility: None,
+                board_visibility: board_visibility.clone(),
                 board_history: vec![BoardHistory {
                     hash: board.hash(),
                     board,
-                    board_visibility: None,
+                    board_visibility,
                     state: GameState::play(seats.len()),
                     points: komis.clone(),
                     turn: 0,

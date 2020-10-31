@@ -105,6 +105,13 @@ If two players pick the same point, neither one gets a stone there, but they sti
             </label>
         );
 
+        let phantom = if_html!(mods.phantom.is_some() =>
+            <label class="tooltip">
+                {"Phantom go"}
+                <span class=tooltip_class>{"All stones are invisinle when placed. They become visible when they affect the game (like hidden move go). Atari also reveals."}</span>
+            </label>
+        );
+
         let captures_give_points = if_html!(
             mods.captures_give_points.is_some() =>
             <label class="tooltip">
@@ -124,6 +131,7 @@ If two players pick the same point, neither one gets a stone there, but they sti
                 <div>{n_plus_one}</div>
                 <div>{tetris}</div>
                 <div>{toroidal}</div>
+                <div>{phantom}</div>
                 <div>{captures_give_points}</div>
             </div>
         }

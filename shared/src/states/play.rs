@@ -118,12 +118,21 @@ impl PlayState {
         let mut captures = 0;
         let mut revealed = false;
 
-        let groups = find_groups(&shared.board);
+        let board = &mut shared.board;
+
+        if shared.mods.phantom.is_some() {
+            let groups = find_groups(&board);
+            let ataris = groups.iter().filter(|g| g.liberties == 1);
+            for group in ataris {
+                let reveals = reveal_group(shared.board_visibility.as_mut(), group, board);
+                revealed = revealed || reveals;
+            }
+        }
+
+        let groups = find_groups(&board);
         let dead_opponents = groups
             .iter()
             .filter(|g| g.liberties == 0 && g.team != active_seat.team);
-
-        let board = &mut shared.board;
 
         for group in dead_opponents {
             for point in &group.points {
@@ -232,6 +241,20 @@ impl PlayState {
             return Ok(ActionChange::None);
         }
 
+        if shared.mods.phantom.is_some() {
+            let seat = shared.get_active_seat();
+            let visibility = shared
+                .board_visibility
+                .as_mut()
+                .expect("Visibility board not initialized with phantom go");
+            for point in &points_played {
+                let mut v = Bitmap::new();
+                v.set(seat.team.as_usize(), true);
+
+                *visibility.point_mut(*point) = v;
+            }
+        }
+
         let (captures, revealed) = self.capture(shared, &mut points_played);
 
         if points_played.is_empty() {
@@ -269,6 +292,12 @@ impl PlayState {
         };
 
         self.last_stone = Some(points_played);
+
+        // TODO: Handle this at the view layer instead to have the marker visible for your own stones.
+        if shared.mods.phantom.is_some() {
+            self.last_stone = None;
+        }
+
         for passed in &mut self.players_passed {
             *passed = false;
         }
