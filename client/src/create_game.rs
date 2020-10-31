@@ -55,6 +55,7 @@ pub enum Msg {
     TogglePonnuki,
     ToggleZen,
     ToggleHiddenMove,
+    ToggleTraitor,
     ToggleOneColor,
     ToggleNoHistory,
     ToggleNPlusOne,
@@ -63,6 +64,7 @@ pub enum Msg {
     ToggleToroidal,
     TogglePhantom,
     SetHiddenMoveCount(u32),
+    SetTraitorCount(u32),
     SetNPlusOneCount(u8),
     SetPonnukiValue(i32),
     SetKomi(usize, f32),
@@ -188,6 +190,15 @@ impl Component for CreateGameView {
                 };
                 true
             }
+            Msg::ToggleTraitor => {
+                self.mods.traitor = match &self.mods.traitor {
+                    None => Some(game::TraitorGo {
+                        traitor_count: 10,
+                    }),
+                    Some(_) => None,
+                };
+                true
+            }
             Msg::ToggleNPlusOne => {
                 self.mods.n_plus_one = match &self.mods.n_plus_one {
                     None => Some(game::NPlusOne { length: 4 }),
@@ -199,6 +210,15 @@ impl Component for CreateGameView {
                 match &mut self.mods.hidden_move {
                     Some(rules) => {
                         rules.placement_count = count;
+                    }
+                    None => {}
+                };
+                true
+            }
+            Msg::SetTraitorCount(count) => {
+                match &mut self.mods.traitor {
+                    Some(rules) => {
+                        rules.traitor_count = count;
                     }
                     None => {}
                 };
@@ -514,6 +534,32 @@ impl Component for CreateGameView {
             </li>
         };
 
+        let traitor = html! {
+            <li>
+                <input
+                    type="checkbox"
+                    class="toggle"
+                    checked=self.mods.traitor.is_some()
+                    onclick=self.link.callback(move |_| Msg::ToggleTraitor) />
+                <label class="tooltip" onclick=self.link.callback(move |_| Msg::ToggleTraitor)>
+                    {"Traitor go"}
+                    <span class="tooltiptext">{"N of your stones are of the wrong color."}</span>
+                </label>
+                {" Traitor stones: "}
+                <input
+                    style="width: 3em;"
+                    type="number"
+                    value={self.mods.traitor.as_ref().map_or(3, |x| x.traitor_count)}
+                    disabled=self.mods.traitor.is_none()
+                    onchange=self.link.callback(|data|
+                        match data {
+                            yew::events::ChangeData::Value(v) => Msg::SetTraitorCount(v.parse().unwrap()),
+                            _ => unreachable!(),
+                        }
+                    ) />
+            </li>
+        };
+
         let options = html! {
             <div style="padding: 1em; flex-grow: 1;">
                 <div>
@@ -620,6 +666,7 @@ If two players pick the same point, neither one gets a stone there, but they sti
                         {tetris}
                         {toroidal}
                         {phantom}
+                        {traitor}
                         <li>
                             <input
                                 type="checkbox"

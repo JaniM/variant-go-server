@@ -11,6 +11,7 @@ use std::collections::{HashSet, VecDeque};
 use bitmaps::Bitmap;
 use tinyvec::TinyVec;
 
+use crate::states::play::traitor::TraitorState;
 pub use crate::states::GameState;
 use crate::states::PlayState;
 use crate::states::ScoringState;
@@ -187,6 +188,11 @@ pub struct Clock {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PhantomGo {}
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TraitorGo {
+    pub traitor_count: u32,
+}
+
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct GameModifier {
     /// Pixel go is a game mode where you place 2x2 blobs instead of a single stone.
@@ -231,13 +237,16 @@ pub struct GameModifier {
 
     #[serde(default)]
     pub phantom: Option<PhantomGo>,
+
+    #[serde(default)]
+    pub traitor: Option<TraitorGo>,
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 //                                   State                                   //
 ///////////////////////////////////////////////////////////////////////////////
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone)]
 pub struct BoardHistory {
     pub hash: u64,
     pub board: Board,
@@ -245,9 +254,10 @@ pub struct BoardHistory {
     pub state: GameState,
     pub points: GroupVec<i32>,
     pub turn: usize,
+    pub traitor: Option<TraitorState>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone)]
 pub struct SharedState {
     pub seats: GroupVec<Seat>,
     pub points: GroupVec<i32>,
@@ -259,14 +269,16 @@ pub struct SharedState {
     pub komis: GroupVec<i32>,
     pub mods: GameModifier,
     pub clock: Option<GameClock>,
+    pub traitor: Option<TraitorState>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone)]
 pub struct Game {
     pub state: GameState,
     pub state_stack: Vec<GameState>,
     pub shared: SharedState,
     pub actions: Vec<GameAction>,
+    pub seed: u64,
 }
 
 impl SharedState {
@@ -372,6 +384,8 @@ struct GameReplay {
     komis: GroupVec<i32>,
     seats: GroupVec<u8>,
     size: (u8, u8),
+    #[serde(default)]
+    seed: u64,
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -384,6 +398,7 @@ impl Game {
         komis: GroupVec<i32>,
         size: (u8, u8),
         mods: GameModifier,
+        seed: u64,
     ) -> Option<Game> {
         if !seats.iter().all(|&t| t > 0 && t <= 4) {
             return None;
@@ -438,6 +453,15 @@ impl Game {
             None
         };
 
+        let traitor = mods.traitor.as_ref().map(|rule| {
+            let mut stone_count = (size.0 as usize * size.1 as usize / komis.len()) as u32;
+            if mods.pixel {
+                stone_count /= 4;
+            }
+
+            TraitorState::new(komis.len(), stone_count, seed, rule)
+        });
+
         Some(Game {
             state,
             state_stack: Vec::new(),
@@ -455,12 +479,15 @@ impl Game {
                     state: GameState::play(seats.len()),
                     points: komis.clone(),
                     turn: 0,
+                    traitor: traitor.clone(),
                 }],
                 komis,
                 mods,
                 clock,
+                traitor,
             },
             actions: vec![],
+            seed,
         })
     }
 
@@ -470,7 +497,13 @@ impl Game {
         let mut replay: GameReplay = serde_cbor::from_slice(dump).ok()?;
         // TODO: PUZZLE make replays conserve clocks
         replay.mods.clock = None;
-        let mut game = Game::standard(&replay.seats, replay.komis, replay.size, replay.mods)?;
+        let mut game = Game::standard(
+            &replay.seats,
+            replay.komis,
+            replay.size,
+            replay.mods,
+            replay.seed,
+        )?;
 
         for action in replay.actions {
             use ReplayActionKind::*;
@@ -500,6 +533,7 @@ impl Game {
             size: (shared.board.width as _, shared.board.height as _),
             seats: shared.seats.iter().map(|x| x.team.0).collect(),
             mods: shared.mods.clone(),
+            seed: self.seed,
         };
 
         let mut vec = Vec::new();

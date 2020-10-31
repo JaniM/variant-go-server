@@ -1,5 +1,6 @@
 mod n_plus_one;
 mod tetris;
+pub(crate) mod traitor;
 
 use crate::game::{
     find_groups, ActionChange, ActionKind, Board, BoardHistory, Color, GameState, Group, GroupVec,
@@ -40,6 +41,12 @@ impl PlayState {
         let active_seat = shared.get_active_seat();
         let mut points_played = GroupVec::new();
 
+        let color_placed = if let Some(state) = &mut shared.traitor {
+            state.next_color(active_seat.team)
+        } else {
+            active_seat.team
+        };
+
         if shared.mods.pixel {
             // In pixel mode coordinate 0,0 is outside the board.
             // This is to adjust for it.
@@ -69,7 +76,7 @@ impl PlayState {
                 if !point.is_empty() {
                     continue;
                 }
-                *point = active_seat.team;
+                *point = color_placed;
                 points_played.push(coord);
                 any_placed = true;
             }
@@ -102,7 +109,7 @@ impl PlayState {
                 return Err(MakeActionError::PointOccupied);
             }
 
-            *point = active_seat.team;
+            *point = color_placed;
             points_played.push((x, y));
         }
 
@@ -357,6 +364,7 @@ impl PlayState {
         shared.board_visibility = history.board_visibility.clone();
         shared.points = history.points.clone();
         shared.turn = history.turn;
+        shared.traitor = history.traitor.clone();
 
         *self = history.state.assume::<PlayState>().clone();
 
@@ -404,7 +412,14 @@ impl PlayState {
         }
 
         let res = match action {
-            ActionKind::Place(x, y) => self.make_action_place(shared, (x, y)),
+            ActionKind::Place(x, y) => {
+                let traitor = shared.traitor.clone();
+                let res = self.make_action_place(shared, (x, y));
+                if res.is_err() {
+                    shared.traitor = traitor;
+                }
+                res
+            }
             ActionKind::Pass => self.make_action_pass(shared),
             ActionKind::Cancel => self.make_action_cancel(shared),
             ActionKind::Resign => self.make_action_resign(shared),
@@ -437,6 +452,7 @@ impl PlayState {
             state: GameState::Play(self.clone()),
             points: shared.points.clone(),
             turn: shared.turn,
+            traitor: shared.traitor.clone(),
         });
     }
 

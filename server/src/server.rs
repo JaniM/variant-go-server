@@ -1,5 +1,5 @@
 use actix::prelude::*;
-use rand::{self, rngs::ThreadRng, Rng};
+use rand::prelude::*;
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 use uuid::Uuid;
@@ -525,7 +525,8 @@ impl Handler<CreateRoom> for GameServer {
         }
 
         let komis = komis.as_slice().into();
-        let game = match game::Game::standard(&seats, komis, size, mods) {
+        let seed = self.rng.next_u64();
+        let game = match game::Game::standard(&seats, komis, size, mods, seed) {
             Some(g) => g,
             None => return ActorResponse::reply(Err(Error::other("Rules not accepted"))),
         };

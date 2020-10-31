@@ -131,6 +131,7 @@ impl FreePlacement {
                 state: state.clone(),
                 points: shared.points.clone(),
                 turn: 0,
+                traitor: shared.traitor.clone(),
             }];
 
             return Ok(ActionChange::SwapState(state));

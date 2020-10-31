@@ -69,6 +69,13 @@ If two players pick the same point, neither one gets a stone there, but they sti
             </label>
         );
 
+        let traitor = if_html!(let Some(r) = &mods.traitor =>
+            <label class="tooltip">
+                {format!("{} traitor stones", r.traitor_count)}
+                <span class=tooltip_class>{"N of your stones are of the wrong color."}</span>
+            </label>
+        );
+
         let one_color = if_html!(
             let Some(VisibilityMode::OneColor) = &mods.visibility_mode =>
             <label class="tooltip">
@@ -126,6 +133,7 @@ If two players pick the same point, neither one gets a stone there, but they sti
                 <div>{ponnuki}</div>
                 <div>{zen_go}</div>
                 <div>{hidden_move}</div>
+                <div>{traitor}</div>
                 <div>{one_color}</div>
                 <div>{no_history}</div>
                 <div>{n_plus_one}</div>
