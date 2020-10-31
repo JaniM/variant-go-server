@@ -42,7 +42,7 @@ impl Audio {
         if let Some(sound) = &self.time_sound {
             sound.set_current_time(0.0);
             // TODO: PUZZLE unhardcode this
-            sound.set_volume(0.25);
+            sound.set_volume(0.50);
             let _ = sound.play();
         }
     }
