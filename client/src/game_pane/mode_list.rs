@@ -115,7 +115,7 @@ If two players pick the same point, neither one gets a stone there, but they sti
         let phantom = if_html!(mods.phantom.is_some() =>
             <label class="tooltip">
                 {"Phantom go"}
-                <span class=tooltip_class>{"All stones are invisinle when placed. They become visible when they affect the game (like hidden move go). Atari also reveals."}</span>
+                <span class=tooltip_class>{"All stones are invisible when placed. They become visible when they affect the game (like hidden move go). Atari also reveals."}</span>
             </label>
         );
 

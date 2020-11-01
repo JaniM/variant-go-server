@@ -529,7 +529,7 @@ impl Component for CreateGameView {
                     onclick=self.link.callback(move |_| Msg::TogglePhantom) />
                 <label class="tooltip" onclick=self.link.callback(move |_| Msg::TogglePhantom)>
                     {"Phantom go"}
-                    <span class="tooltiptext">{"All stones are invisinle when placed. They become visible when they affect the game (like hidden move go). Atari also reveals."}</span>
+                    <span class="tooltiptext">{"All stones are invisible when placed. They become visible when they affect the game (like hidden move go). Atari also reveals."}</span>
                 </label>
             </li>
         };
