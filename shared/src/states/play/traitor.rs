@@ -34,12 +34,12 @@ impl TraitorState {
         }
     }
 
-    pub fn next_color(&mut self, team_color: Color) -> Color {
+    pub fn next_color(&mut self, team_color: Color, rule: &TraitorGo) -> Color {
         let team = &mut self.team_states[team_color.as_usize() - 1];
         let stone_count = team.stone_count;
         let _ = team.stone_count.saturating_sub(1);
 
-        if self.rng_state.next_u32() % stone_count < team.traitor_count {
+        if team.traitor_count > 0 && self.rng_state.next_u32() % (rule.traitor_count * stone_count/4) == 0 {
             team.traitor_count -= 1;
 
             let mut color = self.rng_state.next_u32() as usize % (self.team_states.len() - 1) + 1;
