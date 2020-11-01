@@ -254,11 +254,17 @@ impl PlayState {
                 .board_visibility
                 .as_mut()
                 .expect("Visibility board not initialized with phantom go");
-            for point in &points_played {
+            for &point in &points_played {
+                // The hidden layer can't deal with being able to see someone else's stones, so if we played
+                // a stone of wrong color (eg. a traitor), just reveal it.
+                if shared.board.get_point(point) != seat.team {
+                    continue;
+                }
+
                 let mut v = Bitmap::new();
                 v.set(seat.team.as_usize(), true);
 
-                *visibility.point_mut(*point) = v;
+                *visibility.point_mut(point) = v;
             }
         }
 
