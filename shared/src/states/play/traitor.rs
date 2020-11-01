@@ -39,7 +39,7 @@ impl TraitorState {
         let stone_count = team.stone_count;
         team.stone_count = team.stone_count.saturating_sub(1);
 
-        if self.rng_state.next_u32() % stone_count < team.traitor_count {
+        if stone_count > 0 && self.rng_state.next_u32() % stone_count < team.traitor_count {
             team.traitor_count -= 1;
 
             let color = (1u8..=self.team_states.len() as u8)
