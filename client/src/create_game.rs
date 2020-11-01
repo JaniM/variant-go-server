@@ -549,7 +549,7 @@ impl Component for CreateGameView {
                 <input
                     style="width: 3em;"
                     type="number"
-                    value={self.mods.traitor.as_ref().map_or(3, |x| x.traitor_count)}
+                    value={self.mods.traitor.as_ref().map_or(10, |x| x.traitor_count)}
                     disabled=self.mods.traitor.is_none()
                     onchange=self.link.callback(|data|
                         match data {
