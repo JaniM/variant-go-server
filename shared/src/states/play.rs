@@ -363,10 +363,14 @@ impl PlayState {
             return Err(MakeActionError::OutOfBounds);
         }
 
-        self.rollback_turn(shared)
+        self.rollback_turn(shared, true)
     }
 
-    fn rollback_turn(&mut self, shared: &mut SharedState) -> MakeActionResult {
+    fn rollback_turn(
+        &mut self,
+        shared: &mut SharedState,
+        roll_visibility: bool,
+    ) -> MakeActionResult {
         shared
             .board_history
             .pop()
@@ -377,7 +381,9 @@ impl PlayState {
             .ok_or(MakeActionError::OutOfBounds)?;
 
         shared.board = history.board.clone();
-        shared.board_visibility = history.board_visibility.clone();
+        if roll_visibility {
+            shared.board_visibility = history.board_visibility.clone();
+        }
         shared.points = history.points.clone();
         shared.turn = history.turn;
         shared.traitor = history.traitor.clone();
@@ -437,7 +443,7 @@ impl PlayState {
                     // Depth increased -> the move is legal.
                     // Replay using traitor stone.
 
-                    let _ = self.rollback_turn(shared);
+                    let _ = self.rollback_turn(shared, false);
 
                     let traitor = shared.traitor.clone();
                     let color_placed = if let Some(state) = &mut shared.traitor {
