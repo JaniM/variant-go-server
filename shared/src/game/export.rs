@@ -28,11 +28,23 @@ impl SGFWriter {
             2 => "AW",
             _ => unreachable!(),
         };
+
+        let (x, y) = self.point(point);
+
+        let _ = write!(&mut self.buffer, "{}[{}{}]", name, x, y);
+    }
+
+    fn point(&self, point: (u32, u32)) -> (char, char) {
         let mut letters = 'a'..='z';
         let x = letters.clone().nth(point.0 as usize).unwrap_or('a');
         let y = letters.nth(point.1 as usize).unwrap_or('a');
+        (x, y)
+    }
 
-        let _ = write!(&mut self.buffer, "{}[{}{}]", name, x, y);
+    fn label(&mut self, point: (u32, u32), text: &str) {
+        let (x, y) = self.point(point);
+
+        let _ = write!(&mut self.buffer, "LB[{}{}:{}]", x, y, text);
     }
 
     fn end_turn(&mut self) {
@@ -66,9 +78,17 @@ pub fn sgf_export(game: &Game) -> String {
             }
         }
 
+        for (idx, new) in board.points.iter().enumerate() {
+            let coord = board.idx_to_coord(idx).unwrap();
+            match new.0 {
+                3 => writer.label(coord, "B"),
+                4 => writer.label(coord, "R"),
+                _ => {}
+            }
+        }
+
         writer.end_turn();
 
-        // TODO: PUZZLE markers for blue & red stones
         // TODO: PUZZLE markers for hidden stones
     }
 
