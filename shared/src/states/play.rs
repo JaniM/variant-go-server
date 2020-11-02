@@ -37,15 +37,9 @@ impl PlayState {
         &mut self,
         shared: &mut SharedState,
         (x, y): Point,
+        color_placed: Color,
     ) -> MakeActionResult<GroupVec<Point>> {
-        let active_seat = shared.get_active_seat();
         let mut points_played = GroupVec::new();
-
-        let color_placed = if let Some(state) = &mut shared.traitor {
-            state.next_color(active_seat.team)
-        } else {
-            active_seat.team
-        };
 
         if shared.mods.pixel {
             // In pixel mode coordinate 0,0 is outside the board.
@@ -125,29 +119,22 @@ impl PlayState {
         let mut captures = 0;
         let mut revealed = false;
 
-        let board = &mut shared.board;
-
         if shared.mods.phantom.is_some() {
-            let groups = find_groups(&board);
+            let groups = find_groups(&shared.board);
             let ataris = groups.iter().filter(|g| g.liberties == 1);
             for group in ataris {
-                let reveals = reveal_group(shared.board_visibility.as_mut(), group, board);
+                let reveals = reveal_group(shared.board_visibility.as_mut(), group, &shared.board);
                 revealed = revealed || reveals;
             }
         }
 
-        let groups = find_groups(&board);
-        let dead_opponents = groups
-            .iter()
-            .filter(|g| g.liberties == 0 && g.team != active_seat.team);
-
-        for group in dead_opponents {
+        let mut kill = |shared: &mut SharedState, group: &Group| -> Revealed {
+            let board = &mut shared.board;
             for point in &group.points {
                 *board.point_mut(*point) = Color::empty();
                 captures += 1;
             }
             let reveals = reveal_group(shared.board_visibility.as_mut(), group, board);
-            revealed = revealed || reveals;
 
             if let Some(ponnuki) = shared.mods.ponnuki_is_points {
                 let surrounding_count = board.surrounding_points(group.points[0]).count();
@@ -163,27 +150,45 @@ impl PlayState {
                     shared.points[active_seat.team.0 as usize - 1] += ponnuki;
                 }
             }
-        }
 
-        if shared.mods.captures_give_points.is_some() {
-            shared.points[active_seat.team.0 as usize - 1] += captures as i32 * 2;
+            reveals
+        };
+
+        let groups = find_groups(&shared.board);
+        let dead_opponents = groups
+            .iter()
+            .filter(|g| g.liberties == 0 && g.team != active_seat.team);
+
+        for group in dead_opponents {
+            revealed = revealed || kill(shared, group);
         }
 
         // TODO: only re-scan own previously dead grouos
-        let groups = find_groups(board);
+        let groups = find_groups(&shared.board);
         let dead_own = groups
             .iter()
             .filter(|g| g.liberties == 0 && g.team == active_seat.team);
 
         for group in dead_own {
+            let mut removed_move = false;
             for point in &group.points {
                 if points_played.contains(point) {
                     points_played.retain(|x| x != point);
-                    *board.point_mut(*point) = Color::empty();
+                    *shared.board.point_mut(*point) = Color::empty();
+                    removed_move = true;
                 }
             }
-            let reveals = reveal_group(shared.board_visibility.as_mut(), group, board);
+            let reveals = reveal_group(shared.board_visibility.as_mut(), group, &shared.board);
             revealed = revealed || reveals;
+
+            // If no illegal move has been made (eg. we suicided with a traitor stone), kill the group.
+            if !removed_move {
+                revealed = revealed || kill(shared, group);
+            }
+        }
+
+        if shared.mods.captures_give_points.is_some() {
+            shared.points[active_seat.team.0 as usize - 1] += captures as i32 * 2;
         }
 
         (captures, revealed)
@@ -231,9 +236,10 @@ impl PlayState {
         &mut self,
         shared: &mut SharedState,
         (x, y): (u32, u32),
+        color_placed: Color,
     ) -> MakeActionResult {
         // TODO: should use some kind of set to make suicide prevention faster
-        let mut points_played = self.place_stone(shared, (x, y))?;
+        let mut points_played = self.place_stone(shared, (x, y), color_placed)?;
         if let Some(rule) = &shared.mods.tetris {
             // This is valid because points_played is empty if the move is illegal.
             use tetris::TetrisResult::*;
@@ -357,6 +363,10 @@ impl PlayState {
             return Err(MakeActionError::OutOfBounds);
         }
 
+        self.rollback_turn(shared)
+    }
+
+    fn rollback_turn(&mut self, shared: &mut SharedState) -> MakeActionResult {
         shared
             .board_history
             .pop()
@@ -419,12 +429,32 @@ impl PlayState {
 
         let res = match action {
             ActionKind::Place(x, y) => {
-                let traitor = shared.traitor.clone();
-                let res = self.make_action_place(shared, (x, y));
-                if res.is_err() {
-                    shared.traitor = traitor;
+                let depth = shared.board_history.len();
+
+                let res = self.make_action_place(shared, (x, y), active_seat.team);
+
+                if res.is_ok() && shared.board_history.len() > depth && shared.traitor.is_some() {
+                    // Depth increased -> the move is legal.
+                    // Replay using traitor stone.
+
+                    let _ = self.rollback_turn(shared);
+
+                    let traitor = shared.traitor.clone();
+                    let color_placed = if let Some(state) = &mut shared.traitor {
+                        state.next_color(active_seat.team)
+                    } else {
+                        unreachable!();
+                    };
+
+                    let res = self.make_action_place(shared, (x, y), color_placed);
+
+                    if res.is_err() {
+                        shared.traitor = traitor;
+                    }
+                    res
+                } else {
+                    res
                 }
-                res
             }
             ActionKind::Pass => self.make_action_pass(shared),
             ActionKind::Cancel => self.make_action_cancel(shared),
