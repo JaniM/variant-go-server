@@ -18,6 +18,12 @@ pub fn check(
     for &point_played in points_played {
         let color = board.get_point(point_played);
 
+        if color.is_empty() {
+            // The point can be empty if the group was killed by traitor-suicide.
+            // Skip it in that case.
+            continue;
+        }
+
         let add_point = |line_points: &mut Vec<Point>, p: Point| {
             if board.get_point(p) == color && !line_points.contains(&p) {
                 line_points.push(p);
