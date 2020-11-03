@@ -4,9 +4,8 @@ A highly unfinished server for Go variants implemented in full-stack Rust.
 
 ## Development
 
-### Server
-
-The server needs a postgres server to store user info & games in. I recommend running a simple instance with docker: 
+### Database
+The server needs a postgres database to store user info & games in. I recommend running a simple instance with docker: 
 
 ``` sh
 docker run --name go-postgres -e POSTGRES_PASSWORD=localpw -d postgres -p 127.0.0.1:5432:5432
@@ -17,6 +16,16 @@ You can then either add the following in your environment variables (adjusting f
 ```
 DATABASE_URL=postgres://postgres:localpw@localhost/postgres
 ```
+
+To create the necessary tables run:
+
+```
+cargo install diesel_cli --no-default-features --features postgres
+cd server/
+diesel migration run
+```
+
+### Server
 
 Execute the server with
 
