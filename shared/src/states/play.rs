@@ -240,6 +240,10 @@ impl PlayState {
     ) -> MakeActionResult {
         // TODO: should use some kind of set to make suicide prevention faster
         let mut points_played = self.place_stone(shared, (x, y), color_placed)?;
+        if points_played.is_empty() {
+            return Ok(ActionChange::None);
+        }
+
         if let Some(rule) = &shared.mods.tetris {
             // This is valid because points_played is empty if the move is illegal.
             use tetris::TetrisResult::*;
@@ -249,9 +253,6 @@ impl PlayState {
                     return Err(MakeActionError::Illegal);
                 }
             }
-        }
-        if points_played.is_empty() {
-            return Ok(ActionChange::None);
         }
 
         if shared.mods.phantom.is_some() {
