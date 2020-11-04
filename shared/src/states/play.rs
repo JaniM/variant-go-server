@@ -160,7 +160,9 @@ impl PlayState {
             .filter(|g| g.liberties == 0 && g.team != active_seat.team);
 
         for group in dead_opponents {
-            revealed = revealed || kill(shared, group);
+            // Don't forget about short-circuiting boolean operators...
+            let reveals = kill(shared, group);
+            revealed = revealed || reveals;
         }
 
         // TODO: only re-scan own previously dead grouos
