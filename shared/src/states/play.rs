@@ -144,12 +144,12 @@ impl PlayState {
                     && surrounding_count == 4
                     && board
                         .surrounding_points(group.points[0])
-                        .all(|p| board.get_point(p) == active_seat.team)
+                        .all(|p| board.get_point(p) == color_placed)
                     && board
                         .surrounding_diagonal_points(group.points[0])
-                        .all(|p| board.get_point(p) != active_seat.team)
+                        .all(|p| board.get_point(p) != color_placed)
                 {
-                    shared.points[active_seat.team.0 as usize - 1] += ponnuki;
+                    shared.points[color_placed.0 as usize - 1] += ponnuki;
                 }
             }
 
@@ -176,7 +176,7 @@ impl PlayState {
         for group in dead_own {
             let mut removed_move = false;
             for point in &group.points {
-                if points_played.contains(point) {
+                if points_played.contains(point) && color_placed == active_seat.team {
                     points_played.retain(|x| x != point);
                     *shared.board.point_mut(*point) = Color::empty();
                     removed_move = true;
