@@ -448,7 +448,7 @@ impl PlayState {
                     // Depth increased -> the move is legal.
                     // Replay using traitor stone.
 
-                    let _ = self.rollback_turn(shared, false);
+                    let _ = self.rollback_turn(shared, true);
 
                     let traitor = shared.traitor.clone();
                     let color_placed = if let Some(state) = &mut shared.traitor {
@@ -462,6 +462,12 @@ impl PlayState {
                     if res.is_err() {
                         shared.traitor = traitor;
                     }
+                    res
+                } else if res.is_ok() && shared.traitor.is_some() {
+                    // Store visibility changes to history.
+                    let history = shared.board_history.last_mut().unwrap();
+                    history.board_visibility = shared.board_visibility.clone();
+
                     res
                 } else {
                     res
