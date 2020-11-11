@@ -114,6 +114,7 @@ impl PlayState {
         &self,
         shared: &mut SharedState,
         points_played: &mut GroupVec<Point>,
+        color_placed: Color,
     ) -> (usize, Revealed) {
         let active_seat = shared.get_active_seat();
         let mut captures = 0;
@@ -121,6 +122,7 @@ impl PlayState {
 
         if shared.mods.phantom.is_some() {
             let groups = find_groups(&shared.board);
+            // TODO: PUZZLE add a concept for pixel go atari
             let ataris = groups.iter().filter(|g| g.liberties == 1);
             for group in ataris {
                 let reveals = reveal_group(shared.board_visibility.as_mut(), group, &shared.board);
@@ -157,7 +159,7 @@ impl PlayState {
         let groups = find_groups(&shared.board);
         let dead_opponents = groups
             .iter()
-            .filter(|g| g.liberties == 0 && g.team != active_seat.team);
+            .filter(|g| g.liberties == 0 && g.team != color_placed);
 
         for group in dead_opponents {
             // Don't forget about short-circuiting boolean operators...
@@ -169,7 +171,7 @@ impl PlayState {
         let groups = find_groups(&shared.board);
         let dead_own = groups
             .iter()
-            .filter(|g| g.liberties == 0 && g.team == active_seat.team);
+            .filter(|g| g.liberties == 0 && g.team == color_placed);
 
         for group in dead_own {
             let mut removed_move = false;
@@ -277,7 +279,7 @@ impl PlayState {
             }
         }
 
-        let (captures, revealed) = self.capture(shared, &mut points_played);
+        let (captures, revealed) = self.capture(shared, &mut points_played, color_placed);
 
         if points_played.is_empty() {
             let BoardHistory { board, points, .. } = shared
