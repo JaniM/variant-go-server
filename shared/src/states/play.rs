@@ -187,7 +187,9 @@ impl PlayState {
 
             // If no illegal move has been made (eg. we suicided with a traitor stone), kill the group.
             if !removed_move {
-                revealed = revealed || kill(shared, group);
+                // Don't forget about short-circuiting boolean operators...
+                let reveals = kill(shared, group);
+                revealed = revealed || reveals;
             }
         }
 
