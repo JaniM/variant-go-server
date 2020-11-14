@@ -192,9 +192,7 @@ impl Component for CreateGameView {
             }
             Msg::ToggleTraitor => {
                 self.mods.traitor = match &self.mods.traitor {
-                    None => Some(game::TraitorGo {
-                        traitor_count: 10,
-                    }),
+                    None => Some(game::TraitorGo { traitor_count: 10 }),
                     Some(_) => None,
                 };
                 true

@@ -606,13 +606,14 @@ impl Game {
             }
             GameState::Play(state) => {
                 let seat_idx = self.shared.turn;
-                // If this is the first move, we want to reset the clock.
-                let start_clock = self.shared.board_history.len() == 1;
-                if start_clock {
-                    if let Some(clock) = &mut self.shared.clock {
+                // We want to keep the clock reset until all players have made a move.
+                let start_clock = self.shared.board_history.len() == self.shared.seats.len();
+                if let Some(clock) = &mut self.shared.clock {
+                    if start_clock {
                         clock.initialize_clocks(time);
                     }
                 }
+
                 let time_left = if let Some(clock) = &mut self.shared.clock {
                     clock.advance_clock(seat_idx, time)
                 } else {
@@ -625,9 +626,12 @@ impl Game {
 
                 let res = state.make_action(&mut self.shared, player_id, action.clone());
 
-                if res.is_ok() && !start_clock {
+                if res.is_ok() {
                     if let Some(clock) = &mut self.shared.clock {
                         clock.end_turn(seat_idx, time);
+                        if start_clock {
+                            clock.pause(false);
+                        }
                     }
                 }
                 res

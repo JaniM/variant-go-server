@@ -107,17 +107,14 @@ impl Component for SeatList {
                 let now = js_sys::Date::now() as i128;
                 let game = &self.props.game;
                 if !matches!(game.state, shared::game::GameStateView::Play(_)) {
-                    return true;
+                    return false;
                 }
-                for (idx, clock) in self
-                    .props
-                    .game
-                    .clock
-                    .iter()
-                    .flat_map(|c| &c.clocks)
-                    .enumerate()
-                {
-                    if game.turn != idx as u32 || game.move_number == 0 {
+                let game_clock = match &game.clock {
+                    Some(c) => c,
+                    None => return false,
+                };
+                for (idx, clock) in game_clock.clocks.iter().enumerate() {
+                    if game.turn != idx as u32 || game_clock.paused {
                         continue;
                     }
 
@@ -195,9 +192,9 @@ impl Component for SeatList {
                     ""
                 };
 
-                let time_left = if let (false, Some(clock)) = (resigned, &game.clock) {
-                    let clock = &clock.clocks[idx];
-                    let time_left = if game.turn == idx as u32 && game.move_number > 0 {
+                let time_left = if let (false, Some(game_clock)) = (resigned, &game.clock) {
+                    let clock = &game_clock.clocks[idx];
+                    let time_left = if game.turn == idx as u32 && !game_clock.paused {
                         match clock {
                             PlayerClock::Plain { last_time, time_left } => last_time.0 + time_left.0 - now
                         }

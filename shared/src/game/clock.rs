@@ -81,6 +81,7 @@ pub struct GameClock {
     /// One clock per team or player. This is decided by the game controller, this module doesn't care which is used.
     pub clocks: Vec<PlayerClock>,
     pub rule: ClockRule,
+    pub paused: bool,
 }
 
 impl GameClock {
@@ -88,6 +89,7 @@ impl GameClock {
         GameClock {
             clocks: vec![rule.clock(); clock_count],
             rule,
+            paused: true,
         }
     }
 
@@ -103,6 +105,10 @@ impl GameClock {
 
     /// Returns the time left for the given clock at current timestamp `time`.
     pub fn advance_clock(&mut self, clock_idx: usize, time: Millisecond) -> Millisecond {
+        if self.paused {
+            return Millisecond(0);
+        }
+
         let clock = &mut self.clocks[clock_idx];
 
         match clock {
@@ -118,6 +124,10 @@ impl GameClock {
     }
 
     pub fn end_turn(&mut self, clock_idx: usize, time: Millisecond) {
+        if self.paused {
+            return;
+        }
+
         let clock = &mut self.clocks[clock_idx];
 
         match &mut self.rule {
@@ -140,5 +150,9 @@ impl GameClock {
                 }
             }
         }
+    }
+
+    pub fn pause(&mut self, paused: bool) {
+        self.paused = paused;
     }
 }
