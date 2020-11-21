@@ -10,6 +10,7 @@ mod seats;
 mod text_input;
 #[macro_use]
 mod utils;
+mod palette;
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -19,6 +20,7 @@ use crate::agents::game_store;
 use crate::create_game::CreateGameView;
 use crate::game_pane::GamePane;
 use crate::game_view::{GameView, Profile};
+use crate::palette::PaletteOption;
 use crate::text_input::TextInput;
 
 use shared::game;
@@ -75,6 +77,7 @@ struct GameApp {
     pane: Pane,
     debounce_job: Option<TimeoutTask>,
     theme: Theme,
+    palette: PaletteOption,
     error: Option<(message::Error, TimeoutTask)>,
     #[allow(dead_code)]
     game_store: game_store::GameStore,
@@ -94,6 +97,7 @@ enum Msg {
     RemoveGame(u32),
     SetPane(Pane),
     SetTheme(Theme),
+    SetPalette(PaletteOption),
     SetError(Option<message::Error>),
     Render,
 }
@@ -206,6 +210,7 @@ impl Component for GameApp {
             },
             debounce_job: None,
             theme: Theme::get(),
+            palette: PaletteOption::get(),
             error: None,
             game_store,
         }
@@ -280,6 +285,11 @@ impl Component for GameApp {
                 self.theme.save();
                 true
             }
+            Msg::SetPalette(palette) => {
+                self.palette = palette;
+                self.palette.save();
+                true
+            }
             Msg::SetError(err) => {
                 self.error = err.map(|err| {
                     (
@@ -338,6 +348,7 @@ impl Component for GameApp {
                 <GamePane
                     user=&self.user
                     profiles=&self.profiles
+                    palette=&self.palette
                     game=game />
             )
         } else {
@@ -388,6 +399,27 @@ impl Component for GameApp {
             </select>
         };
 
+        let select_palette = self.link.callback(|event| match event {
+            ChangeData::Select(elem) => {
+                let value = elem.selected_index();
+                Msg::SetPalette(match value {
+                    0 => PaletteOption::Normal,
+                    1 => PaletteOption::Colorblind,
+                    _ => unreachable!(),
+                })
+            }
+            _ => unreachable!(),
+        });
+
+        let palette_selection = html! {
+            <select
+                onchange=select_palette
+            >
+                <option value=PaletteOption::Normal selected=self.palette == PaletteOption::Normal>{ "Normal" }</option>
+                <option value=PaletteOption::Colorblind selected=self.palette == PaletteOption::Colorblind>{ "Colorblind" }</option>
+            </select>
+        };
+
         let class = match self.theme {
             Theme::White => "",
             Theme::Dark => "dark",
@@ -426,7 +458,7 @@ impl Component for GameApp {
                         { "Create game" }
                     </button>
                 </div>
-                <div>{"Theme: "}{theme_selection}</div>
+                <div>{"Theme: "}{theme_selection}{" Board: "}{palette_selection}</div>
                 <div>
                     {"Nickname: "}
                     <TextInput value=nick onsubmit=nick_enter />

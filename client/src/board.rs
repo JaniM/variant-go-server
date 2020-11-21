@@ -11,6 +11,7 @@ use shared::message::{ClientMessage, GameAction};
 
 use crate::game_view::GameView;
 use crate::networking;
+use crate::palette::Palette;
 
 // TODO: PUZZLE Move audio handling to its own agent.
 
@@ -60,7 +61,7 @@ impl Audio {
     }
 }
 
-pub struct Board {
+pub(crate) struct Board {
     props: Props,
     canvas: Option<HtmlCanvasElement>,
     canvas2d: Option<Canvas2d>,
@@ -76,10 +77,11 @@ pub struct Board {
 }
 
 #[derive(Properties, Clone, PartialEq)]
-pub struct Props {
+pub(crate) struct Props {
     pub game: GameView,
     pub size: i32,
     pub show_hidden: bool,
+    pub palette: Palette,
 }
 
 pub enum Msg {
@@ -300,12 +302,13 @@ impl Board {
     fn render_gl(&mut self, _timestamp: f64) -> Result<(), JsValue> {
         // Stone colors ///////////////////////////////////////////////////////
 
-        let shadow_stone_colors = ["#000000a0", "#eeeeeea0", "#5074bca0", "#e0658fa0"];
-        let shadow_border_colors = ["#bbbbbb", "#555555", "#555555", "#555555"];
-        let stone_colors = ["#000000", "#eeeeee", "#5074bc", "#e0658f"];
-        let stone_colors_hidden = ["#00000080", "#eeeeee80", "#5074bc80", "#e0658f80"];
-        let border_colors = ["#555555", "#000000", "#000000", "#000000"];
-        let dead_mark_color = ["#eeeeee", "#000000", "#000000", "#000000"];
+        let palette = &self.props.palette;
+        let shadow_stone_colors = palette.shadow_stone_colors;
+        let shadow_border_colors = palette.shadow_border_colors;
+        let stone_colors = palette.stone_colors;
+        let stone_colors_hidden = palette.stone_colors_hidden;
+        let border_colors = palette.border_colors;
+        let dead_mark_color = palette.dead_mark_color;
 
         let edge_size = self.edge_size as f64;
 
@@ -355,7 +358,7 @@ impl Board {
 
         context.clear_rect(0.0, 0.0, canvas.width().into(), canvas.height().into());
 
-        context.set_fill_style(&JsValue::from_str("#e0bb6c"));
+        context.set_fill_style(&JsValue::from_str(palette.background));
         context.fill_rect(0.0, 0.0, canvas.width().into(), canvas.height().into());
 
         // Board lines ////////////////////////////////////////////////////////

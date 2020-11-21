@@ -14,13 +14,14 @@ use crate::{
     board,
     game_view::{GameView, Profile},
     if_html, networking,
+    palette::PaletteOption,
     seats::SeatList,
 };
 use game_store::GameStore;
 use message::GameAction;
 use shared::{game, message};
 
-pub struct GamePane {
+pub(crate) struct GamePane {
     link: ComponentLink<Self>,
     props: Props,
     callbacks: Callbacks,
@@ -47,10 +48,11 @@ pub enum Msg {
 }
 
 #[derive(Properties, Clone, PartialEq)]
-pub struct Props {
+pub(crate) struct Props {
     pub game: GameView,
     pub user: Option<Profile>,
     pub profiles: HashMap<u64, Profile>,
+    pub palette: PaletteOption,
 }
 
 #[derive(Clone)]
@@ -150,6 +152,7 @@ impl Component for GamePane {
             user,
             game,
             profiles,
+            palette,
         } = &self.props;
         let Callbacks {
             pass,
@@ -317,7 +320,7 @@ impl Component for GamePane {
                             </div>
                             {hidden_move_toggle}
                         </div>
-                        <board::Board game=game size=self.size show_hidden=self.show_hidden_moves/>
+                        <board::Board game=game size=self.size show_hidden=self.show_hidden_moves palette=palette.to_palette() />
                         {turn_bar}
                     </div>
                 </div>
