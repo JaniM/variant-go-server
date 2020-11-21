@@ -5,6 +5,16 @@
 #[serde(transparent)]
 pub struct Millisecond(pub i128);
 
+impl Millisecond {
+    pub fn as_secs(self) -> f32 {
+        self.0 as f32 / 1000.
+    }
+
+    pub fn as_minutes(self) -> f32 {
+        self.0 as f32 / 1000. / 60.
+    }
+}
+
 impl std::ops::Sub for Millisecond {
     type Output = Self;
 

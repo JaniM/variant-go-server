@@ -2,7 +2,7 @@ use yew::prelude::*;
 use yewtil::NeqAssign;
 
 use crate::if_html;
-use shared::game::{GameModifier, VisibilityMode};
+use shared::game::{clock::ClockRule, Clock, GameModifier, VisibilityMode};
 
 pub struct ModeList {
     _link: ComponentLink<Self>,
@@ -134,6 +134,14 @@ If two players pick the same point, neither one gets a stone there, but they sti
             </label>
         );
 
+        let clock = if_html!(
+            let Some(Clock { rule: ClockRule::Fischer(rule)}) = &mods.clock =>
+            <label class="tooltip">
+                {format!("Fischer {}min + {}s", rule.main_time.as_minutes(), rule.increment.as_secs())}
+                <span class=tooltip_class>{"After each turn the player gains X seconds. Clocks start after all players have made a move."}</span>
+            </label>
+        );
+
         html! {
             <div style="padding: 10px;">
                 <div>{pixel}</div>
@@ -149,6 +157,7 @@ If two players pick the same point, neither one gets a stone there, but they sti
                 <div>{phantom}</div>
                 <div>{captures_give_points}</div>
                 <div>{observable}</div>
+                <div>{clock}</div>
             </div>
         }
     }
