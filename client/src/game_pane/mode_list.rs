@@ -119,6 +119,13 @@ If two players pick the same point, neither one gets a stone there, but they sti
             </label>
         );
 
+        let observable = if_html!(mods.observable =>
+            <label class="tooltip">
+                {"Observable"}
+                <span class=tooltip_class>{"All users who are not holding a seat can see all hidden stones and the true color of stones if one color go is enabled."}</span>
+            </label>
+        );
+
         let captures_give_points = if_html!(
             mods.captures_give_points.is_some() =>
             <label class="tooltip">
@@ -141,6 +148,7 @@ If two players pick the same point, neither one gets a stone there, but they sti
                 <div>{toroidal}</div>
                 <div>{phantom}</div>
                 <div>{captures_give_points}</div>
+                <div>{observable}</div>
             </div>
         }
     }

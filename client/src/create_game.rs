@@ -63,6 +63,7 @@ pub enum Msg {
     ToggleTetris,
     ToggleToroidal,
     TogglePhantom,
+    ToggleObservable,
     SetHiddenMoveCount(u32),
     SetTraitorCount(u32),
     SetNPlusOneCount(u8),
@@ -151,6 +152,10 @@ impl Component for CreateGameView {
                 if self.mods.pixel && self.komis.len() == 2 {
                     self.komis[1] = 51; // 25.5, magic number given by Ten
                 }
+                true
+            }
+            Msg::ToggleObservable => {
+                self.mods.observable = !self.mods.observable;
                 true
             }
             Msg::ToggleNoHistory => {
@@ -532,6 +537,20 @@ impl Component for CreateGameView {
             </li>
         };
 
+        let observable = html! {
+            <li>
+                <input
+                    type="checkbox"
+                    class="toggle"
+                    checked=self.mods.observable
+                    onclick=self.link.callback(move |_| Msg::ToggleObservable) />
+                <label class="tooltip" onclick=self.link.callback(move |_| Msg::ToggleObservable)>
+                    {"Observable"}
+                    <span class="tooltiptext">{"All users who are not holding a seat can see all hidden stones and the true color of stones if one color go is enabled."}</span>
+                </label>
+            </li>
+        };
+
         let traitor = html! {
             <li>
                 <input
@@ -700,6 +719,7 @@ If two players pick the same point, neither one gets a stone there, but they sti
                                 ) />
                             {" points (can be negative)"}
                         </li>
+                        {observable}
                     </ul>
                 </div>
             </div>

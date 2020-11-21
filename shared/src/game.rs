@@ -240,6 +240,10 @@ pub struct GameModifier {
 
     #[serde(default)]
     pub traitor: Option<TraitorGo>,
+
+    /// If true, spectators can see all hidden stones and one color stones.
+    #[serde(default)]
+    pub observable: bool,
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -713,8 +717,12 @@ impl Game {
                 // TODO: Change this to black once the client supports selecting the color
                 const ONE_COLOR_TEAM: Color = Color(2);
 
+                let seat = shared.seats.iter().find(|x| x.player == Some(player_id));
+
                 // If the game is done, everything is visible.
-                if game_done {
+                // Or, if the game is observable and the user is not playing, everything
+                // is visible.
+                if game_done || (seat.is_none() && shared.mods.observable) {
                     return (board, board_visibility.map(|x| x.points), 0);
                 }
 
@@ -726,8 +734,7 @@ impl Game {
                     }
                 };
 
-                if let Some(active_seat) = shared.seats.iter().find(|x| x.player == Some(player_id))
-                {
+                if let Some(active_seat) = seat {
                     let team = if !one_color {
                         active_seat.team
                     } else {
