@@ -73,6 +73,7 @@ pub(crate) struct Board {
     width: u32,
     height: u32,
     edge_size: i32,
+    pixel_ratio: f64,
     audio: Audio,
 }
 
@@ -108,6 +109,7 @@ impl Component for Board {
             width: 0,
             height: 0,
             edge_size: 40,
+            pixel_ratio: 1.0,
             audio: Audio::new(),
         }
     }
@@ -204,6 +206,7 @@ impl Component for Board {
             if let Some(canvas) = &self.canvas {
                 let window = web_sys::window().unwrap();
                 let pixel_ratio = window.device_pixel_ratio();
+                self.pixel_ratio = pixel_ratio;
 
                 let size = self.props.size;
                 let scaled_size = size as f64 * pixel_ratio;
@@ -227,7 +230,7 @@ impl Component for Board {
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         let game = &self.props.game;
-        let edge_size = self.edge_size as f64;
+        let edge_size = self.edge_size as f64 / self.pixel_ratio;
         let width = self.width as f64 - (2.0 * edge_size);
         let height = self.height as f64 - (2.0 * edge_size);
         let is_scoring = matches!(game.state, GameStateView::Scoring(_));
