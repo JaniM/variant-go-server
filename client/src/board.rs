@@ -442,7 +442,7 @@ impl Board {
 
         let from_edge = edge_size - 20.0;
 
-        context.set_font("bold 24px serifd");
+        context.set_font("bold 1.5em serif");
 
         context.set_text_align("center");
         context.set_text_baseline("middle");
