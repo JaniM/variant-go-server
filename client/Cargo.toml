@@ -43,6 +43,7 @@ features = [
   "CloseEvent",
   "CssStyleDeclaration",
   'Document',
+  "DomRect",
   'Element',
   "Event",
   "EventTarget",

@@ -129,7 +129,7 @@ impl Component for Board {
         {
             let mouse_move = self.link.callback(Msg::MouseMove);
             let closure = Closure::wrap(Box::new(move |event: web_sys::MouseEvent| {
-                mouse_move.emit((event.offset_x() as f64, event.offset_y() as f64));
+                mouse_move.emit((event.client_x() as f64, event.client_y() as f64));
             }) as Box<dyn FnMut(_)>);
             canvas
                 .add_event_listener_with_callback("mousemove", closure.as_ref().unchecked_ref())
@@ -148,7 +148,7 @@ impl Component for Board {
                 let buttons = event.buttons();
                 if event.is_primary() && (buttons == 0 || buttons == 1) {
                     let is_touch = event.pointer_type() == "touch";
-                    mouse_click.emit((event.offset_x() as f64, event.offset_y() as f64, is_touch));
+                    mouse_click.emit((event.client_x() as f64, event.client_y() as f64, is_touch));
                 }
             }) as Box<dyn FnMut(_)>);
             canvas
@@ -231,7 +231,13 @@ impl Component for Board {
         let width = self.width as f64 - (2.0 * edge_size);
         let height = self.height as f64 - (2.0 * edge_size);
         let is_scoring = matches!(game.state, GameStateView::Scoring(_));
+        let bounding = self.canvas.as_ref().unwrap().get_bounding_client_rect();
+
         let mouse_to_coord = |mut p: (f64, f64)| -> Option<(u32, u32)> {
+            // Adjust the coordinates for canvas position
+            p.0 -= bounding.left();
+            p.1 -= bounding.top();
+
             if p.0 < edge_size
                 || p.1 < edge_size
                 || p.0 > width + edge_size
@@ -245,11 +251,11 @@ impl Component for Board {
             Some(match game.mods.pixel && !is_scoring {
                 true => (
                     (p.0 / (width / game.size.0 as f64) + 0.5) as u32,
-                    (p.1 / (width / game.size.1 as f64) + 0.5) as u32,
+                    (p.1 / (height / game.size.1 as f64) + 0.5) as u32,
                 ),
                 false => (
                     (p.0 / (width / game.size.0 as f64)) as u32,
-                    (p.1 / (width / game.size.1 as f64)) as u32,
+                    (p.1 / (height / game.size.1 as f64)) as u32,
                 ),
             })
         };
