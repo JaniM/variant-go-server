@@ -267,6 +267,10 @@ impl Component for Board {
                 self.audio.play_stone();
             }
 
+            if self.props.game.room_id != props.game.room_id {
+                self.board_displacement = (0, 0);
+            }
+
             self.props = props;
             if let Some(canvas) = &self.canvas {
                 let window = web_sys::window().unwrap();
