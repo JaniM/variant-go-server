@@ -61,6 +61,71 @@ impl Audio {
     }
 }
 
+#[derive(Copy, Clone, PartialEq, Debug)]
+enum Direction {
+    Up,
+    Down,
+    Left,
+    Right,
+}
+
+#[derive(Copy, Clone, PartialEq, Debug)]
+enum Input {
+    Place((u32, u32), bool),
+    Move(Direction, bool),
+    None,
+}
+
+impl Input {
+    fn from_pointer(board: &Board, mut p: (f64, f64), clicked: bool) -> Input {
+        let game = &board.props.game;
+        let edge_size = board.edge_size as f64 / board.pixel_ratio;
+        let width = board.width as f64 - (2.0 * edge_size);
+        let height = board.height as f64 - (2.0 * edge_size);
+        let is_scoring = matches!(game.state, GameStateView::Scoring(_));
+        let bounding = board.canvas.as_ref().unwrap().get_bounding_client_rect();
+
+        // Adjust the coordinates for canvas position
+        p.0 -= bounding.left();
+        p.1 -= bounding.top();
+
+        if p.0 < edge_size {
+            return Input::Move(Direction::Left, clicked);
+        }
+        if p.1 < edge_size {
+            return Input::Move(Direction::Up, clicked);
+        }
+        if p.0 > width + edge_size {
+            return Input::Move(Direction::Right, clicked);
+        }
+        if p.1 > height + edge_size {
+            return Input::Move(Direction::Down, clicked);
+        }
+
+        p.0 -= edge_size;
+        p.1 -= edge_size;
+        let pos = match game.mods.pixel && !is_scoring {
+            true => (
+                (p.0 / (width / game.size.0 as f64) + 0.5) as u32,
+                (p.1 / (height / game.size.1 as f64) + 0.5) as u32,
+            ),
+            false => (
+                (p.0 / (width / game.size.0 as f64)) as u32,
+                (p.1 / (height / game.size.1 as f64)) as u32,
+            ),
+        };
+
+        Input::Place(pos, clicked)
+    }
+
+    fn into_selection(self) -> Option<(u32, u32)> {
+        match self {
+            Input::Place(p, _) => Some(p),
+            _ => None,
+        }
+    }
+}
+
 pub(crate) struct Board {
     props: Props,
     canvas: Option<HtmlCanvasElement>,
@@ -68,13 +133,14 @@ pub(crate) struct Board {
     link: ComponentLink<Self>,
     node_ref: NodeRef,
     render_loop: Option<Box<dyn Task>>,
-    mouse_pos: Option<(f64, f64)>,
     selection_pos: Option<(u32, u32)>,
     width: u32,
     height: u32,
     edge_size: i32,
     pixel_ratio: f64,
     audio: Audio,
+    input: Input,
+    board_displacement: (i32, i32),
 }
 
 #[derive(Properties, Clone, PartialEq)]
@@ -104,20 +170,19 @@ impl Component for Board {
             link,
             node_ref: NodeRef::default(),
             render_loop: None,
-            mouse_pos: None,
             selection_pos: None,
             width: 0,
             height: 0,
             edge_size: 40,
             pixel_ratio: 1.0,
             audio: Audio::new(),
+            input: Input::None,
+            board_displacement: (0, 0),
         }
     }
 
     fn rendered(&mut self, first_render: bool) {
-        // Once rendered, store references for the canvas and GL context. These can be used for
-        // resizing the rendering area when the window or canvas element are resized, as well as
-        // for making GL calls.
+        // Once rendered, store references for the canvas and GL context.
 
         let canvas = self.node_ref.cast::<HtmlCanvasElement>().unwrap();
 
@@ -229,70 +294,79 @@ impl Component for Board {
     }
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
-        let game = &self.props.game;
-        let edge_size = self.edge_size as f64 / self.pixel_ratio;
-        let width = self.width as f64 - (2.0 * edge_size);
-        let height = self.height as f64 - (2.0 * edge_size);
-        let is_scoring = matches!(game.state, GameStateView::Scoring(_));
-        let bounding = self.canvas.as_ref().unwrap().get_bounding_client_rect();
-
-        let mouse_to_coord = |mut p: (f64, f64)| -> Option<(u32, u32)> {
-            // Adjust the coordinates for canvas position
-            p.0 -= bounding.left();
-            p.1 -= bounding.top();
-
-            if p.0 < edge_size
-                || p.1 < edge_size
-                || p.0 > width + edge_size
-                || p.1 > height + edge_size
-            {
-                return None;
-            }
-
-            p.0 -= edge_size;
-            p.1 -= edge_size;
-            Some(match game.mods.pixel && !is_scoring {
-                true => (
-                    (p.0 / (width / game.size.0 as f64) + 0.5) as u32,
-                    (p.1 / (height / game.size.1 as f64) + 0.5) as u32,
-                ),
-                false => (
-                    (p.0 / (width / game.size.0 as f64)) as u32,
-                    (p.1 / (height / game.size.1 as f64)) as u32,
-                ),
-            })
-        };
-
         match msg {
             Msg::Render(_timestamp) => {
                 //self.render_gl(timestamp).unwrap();
             }
             Msg::MouseMove(p) => {
-                self.mouse_pos = Some(p);
-                self.selection_pos = mouse_to_coord(p);
+                let input = Input::from_pointer(self, p, false);
+                self.input = input;
+                self.selection_pos = input.into_selection();
                 self.render_gl(0.0).unwrap();
             }
             Msg::Click((x, y, is_touch)) => {
                 let p = (x, y);
-                // Ignore clicks while viewing history
-                if self.props.game.history.is_some() {
-                    return false;
-                }
-                self.mouse_pos = Some(p);
-                let coord = mouse_to_coord(p);
+                let input = Input::from_pointer(self, p, false);
+                let coord = input.into_selection();
                 let send = !is_touch || self.selection_pos == coord;
+                self.input = input;
                 self.selection_pos = coord;
                 if let Some(selection_pos) = self.selection_pos {
+                    // Ignore clicks while viewing history
+                    if self.props.game.history.is_some() {
+                        return false;
+                    }
                     if send {
+                        let game = &self.props.game;
+                        let x = (selection_pos.0 as i32 + self.board_displacement.0)
+                            .rem_euclid(game.size.0 as i32) as u32;
+                        let y = (selection_pos.1 as i32 + self.board_displacement.1)
+                            .rem_euclid(game.size.1 as i32) as u32;
                         networking::send(ClientMessage::GameAction {
                             room_id: None,
-                            action: GameAction::Place(selection_pos.0, selection_pos.1),
+                            action: GameAction::Place(x, y),
                         });
+                    }
+                }
+                if self.props.game.mods.toroidal.is_some() {
+                    let render = match input {
+                        Input::Move(Direction::Left, _) => {
+                            self.board_displacement.0 -= 1;
+                            if self.board_displacement.0 < 0 {
+                                self.board_displacement.0 += self.props.game.size.0 as i32;
+                            }
+                            true
+                        }
+                        Input::Move(Direction::Right, _) => {
+                            self.board_displacement.0 += 1;
+                            if self.board_displacement.0 >= self.props.game.size.0 as i32 {
+                                self.board_displacement.0 = 0;
+                            }
+                            true
+                        }
+                        Input::Move(Direction::Up, _) => {
+                            self.board_displacement.1 -= 1;
+                            if self.board_displacement.1 < 0 {
+                                self.board_displacement.1 += self.props.game.size.1 as i32;
+                            }
+                            true
+                        }
+                        Input::Move(Direction::Down, _) => {
+                            self.board_displacement.1 += 1;
+                            if self.board_displacement.1 >= self.props.game.size.1 as i32 {
+                                self.board_displacement.1 = 0;
+                            }
+                            true
+                        }
+                        _ => false,
+                    };
+                    if render {
+                        self.render_gl(0.0).unwrap();
                     }
                 }
             }
             Msg::MouseLeave => {
-                self.mouse_pos = None;
+                self.input = Input::None;
                 self.selection_pos = None;
                 self.render_gl(0.0).unwrap();
             }
@@ -341,6 +415,8 @@ impl Board {
 
         // TODO: actually handle non-square boards
         let board_size = game.size.0 as usize;
+        let width = canvas.width() as f64;
+        let height = canvas.height() as f64;
         let size = (canvas.width() as f64 - 2.0 * edge_size) / board_size as f64;
         let turn = game.seats[game.turn as usize].1;
 
@@ -369,6 +445,28 @@ impl Board {
 
         context.set_fill_style(&JsValue::from_str(palette.background));
         context.fill_rect(0.0, 0.0, canvas.width().into(), canvas.height().into());
+
+        // Toroidal edge scroll boxes /////////////////////////////////////////
+
+        if game.mods.toroidal.is_some() {
+            context.set_stroke_style(&JsValue::from_str("#000000"));
+            context.set_fill_style(&JsValue::from_str("#000000aa"));
+            match self.input {
+                Input::Move(Direction::Left, _) => {
+                    context.fill_rect(0.0, 0.0, edge_size, height);
+                }
+                Input::Move(Direction::Right, _) => {
+                    context.fill_rect(width - edge_size, 0.0, edge_size, height);
+                }
+                Input::Move(Direction::Up, _) => {
+                    context.fill_rect(0.0, 0.0, width, edge_size);
+                }
+                Input::Move(Direction::Down, _) => {
+                    context.fill_rect(0.0, height - edge_size, width, edge_size);
+                }
+                _ => {}
+            }
+        }
 
         // Board lines ////////////////////////////////////////////////////////
 
@@ -410,7 +508,7 @@ impl Board {
 
         // Starpoints /////////////////////////////////////////////////////////
 
-        let points: &[(u8, u8)] = match game.size.0 {
+        let points: &[(i32, i32)] = match game.size.0 {
             19 => &[
                 (3, 3),
                 (9, 3),
@@ -438,6 +536,8 @@ impl Board {
             _ => &[],
         };
         for &(x, y) in points {
+            let x = (x - self.board_displacement.0).rem_euclid(game.size.0 as i32);
+            let y = (y - self.board_displacement.1).rem_euclid(game.size.1 as i32);
             draw_stone((x as _, y as _), size / 4., true, false)?;
         }
 
@@ -450,33 +550,35 @@ impl Board {
         context.set_text_align("center");
         context.set_text_baseline("middle");
 
-        for y in 0..game.size.1 {
+        for (i, y) in (0..game.size.1)
+            .cycle()
+            .skip(self.board_displacement.1 as usize)
+            .take(game.size.1 as usize)
+            .enumerate()
+        {
             let text = (game.size.1 - y).to_string();
-            let y = y as f64 + 0.5;
-            context.fill_text(&text, from_edge, edge_size + y as f64 * size + 2.0)?;
-            context.fill_text(
-                &text,
-                canvas.width() as f64 - from_edge,
-                edge_size + y as f64 * size + 2.0,
-            )?;
+            let i = i as f64 + 0.5;
+            context.fill_text(&text, from_edge, edge_size + i * size + 2.0)?;
+            context.fill_text(&text, width - from_edge, edge_size + i * size + 2.0)?;
         }
 
         context.set_text_align("center");
         context.set_text_baseline("baseline");
 
-        for x in 0..game.size.0 {
+        for (i, x) in (0..game.size.0)
+            .cycle()
+            .skip(self.board_displacement.0 as usize)
+            .take(game.size.0 as usize)
+            .enumerate()
+        {
             let letter = ('A'..'I')
                 .chain('J'..='Z')
                 .nth(x as usize)
                 .unwrap()
                 .to_string();
-            let x = x as f64 + 0.5;
-            context.fill_text(&letter, edge_size + x as f64 * size, from_edge)?;
-            context.fill_text(
-                &letter,
-                edge_size + x as f64 * size,
-                canvas.height() as f64 - from_edge,
-            )?;
+            let i = i as f64 + 0.5;
+            context.fill_text(&letter, edge_size + i * size, from_edge)?;
+            context.fill_text(&letter, edge_size + i * size, height - from_edge)?;
         }
 
         // Mouse hover display ////////////////////////////////////////////////
@@ -520,13 +622,18 @@ impl Board {
 
         // Board stones ///////////////////////////////////////////////////////
 
-        for (idx, &color) in board.iter().enumerate() {
+        for (idx, _) in board.iter().enumerate() {
             let x = idx % board_size;
             let y = idx / board_size;
 
+            let px = (x as i32 + self.board_displacement.0).rem_euclid(game.size.0 as i32);
+            let py = (y as i32 + self.board_displacement.1).rem_euclid(game.size.1 as i32);
+            let pidx = py as usize * board_size + px as usize;
+            let color = board[pidx];
+
             let visible = board_visibility
                 .as_ref()
-                .map(|v| v[idx] == 0)
+                .map(|v| v[pidx] == 0)
                 .unwrap_or(true);
 
             if color == 0 || !visible {
@@ -542,9 +649,14 @@ impl Board {
         // Hidden stones //////////////////////////////////////////////////////
 
         if self.props.show_hidden {
-            for (idx, &colors) in board_visibility.iter().flatten().enumerate() {
+            for (idx, _) in board_visibility.iter().flatten().enumerate() {
                 let x = idx % board_size;
                 let y = idx / board_size;
+
+                let px = (x as i32 + self.board_displacement.0).rem_euclid(game.size.0 as i32);
+                let py = (y as i32 + self.board_displacement.1).rem_euclid(game.size.1 as i32);
+                let pidx = py as usize * board_size + px as usize;
+                let colors = board_visibility.as_ref().unwrap()[pidx];
 
                 let colors = Visibility::from_value(colors);
 
@@ -573,6 +685,8 @@ impl Board {
 
         if let Some(points) = last_stone {
             for &(x, y) in points {
+                let px = (x as i32 - self.board_displacement.0).rem_euclid(game.size.0 as i32);
+                let py = (y as i32 - self.board_displacement.1).rem_euclid(game.size.1 as i32);
                 let mut color = board[y as usize * game.size.0 as usize + x as usize];
 
                 if color == 0 {
@@ -583,7 +697,7 @@ impl Board {
                 context.set_stroke_style(&JsValue::from_str(dead_mark_color[color as usize - 1]));
                 context.set_line_width(2.0);
 
-                draw_stone((x as _, y as _), size / 2., false, true)?;
+                draw_stone((px as _, py as _), size / 2., false, true)?;
             }
         }
 
@@ -598,6 +712,11 @@ impl Board {
                         }
 
                         for &(x, y) in &group.points {
+                            let x = (x as i32 - self.board_displacement.0)
+                                .rem_euclid(game.size.0 as i32);
+                            let y = (y as i32 - self.board_displacement.1)
+                                .rem_euclid(game.size.1 as i32);
+
                             context.set_line_width(2.0);
                             context.set_stroke_style(&JsValue::from_str(
                                 dead_mark_color[group.team.0 as usize - 1],
@@ -632,8 +751,13 @@ impl Board {
                     }
 
                     for (idx, &color) in scoring.points.points.iter().enumerate() {
-                        let x = (idx % board_size) as f64;
-                        let y = (idx / board_size) as f64;
+                        let x = idx % board_size;
+                        let y = idx / board_size;
+
+                        let x = (x as i32 - self.board_displacement.0)
+                            .rem_euclid(game.size.0 as i32) as f64;
+                        let y = (y as i32 - self.board_displacement.1)
+                            .rem_euclid(game.size.1 as i32) as f64;
 
                         if color.is_empty() {
                             continue;
