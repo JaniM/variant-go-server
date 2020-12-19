@@ -3,6 +3,8 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::CanvasRenderingContext2d as Canvas2d;
 use web_sys::HtmlCanvasElement;
+use yew::prelude::*;
+use yew::services::keyboard::{KeyListenerHandle, KeyboardService};
 use yew::services::{RenderService, Task};
 use yew::{html, Component, ComponentLink, Html, NodeRef, Properties, ShouldRender};
 
@@ -62,7 +64,7 @@ impl Audio {
 }
 
 #[derive(Copy, Clone, PartialEq, Debug)]
-enum Direction {
+pub enum Direction {
     Up,
     Down,
     Left,
@@ -70,7 +72,7 @@ enum Direction {
 }
 
 #[derive(Copy, Clone, PartialEq, Debug)]
-enum Input {
+pub enum Input {
     Place((u32, u32), bool),
     Move(Direction, bool),
     None,
@@ -141,6 +143,7 @@ pub(crate) struct Board {
     audio: Audio,
     input: Input,
     board_displacement: (i32, i32),
+    _key_listener: Option<KeyListenerHandle>,
 }
 
 #[derive(Properties, Clone, PartialEq)]
@@ -155,7 +158,9 @@ pub enum Msg {
     Render(f64),
     MouseMove((f64, f64)),
     Click((f64, f64, bool)),
+    Input(Input),
     MouseLeave,
+    None,
 }
 
 impl Component for Board {
@@ -178,6 +183,7 @@ impl Component for Board {
             audio: Audio::new(),
             input: Input::None,
             board_displacement: (0, 0),
+            _key_listener: None,
         }
     }
 
@@ -237,6 +243,19 @@ impl Component for Board {
 
         self.width = canvas.width();
         self.height = canvas.height();
+
+        let key_listener = KeyboardService::register_key_down(
+            &yew::utils::document(),
+            self.link
+                .callback(|event: KeyboardEvent| match event.key().as_str() {
+                    "w" => Msg::Input(Input::Move(Direction::Up, true)),
+                    "s" => Msg::Input(Input::Move(Direction::Down, true)),
+                    "a" => Msg::Input(Input::Move(Direction::Left, true)),
+                    "d" => Msg::Input(Input::Move(Direction::Right, true)),
+                    _ => Msg::None,
+                }),
+        );
+        self._key_listener = Some(key_listener);
 
         self.canvas = Some(canvas);
         self.canvas2d = Some(canvas2d);
@@ -310,7 +329,7 @@ impl Component for Board {
             }
             Msg::Click((x, y, is_touch)) => {
                 let p = (x, y);
-                let input = Input::from_pointer(self, p, false);
+                let input = Input::from_pointer(self, p, true);
                 let coord = input.into_selection();
                 let send = !is_touch || self.selection_pos == coord;
                 self.input = input;
@@ -332,30 +351,38 @@ impl Component for Board {
                         });
                     }
                 }
+                self.update(Msg::Input(input));
+            }
+            Msg::MouseLeave => {
+                self.input = Input::None;
+                self.selection_pos = None;
+                self.render_gl(0.0).unwrap();
+            }
+            Msg::Input(input) => {
                 if self.props.game.mods.toroidal.is_some() {
                     let render = match input {
-                        Input::Move(Direction::Left, _) => {
+                        Input::Move(Direction::Left, true) => {
                             self.board_displacement.0 -= 1;
                             if self.board_displacement.0 < 0 {
                                 self.board_displacement.0 += self.props.game.size.0 as i32;
                             }
                             true
                         }
-                        Input::Move(Direction::Right, _) => {
+                        Input::Move(Direction::Right, true) => {
                             self.board_displacement.0 += 1;
                             if self.board_displacement.0 >= self.props.game.size.0 as i32 {
                                 self.board_displacement.0 = 0;
                             }
                             true
                         }
-                        Input::Move(Direction::Up, _) => {
+                        Input::Move(Direction::Up, true) => {
                             self.board_displacement.1 -= 1;
                             if self.board_displacement.1 < 0 {
                                 self.board_displacement.1 += self.props.game.size.1 as i32;
                             }
                             true
                         }
-                        Input::Move(Direction::Down, _) => {
+                        Input::Move(Direction::Down, true) => {
                             self.board_displacement.1 += 1;
                             if self.board_displacement.1 >= self.props.game.size.1 as i32 {
                                 self.board_displacement.1 = 0;
@@ -369,11 +396,7 @@ impl Component for Board {
                     }
                 }
             }
-            Msg::MouseLeave => {
-                self.input = Input::None;
-                self.selection_pos = None;
-                self.render_gl(0.0).unwrap();
-            }
+            Msg::None => {}
         }
         false
     }
