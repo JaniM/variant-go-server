@@ -535,37 +535,39 @@ impl Board {
 
         // Starpoints /////////////////////////////////////////////////////////
 
-        let points: &[(i32, i32)] = match game.size.0 {
-            19 => &[
-                (3, 3),
-                (9, 3),
-                (15, 3),
-                (3, 9),
-                (9, 9),
-                (15, 9),
-                (3, 15),
-                (9, 15),
-                (15, 15),
-            ],
-            17 => &[
-                (3, 3),
-                (8, 3),
-                (13, 3),
-                (3, 8),
-                (8, 8),
-                (13, 8),
-                (3, 13),
-                (8, 13),
-                (13, 13),
-            ],
-            13 => &[(3, 3), (9, 3), (6, 6), (3, 9), (9, 9)],
-            9 => &[(4, 4)],
-            _ => &[],
-        };
-        for &(x, y) in points {
-            let x = (x - self.board_displacement.0).rem_euclid(game.size.0 as i32);
-            let y = (y - self.board_displacement.1).rem_euclid(game.size.1 as i32);
-            draw_stone((x as _, y as _), size / 4., true, false)?;
+        if game.mods.toroidal.is_none() {
+            let points: &[(i32, i32)] = match game.size.0 {
+                19 => &[
+                    (3, 3),
+                    (9, 3),
+                    (15, 3),
+                    (3, 9),
+                    (9, 9),
+                    (15, 9),
+                    (3, 15),
+                    (9, 15),
+                    (15, 15),
+                ],
+                17 => &[
+                    (3, 3),
+                    (8, 3),
+                    (13, 3),
+                    (3, 8),
+                    (8, 8),
+                    (13, 8),
+                    (3, 13),
+                    (8, 13),
+                    (13, 13),
+                ],
+                13 => &[(3, 3), (9, 3), (6, 6), (3, 9), (9, 9)],
+                9 => &[(4, 4)],
+                _ => &[],
+            };
+            for &(x, y) in points {
+                let x = (x - self.board_displacement.0).rem_euclid(game.size.0 as i32);
+                let y = (y - self.board_displacement.1).rem_euclid(game.size.1 as i32);
+                draw_stone((x as _, y as _), size / 4., true, false)?;
+            }
         }
 
         // Coordinates ////////////////////////////////////////////////////////
