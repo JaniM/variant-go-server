@@ -115,7 +115,7 @@ impl Component for CreateGameView {
                     Preset::ThreeColor => (vec![1, 2, 3], vec![0, 0, 0], 13),
                     Preset::FourColor => (vec![1, 2, 3, 4], vec![0, 0, 0, 0], 13),
                     Preset::ThreeColorRengo => (vec![1, 2, 3, 1, 2, 3], vec![0, 0, 0], 13),
-                    Preset::NGDTournament => (vec![1, 2], vec![0, 51], 19),
+                    Preset::NGDTournament => (vec![1, 2], vec![0, 7], 13),
                 };
                 self.preset = preset;
                 self.seats = seats;
@@ -129,7 +129,7 @@ impl Component for CreateGameView {
 
                 if preset == Preset::NGDTournament {
                     self.mods = GameModifier {
-                        pixel: true,
+                        toroidal: Some(game::ToroidalGo {}),
                         ..GameModifier::default()
                     };
                     self.clock_kind = ClockKind::Fischer;
@@ -396,7 +396,7 @@ impl Component for CreateGameView {
         let presets = html! {
             <ul>
                 {ps(Preset::Standard, "Standard")}
-                {ps(Preset::Rengo2v2, "Rengo2v2")}
+                {ps(Preset::Rengo2v2, "Rengo")}
                 <li class="preset-option">
                     <a href="#" class=pc(Preset::ThreeColor) onclick=self.link.callback(|_| Msg::LoadPreset(Preset::ThreeColor))>
                         {"Three color go"}
@@ -407,7 +407,7 @@ impl Component for CreateGameView {
                     </a>
                 </li>
                 {ps(Preset::ThreeColorRengo, "Three color go (rengo)")}
-                {ps(Preset::NGDTournament, "NGD PIxel Go Tournament settings")}
+                {ps(Preset::NGDTournament, "NGD Toroid Go Tournament settings")}
             </ul>
         };
 
