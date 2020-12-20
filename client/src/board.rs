@@ -11,9 +11,11 @@ use yew::{html, Component, ComponentLink, Html, NodeRef, Properties, ShouldRende
 use shared::game::{GameStateView, Visibility};
 use shared::message::{ClientMessage, GameAction};
 
+use crate::agents::board_store::{BoardState, BoardStore, BoardStoreState};
 use crate::game_view::GameView;
 use crate::networking;
 use crate::palette::Palette;
+use store::ReadOnly;
 
 // TODO: PUZZLE Move audio handling to its own agent.
 
@@ -143,6 +145,7 @@ pub(crate) struct Board {
     audio: Audio,
     input: Input,
     board_displacement: (i32, i32),
+    board_store: BoardStore,
     _key_listener: Option<KeyListenerHandle>,
 }
 
@@ -160,6 +163,7 @@ pub enum Msg {
     Click((f64, f64, bool)),
     Input(Input),
     MouseLeave,
+    BoardStoreEvent(ReadOnly<BoardStoreState>),
     None,
 }
 
@@ -168,6 +172,8 @@ impl Component for Board {
     type Properties = Props;
 
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
+        let board_store = BoardStore::bridge(link.callback(Msg::BoardStoreEvent));
+
         Board {
             props,
             canvas: None,
@@ -183,6 +189,7 @@ impl Component for Board {
             audio: Audio::new(),
             input: Input::None,
             board_displacement: (0, 0),
+            board_store,
             _key_listener: None,
         }
     }
@@ -288,6 +295,7 @@ impl Component for Board {
 
             if self.props.game.room_id != props.game.room_id {
                 self.board_displacement = (0, 0);
+                self.board_store.refresh();
             }
 
             self.props = props;
@@ -391,9 +399,27 @@ impl Component for Board {
                         }
                         _ => false,
                     };
+
                     if render {
+                        self.board_store.set_board_state(
+                            self.props.game.room_id,
+                            BoardState {
+                                board_displacement: self.board_displacement,
+                            },
+                        );
+
                         self.render_gl(0.0).unwrap();
                     }
+                }
+            }
+            Msg::BoardStoreEvent(store) => {
+                if self.board_displacement != (0, 0) {
+                    return false;
+                }
+
+                if let Some(state) = store.borrow().boards.get(&self.props.game.room_id) {
+                    self.board_displacement = state.board_displacement;
+                    self.render_gl(0.0).unwrap();
                 }
             }
             Msg::None => {}
