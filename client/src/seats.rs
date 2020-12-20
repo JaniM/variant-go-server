@@ -68,6 +68,7 @@ pub struct Props {
     pub game: GameView,
     pub profiles: HashMap<u64, Profile>,
     pub user: Option<Profile>,
+    pub time_adjustment: i128,
 }
 
 pub enum Msg {
@@ -106,6 +107,7 @@ impl Component for SeatList {
             Msg::Refresh => {
                 let now = js_sys::Date::now() as i128;
                 let game = &self.props.game;
+                let adj = self.props.time_adjustment;
                 if !matches!(game.state, shared::game::GameStateView::Play(_)) {
                     return false;
                 }
@@ -122,7 +124,7 @@ impl Component for SeatList {
                         PlayerClock::Plain {
                             last_time,
                             time_left,
-                        } => last_time.0 + time_left.0 - now,
+                        } => last_time.0 + time_left.0 + adj - now,
                     };
 
                     if time_left < 5000 && time_left > 0 {
@@ -194,13 +196,14 @@ impl Component for SeatList {
 
                 let time_left = if let (false, Some(game_clock)) = (resigned, &game.clock) {
                     let clock = &game_clock.clocks[idx];
+                    let adj = self.props.time_adjustment;
                     let time_left = if game.turn == idx as u32 && !game_clock.paused {
                         match clock {
-                            PlayerClock::Plain { last_time, time_left } => last_time.0 + time_left.0 - now
+                            PlayerClock::Plain { last_time, time_left } => last_time.0 + time_left.0 + adj - now
                         }
                     } else {
                         match clock {
-                            PlayerClock::Plain { time_left, .. } => time_left.0
+                            PlayerClock::Plain { time_left, .. } => time_left.0 + adj
                         }
                     };
                     let minutes = time_left / (60 * 1000);

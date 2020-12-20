@@ -81,6 +81,7 @@ struct GameApp {
     error: Option<(message::Error, TimeoutTask)>,
     #[allow(dead_code)]
     game_store: game_store::GameStore,
+    time_adjustment: i128,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -213,6 +214,7 @@ impl Component for GameApp {
             palette: PaletteOption::get(),
             error: None,
             game_store,
+            time_adjustment: 0,
         }
     }
 
@@ -241,6 +243,7 @@ impl Component for GameApp {
             Msg::GameStoreEvent(store) => {
                 let store = store.borrow();
                 self.game = store.game.clone();
+                self.time_adjustment = store.time_adjustment;
                 true
             }
             Msg::SetGameHistory(view) => {
@@ -349,7 +352,8 @@ impl Component for GameApp {
                     user=&self.user
                     profiles=&self.profiles
                     palette=&self.palette
-                    game=game />
+                    game=game
+                    time_adjustment=self.time_adjustment />
             )
         } else {
             html!(<p>{"Join a game!"}</p>)

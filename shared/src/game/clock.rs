@@ -92,6 +92,7 @@ pub struct GameClock {
     pub clocks: Vec<PlayerClock>,
     pub rule: ClockRule,
     pub paused: bool,
+    pub server_time: Millisecond,
 }
 
 impl GameClock {
@@ -100,6 +101,7 @@ impl GameClock {
             clocks: vec![rule.clock(); clock_count],
             rule,
             paused: true,
+            server_time: Millisecond(0),
         }
     }
 

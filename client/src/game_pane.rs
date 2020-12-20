@@ -53,6 +53,7 @@ pub(crate) struct Props {
     pub user: Option<Profile>,
     pub profiles: HashMap<u64, Profile>,
     pub palette: PaletteOption,
+    pub time_adjustment: i128,
 }
 
 #[derive(Clone)]
@@ -153,6 +154,7 @@ impl Component for GamePane {
             game,
             profiles,
             palette,
+            time_adjustment,
         } = &self.props;
         let Callbacks {
             pass,
@@ -336,7 +338,7 @@ impl Component for GamePane {
                     <a href="https://github.com/JaniM/variant-go-server/blob/master/privacy_policy.md" target="_blank">{"Privacy policy"}</a>
                 </div>
                 <div>{"Seats"}</div>
-                <SeatList game=game profiles=profiles user=user />
+                <SeatList game=game profiles=profiles user=user time_adjustment=time_adjustment />
                 {"Modifiers"}
                 <mode_list::ModeList mods=&game.mods />
                 {"Users"}

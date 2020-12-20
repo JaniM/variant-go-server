@@ -801,7 +801,15 @@ impl Game {
             points: shared.points.clone(),
             move_number: shared.board_history.len() as u32 - 1,
             clock: if game_active {
-                shared.clock.clone()
+                shared.clock.clone().map(|c| GameClock {
+                    server_time: Millisecond(
+                        std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap()
+                            .as_millis() as i128,
+                    ),
+                    ..c
+                })
             } else {
                 None
             },

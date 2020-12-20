@@ -34,6 +34,7 @@ pub struct GameStoreState {
     pub history: Vec<Option<GameHistory>>,
     pub history_pending: bool,
     pub wanted_history: Option<u32>,
+    pub time_adjustment: i128,
 }
 
 impl Store for GameStoreState {
@@ -46,6 +47,7 @@ impl Store for GameStoreState {
             history: Vec::new(),
             history_pending: false,
             wanted_history: None,
+            time_adjustment: 0,
         }
     }
 
@@ -138,6 +140,12 @@ impl Store for GameStoreState {
                         self.history_pending = false;
                         self.wanted_history = None;
                     }
+                }
+
+                if let Some(clock) = &self.game.as_ref().unwrap().clock {
+                    let now = js_sys::Date::now() as i128;
+                    let time_adjustment = now - clock.server_time.0;
+                    self.time_adjustment = time_adjustment;
                 }
             }
             Action::SetGameHistory(view) => {
