@@ -203,7 +203,7 @@ impl Component for SeatList {
                         }
                     } else {
                         match clock {
-                            PlayerClock::Plain { time_left, .. } => time_left.0 + adj
+                            PlayerClock::Plain { time_left, .. } => time_left.0
                         }
                     };
                     let minutes = time_left / (60 * 1000);
