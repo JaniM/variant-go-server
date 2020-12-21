@@ -108,7 +108,7 @@ If two players pick the same point, neither one gets a stone there, but they sti
         let toroidal = if_html!(mods.toroidal.is_some() =>
             <label class="tooltip">
                 {"Toroidal go"}
-                <span class=tooltip_class>{"Opposing edges are connected. First line doesn't exist. Click on the borders or use WASD to move the view."}</span>
+                <span class=tooltip_class>{"Opposing edges are connected. First line doesn't exist. Click on the borders, shift click on a point or use WASD to move the view. Use < and > to adjust the extended view."}</span>
             </label>
         );
 
