@@ -111,7 +111,7 @@ impl Input {
         p.0 -= edge_size;
         p.1 -= edge_size;
         let size = (game.size.0 as i32 + 2 * board.toroidal_edge_size) as f64;
-        let mut pos = match game.mods.pixel && !is_scoring {
+        let pos = match game.mods.pixel && !is_scoring {
             true => (
                 (p.0 / (width / size) + 0.5) as i32,
                 (p.1 / (height / size) + 0.5) as i32,
@@ -121,7 +121,6 @@ impl Input {
                 (p.1 / (height / size)) as i32,
             ),
         };
-        let limit = if game.mods.pixel { 1 } else { 0 };
 
         Input::Place((pos.0 as u32, pos.1 as u32), clicked)
     }
