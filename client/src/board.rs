@@ -665,7 +665,7 @@ impl Board {
         context.set_fill_style(&JsValue::from_str("#000000"));
 
         let line_edge_size = if game.mods.toroidal.is_some() {
-            edge_size / 2.0
+            size / 2.0
         } else {
             0.0
         };
