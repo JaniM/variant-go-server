@@ -443,6 +443,7 @@ impl Component for Board {
                             if self.toroidal_edge_size > self.props.game.size.0 as i32 / 2 {
                                 self.toroidal_edge_size = self.props.game.size.0 as i32 / 2;
                             }
+                            self.selection_pos = None;
                             true
                         }
                         Input::SmallerEdge => {
@@ -450,6 +451,7 @@ impl Component for Board {
                             if self.toroidal_edge_size < 0 {
                                 self.toroidal_edge_size = 0;
                             }
+                            self.selection_pos = None;
                             true
                         }
                         _ => false,
