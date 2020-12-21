@@ -123,18 +123,6 @@ impl Input {
         };
         let limit = if game.mods.pixel { 1 } else { 0 };
 
-        pos.0 -= board.toroidal_edge_size;
-        pos.1 -= board.toroidal_edge_size;
-        if pos.0 < 0
-            || pos.1 < 0
-            || pos.0 >= game.size.0 as i32 + limit
-            || pos.1 >= game.size.1 as i32 + limit
-        {
-            return Input::None;
-        }
-        pos.0 += board.toroidal_edge_size;
-        pos.1 += board.toroidal_edge_size;
-
         Input::Place((pos.0 as u32, pos.1 as u32), clicked)
     }
 
@@ -178,6 +166,7 @@ pub enum Msg {
     Render(f64),
     MouseMove((f64, f64)),
     Click((f64, f64, bool)),
+    ShiftClick((f64, f64)),
     Input(Input),
     MouseLeave,
     BoardStoreEvent(ReadOnly<BoardStoreState>),
@@ -245,6 +234,7 @@ impl Component for Board {
 
         {
             let mouse_click = self.link.callback(Msg::Click);
+            let shift_click = self.link.callback(Msg::ShiftClick);
             let closure = Closure::wrap(Box::new(move |event: web_sys::PointerEvent| {
                 // Only trigger for primary button.
                 // See https://developer.mozilla.org/en-US/docs/Web/API/Pointer_events
@@ -252,7 +242,15 @@ impl Component for Board {
                 let buttons = event.buttons();
                 if event.is_primary() && (buttons == 0 || buttons == 1) {
                     let is_touch = event.pointer_type() == "touch";
-                    mouse_click.emit((event.client_x() as f64, event.client_y() as f64, is_touch));
+                    if event.shift_key() {
+                        shift_click.emit((event.client_x() as f64, event.client_y() as f64));
+                    } else {
+                        mouse_click.emit((
+                            event.client_x() as f64,
+                            event.client_y() as f64,
+                            is_touch,
+                        ));
+                    }
                 }
             }) as Box<dyn FnMut(_)>);
             canvas
@@ -388,6 +386,23 @@ impl Component for Board {
                 }
                 self.update(Msg::Input(input));
             }
+            Msg::ShiftClick((x, y)) => {
+                let p = (x, y);
+                let input = Input::from_pointer(self, p, true);
+                if self.props.game.mods.toroidal.is_none() {
+                    return false;
+                }
+
+                if let Some(coord) = input.into_selection() {
+                    let game = &self.props.game;
+                    let (x, y) = self.view_to_board_coord(coord);
+                    let x = (x - game.size.0 as i32 / 2).rem_euclid(game.size.0 as i32);
+                    let y = (y - game.size.1 as i32 / 2).rem_euclid(game.size.1 as i32);
+                    self.board_displacement = (x, y);
+                    self.save();
+                    self.render_gl(0.0).unwrap();
+                }
+            }
             Msg::MouseLeave => {
                 self.input = Input::None;
                 self.selection_pos = None;
@@ -442,14 +457,7 @@ impl Component for Board {
                     };
 
                     if render {
-                        self.board_store.set_board_state(
-                            self.props.game.room_id,
-                            BoardState {
-                                board_displacement: self.board_displacement,
-                                toroidal_edge_size: self.toroidal_edge_size,
-                            },
-                        );
-
+                        self.save();
                         self.render_gl(0.0).unwrap();
                     }
                 }
@@ -478,6 +486,16 @@ impl Component for Board {
 }
 
 impl Board {
+    fn save(&mut self) {
+        self.board_store.set_board_state(
+            self.props.game.room_id,
+            BoardState {
+                board_displacement: self.board_displacement,
+                toroidal_edge_size: self.toroidal_edge_size,
+            },
+        );
+    }
+
     fn board_to_view_coord(&self, board: (i32, i32), mut cb: impl FnMut((i32, i32))) {
         let game = &self.props.game;
         let edge = self.toroidal_edge_size;
