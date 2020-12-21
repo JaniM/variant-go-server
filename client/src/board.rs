@@ -500,10 +500,8 @@ impl Board {
         let edge = self.toroidal_edge_size;
         let size = game.size.0 as i32;
 
-        if game.mods.toroidal.is_none() && board.0 < 0
-            || board.1 < 0
-            || board.0 >= size
-            || board.1 >= size
+        if game.mods.toroidal.is_none()
+            && (board.0 < 0 || board.1 < 0 || board.0 >= size || board.1 >= size)
         {
             return;
         }
