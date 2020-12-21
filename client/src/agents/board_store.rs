@@ -8,6 +8,7 @@ use store::{store, Bridgeable, Store, StoreBridge, StoreWrapper};
 #[derive(Clone, Debug)]
 pub struct BoardState {
     pub board_displacement: (i32, i32),
+    pub toroidal_edge_size: i32,
 }
 
 store! {
