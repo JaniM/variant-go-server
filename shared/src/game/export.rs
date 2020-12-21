@@ -81,7 +81,7 @@ pub fn sgf_export(game: &Game) -> String {
         for (idx, new) in board.points.iter().enumerate() {
             let coord = board.idx_to_coord(idx).unwrap();
             match new.0 {
-                3 => writer.label(coord, "B"),
+                3 => writer.label(coord, "U"),
                 4 => writer.label(coord, "R"),
                 _ => {}
             }
