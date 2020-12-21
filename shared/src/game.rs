@@ -244,6 +244,9 @@ pub struct GameModifier {
     /// If true, spectators can see all hidden stones and one color stones.
     #[serde(default)]
     pub observable: bool,
+
+    #[serde(default)]
+    pub no_undo: bool,
 }
 
 ///////////////////////////////////////////////////////////////////////////////

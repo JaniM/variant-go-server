@@ -370,6 +370,10 @@ impl PlayState {
             return Err(MakeActionError::OutOfBounds);
         }
 
+        if shared.mods.no_undo {
+            return Err(MakeActionError::Illegal);
+        }
+
         self.rollback_turn(shared, true)
     }
 

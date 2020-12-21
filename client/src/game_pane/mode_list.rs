@@ -126,6 +126,13 @@ If two players pick the same point, neither one gets a stone there, but they sti
             </label>
         );
 
+        let no_undo = if_html!(mods.no_undo =>
+            <label class="tooltip">
+                {"Undo not allowed"}
+                <span class=tooltip_class>{"Disables undo for all players."}</span>
+            </label>
+        );
+
         let captures_give_points = if_html!(
             mods.captures_give_points.is_some() =>
             <label class="tooltip">
@@ -157,6 +164,7 @@ If two players pick the same point, neither one gets a stone there, but they sti
                 <div>{phantom}</div>
                 <div>{captures_give_points}</div>
                 <div>{observable}</div>
+                <div>{no_undo}</div>
                 <div>{clock}</div>
             </div>
         }

@@ -58,6 +58,7 @@ pub enum Msg {
     ToggleTraitor,
     ToggleOneColor,
     ToggleNoHistory,
+    ToggleNoUndo,
     ToggleNPlusOne,
     ToggleCapturesGivePoints,
     ToggleTetris,
@@ -130,6 +131,7 @@ impl Component for CreateGameView {
                 if preset == Preset::NGDTournament {
                     self.mods = GameModifier {
                         toroidal: Some(game::ToroidalGo {}),
+                        no_undo: true,
                         ..GameModifier::default()
                     };
                     self.clock_kind = ClockKind::Fischer;
@@ -160,6 +162,10 @@ impl Component for CreateGameView {
             }
             Msg::ToggleNoHistory => {
                 self.mods.no_history = !self.mods.no_history;
+                true
+            }
+            Msg::ToggleNoUndo => {
+                self.mods.no_undo = !self.mods.no_undo;
                 true
             }
             Msg::TogglePonnuki => {
@@ -537,6 +543,20 @@ impl Component for CreateGameView {
             </li>
         };
 
+        let no_undo = html! {
+            <li>
+                <input
+                    type="checkbox"
+                    class="toggle"
+                    checked=self.mods.no_undo
+                    onclick=self.link.callback(move |_| Msg::ToggleNoUndo) />
+                <label class="tooltip" onclick=self.link.callback(move |_| Msg::ToggleNoUndo)>
+                    {"Undo not allowed"}
+                    <span class="tooltiptext">{"Disables undo for all players."}</span>
+                </label>
+            </li>
+        };
+
         let observable = html! {
             <li>
                 <input
@@ -720,6 +740,7 @@ If two players pick the same point, neither one gets a stone there, but they sti
                             {" points (can be negative)"}
                         </li>
                         {observable}
+                        {no_undo}
                     </ul>
                 </div>
             </div>
