@@ -524,7 +524,7 @@ impl Component for CreateGameView {
                     onclick=self.link.callback(move |_| Msg::ToggleToroidal) />
                 <label class="tooltip" onclick=self.link.callback(move |_| Msg::ToggleToroidal)>
                     {"Toroidal go"}
-                    <span class="tooltiptext">{"Opposing edges are connected. First line doesn't exist."}</span>
+                    <span class="tooltiptext">{"Opposing edges are connected. First line doesn't exist. Click on the borders, shift click on a point or use WASD or 8462 to move the view. Use < and > or + and - to adjust the extended view."}</span>
                 </label>
             </li>
         };

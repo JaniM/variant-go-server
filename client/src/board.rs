@@ -276,12 +276,12 @@ impl Component for Board {
             &yew::utils::document(),
             self.link
                 .callback(|event: KeyboardEvent| match event.key().as_str() {
-                    "w" => Msg::Input(Input::Move(Direction::Up, true)),
-                    "s" => Msg::Input(Input::Move(Direction::Down, true)),
-                    "a" => Msg::Input(Input::Move(Direction::Left, true)),
-                    "d" => Msg::Input(Input::Move(Direction::Right, true)),
-                    "<" => Msg::Input(Input::SmallerEdge),
-                    ">" => Msg::Input(Input::WiderEdge),
+                    "w" | "W" | "8" => Msg::Input(Input::Move(Direction::Up, true)),
+                    "s" | "S" | "2" => Msg::Input(Input::Move(Direction::Down, true)),
+                    "a" | "A" | "4" => Msg::Input(Input::Move(Direction::Left, true)),
+                    "d" | "D" | "6" => Msg::Input(Input::Move(Direction::Right, true)),
+                    "<" | "-" => Msg::Input(Input::SmallerEdge),
+                    ">" | "+" => Msg::Input(Input::WiderEdge),
                     _ => Msg::None,
                 }),
         );
