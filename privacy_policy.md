@@ -19,7 +19,7 @@ If you contact us directly, we may receive additional information about you such
 
 When you register for an Account, we may ask for your contact information, including items such as email address.
 
-*Non-Identifying Information*. When you visit the website, our third-party analytics tool SimpleAnalytics collects some non-identifying information. However, this information is not tied to you in any way. You can read more about it from the [SimpleAnalytics website](https://docs.simpleanalytics.com/what-we-collect). These analytics are pubically avialable and can be viewed at https://simpleanalytics.com/go.kahv.io. The cost of this tool is covered by [BadukClub](https://baduk.club) and if you also have a website and are looking for an ethical and beautiful analytics solution, please consider using this [referral link](https://referral.simpleanalytics.com/devin-fraze) to sign up and we’ll both receive one month free!
+*Non-Identifying Information*. When you visit the website, our third-party analytics tool SimpleAnalytics collects some non-identifying information. However, this information is not tied to you in any way. You can read more about it from the [SimpleAnalytics website](https://docs.simpleanalytics.com/what-we-collect). These analytics are publically available and can be viewed at https://simpleanalytics.com/go.kahv.io. The cost of this tool is covered by [BadukClub](https://baduk.club) and if you also have a website and are looking for an ethical and beautiful analytics solution, please consider using this [referral link](https://referral.simpleanalytics.com/devin-fraze) to sign up and we’ll both receive one month free!
 
 ## How we use your information
 
