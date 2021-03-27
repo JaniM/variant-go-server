@@ -333,7 +333,7 @@ impl Component for GamePane {
                     {" / "}
                     <a href="https://discord.gg/qzqwEV4" target="_blank">{"Discord"}</a>
                     {" / "}
-                    <a href="https://www.patreon.com/variantgo" target="_blank">{"Support"}</a>
+                    <a href="https://www.patreon.com/variantgo" target="_blank">{"Patreon"}</a>
                     {" / "}
                     <a href="https://github.com/JaniM/variant-go-server/blob/master/privacy_policy.md" target="_blank">{"Privacy policy"}</a>
                 </div>
