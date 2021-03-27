@@ -149,6 +149,7 @@ pub enum ServerMessage {
         sgf: String,
     },
     Profile(Profile),
+    ServerTime(game::clock::Millisecond),
     MsgError(String),
     Error(Error),
 }

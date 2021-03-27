@@ -627,7 +627,7 @@ impl Game {
                     Millisecond(0)
                 };
 
-                if time_left.0 < -1000 {
+                if time_left.0 < -2000 {
                     action = ActionKind::Resign;
                 }
 

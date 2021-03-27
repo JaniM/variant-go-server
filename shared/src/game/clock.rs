@@ -13,6 +13,15 @@ impl Millisecond {
     pub fn as_minutes(self) -> f32 {
         self.0 as f32 / 1000. / 60.
     }
+
+    pub fn now() -> Self {
+        Millisecond(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as i128,
+        )
+    }
 }
 
 impl std::ops::Sub for Millisecond {

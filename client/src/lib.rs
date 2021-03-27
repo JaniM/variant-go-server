@@ -90,6 +90,7 @@ enum Msg {
     ChangeNick(String),
     JoinGame(u32),
     SetGameStatus(GameView),
+    SetServerTime(shared::game::clock::Millisecond),
     GameStoreEvent(ReadOnly<game_store::GameStoreState>),
     SetGameHistory(Option<game::GameHistory>),
     SetOwnProfile(Profile),
@@ -110,6 +111,7 @@ impl Component for GameApp {
         let addgame = link.callback(Msg::AddGame);
         let remove_game = link.callback(Msg::RemoveGame);
         let game = link.callback(Msg::SetGameStatus);
+        let set_server_time = link.callback(Msg::SetServerTime);
         let set_game_history = link.callback(Msg::SetGameHistory);
         let set_own_profile = link.callback(Msg::SetOwnProfile);
         let set_profile = link.callback(Msg::SetProfile);
@@ -155,6 +157,9 @@ impl Component for GameApp {
                         history: None,
                         clock,
                     });
+                }
+                Ok(ServerMessage::ServerTime(time)) => {
+                    set_server_time.emit(time);
                 }
                 Ok(ServerMessage::BoardAt { view, .. }) => {
                     set_game_history.emit(Some(view));
@@ -238,6 +243,10 @@ impl Component for GameApp {
             }
             Msg::SetGameStatus(game) => {
                 self.game_store.set_game(game);
+                false
+            }
+            Msg::SetServerTime(time) => {
+                self.game_store.set_server_time(time);
                 false
             }
             Msg::GameStoreEvent(store) => {

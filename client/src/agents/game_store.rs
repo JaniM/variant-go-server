@@ -6,7 +6,7 @@ use itertools::Itertools;
 use crate::game_view::GameView;
 use crate::networking;
 use crate::utils;
-use shared::game::{GameHistory, GameStateView};
+use shared::game::{clock::Millisecond, GameHistory, GameStateView};
 use shared::message::GameAction;
 
 use store::{store, Bridgeable, Store, StoreBridge, StoreWrapper};
@@ -16,6 +16,7 @@ store! {
     state GameStoreState,
     request Request {
         set_game => SetGame(game: GameView),
+        set_server_time => SetServerTime(time: Millisecond),
         set_game_history => SetGameHistory(view: Option<GameHistory>),
         get_board_at => GetBoardAt(turn: u32),
         scan_board => ScanBoard(amount: i32),
@@ -25,6 +26,7 @@ store! {
 #[derive(Debug)]
 pub enum Action {
     SetGame(GameView),
+    SetServerTime(Millisecond),
     SetGameHistory(Option<GameHistory>),
     SetHistoryPending(u32, bool),
 }
@@ -56,6 +58,9 @@ impl Store for GameStoreState {
             Request::SetGame(game) => {
                 utils::set_hash(&game.room_id.to_string());
                 link.send_message(Action::SetGame(game));
+            }
+            Request::SetServerTime(time) => {
+                link.send_message(Action::SetServerTime(time));
             }
             Request::SetGameHistory(view) => {
                 link.send_message(Action::SetGameHistory(view));
@@ -147,6 +152,11 @@ impl Store for GameStoreState {
                     let time_adjustment = now - clock.server_time.0;
                     self.time_adjustment = time_adjustment;
                 }
+            }
+            Action::SetServerTime(server_time) => {
+                let now = js_sys::Date::now() as i128;
+                let time_adjustment = now - server_time.0;
+                self.time_adjustment = time_adjustment;
             }
             Action::SetGameHistory(view) => {
                 if let Some(game) = &mut self.game {

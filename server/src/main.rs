@@ -21,6 +21,9 @@ const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 /// How long before lack of client response causes a timeout
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// How often time syncs are sent
+const TIMESYNC_INTERVAL: Duration = Duration::from_secs(2);
+
 /// do websocket handshake and start `MyWebSocket` actor
 async fn ws_index(
     r: HttpRequest,
@@ -256,6 +259,10 @@ impl ClientWebSocket {
 
             ctx.ping(b"");
         });
+
+        ctx.run_interval(TIMESYNC_INTERVAL, |_act, ctx| {
+            ctx.binary(ServerMessage::ServerTime(shared::game::clock::Millisecond::now()).pack());
+        });
     }
 
     fn handle_get_game_list(&mut self, ctx: &mut Context) {
@@ -265,7 +272,7 @@ impl ClientWebSocket {
             for (room_id, name) in rooms {
                 ctx.binary(ServerMessage::AnnounceGame { room_id, name }.pack());
             }
-        };
+        }
 
         self.server_addr
             .send(server::ListRooms)
