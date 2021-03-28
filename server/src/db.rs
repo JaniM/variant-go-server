@@ -28,6 +28,7 @@ pub struct User {
     pub id: i64,
     pub auth_token: String,
     pub nick: Option<String>,
+    pub has_integration_access: bool,
 }
 
 #[derive(Insertable, AsChangeset)]
@@ -73,6 +74,11 @@ impl Message for IdentifyUser {
 
 pub struct GetUser(pub u64);
 impl Message for GetUser {
+    type Result = Result<User, ()>;
+}
+
+pub struct GetUserByToken(pub String);
+impl Message for GetUserByToken {
     type Result = Result<User, ()>;
 }
 
@@ -160,6 +166,26 @@ impl Handler<GetUser> for DbActor {
         use crate::schema::users::dsl::*;
 
         let existing = users.find(msg.0 as i64).first::<User>(&self.connection);
+
+        match existing {
+            Ok(u) => Ok(u),
+            Err(e) => {
+                println!("{:?}", e);
+                Err(())
+            }
+        }
+    }
+}
+
+impl Handler<GetUserByToken> for DbActor {
+    type Result = Result<User, ()>;
+
+    fn handle(&mut self, msg: GetUserByToken, _ctx: &mut Self::Context) -> Self::Result {
+        use crate::schema::users::dsl::*;
+
+        let existing = users
+            .filter(auth_token.eq(msg.0))
+            .first::<User>(&self.connection);
 
         match existing {
             Ok(u) => Ok(u),

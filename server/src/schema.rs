@@ -12,12 +12,10 @@ table! {
         id -> Int8,
         auth_token -> Text,
         nick -> Nullable<Text>,
+        has_integration_access -> Bool,
     }
 }
 
 joinable!(games -> users (owner));
 
-allow_tables_to_appear_in_same_query!(
-    games,
-    users,
-);
+allow_tables_to_appear_in_same_query!(games, users,);

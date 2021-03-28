@@ -16,6 +16,14 @@ use actix_web_actors::ws;
 use crate::server::GameServer;
 use shared::message::{self, ClientMessage, ClientMode, ServerMessage};
 
+use serde::{Deserialize, Serialize};
+
+macro_rules! catch {
+    ($($code:tt)+) => {
+        (|| Some({ $($code)+ }))()
+    };
+}
+
 /// How often heartbeat pings are sent
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 /// How long before lack of client response causes a timeout
@@ -125,9 +133,7 @@ impl Handler<game_room::Message> for ClientWebSocket {
                             .collect(),
                         turn: view.turn,
                         board: view.board.into_iter().map(|x| x.0).collect(),
-                        board_visibility: view
-                            .board_visibility
-                            .map(|b| b.iter().map(|x| x.into_value()).collect()),
+                        board_visibility: view.board_visibility,
                         hidden_stones_left: view.hidden_stones_left,
                         size: view.size,
                         state: view.state,
@@ -302,7 +308,7 @@ impl ClientWebSocket {
                 match res {
                     Ok(Ok((id, addr))) => {
                         act.room_id = Some(id);
-                        act.game_addr.insert(id, addr);
+                        act.game_addr.insert(id, addr.unwrap());
                     }
                     Ok(Err(err)) => {
                         ctx.binary(ServerMessage::Error(err).pack());
@@ -428,20 +434,180 @@ impl ClientWebSocket {
     }
 }
 
+#[derive(Debug, Deserialize)]
+struct CreateGameBody {
+    game: message::StartGame,
+    #[serde(default)]
+    players: Option<Vec<u64>>,
+}
+
+#[derive(Debug, Serialize)]
+struct CreateGameResponse {
+    id: u32,
+}
+
+async fn create_game(
+    req: actix_web::HttpRequest,
+    body: web::Json<CreateGameBody>,
+    server_addr: web::Data<Addr<GameServer>>,
+    db_addr: web::Data<Addr<db::DbActor>>,
+) -> actix_web::Result<HttpResponse> {
+    println!("POST /game/create: {:?}", body);
+
+    let token = match catch! {
+        let header = req.headers().get("Bearer")?;
+        header.to_str().ok()?.to_owned()
+    } {
+        Some(x) => x,
+        None => return Ok(HttpResponse::BadRequest().body("Bearer token required")),
+    };
+
+    let user = match db_addr.send(db::GetUserByToken(token)).await? {
+        Ok(x) => x,
+        Err(_) => return Ok(HttpResponse::BadRequest().body("Invalid token")),
+    };
+
+    if !user.has_integration_access {
+        return Ok(HttpResponse::BadRequest().body("Invalid token"));
+    }
+
+    let CreateGameBody { game, players } = body.into_inner();
+
+    let resp = server_addr
+        .send(server::CreateRoom {
+            id: 0,
+            room: game,
+            leave_previous: false,
+        })
+        .await?;
+
+    let (id, addr) = match resp {
+        Ok((id, Some(addr))) => (id, addr),
+        _ => return Ok(HttpResponse::BadRequest().body("Game creation error")),
+    };
+
+    for (idx, &user_id) in players.iter().flatten().enumerate() {
+        addr.do_send(game_room::GameActionAsUser {
+            user_id,
+            action: message::GameAction::TakeSeat(idx as _),
+        });
+    }
+
+    Ok(HttpResponse::Ok().json(CreateGameResponse { id }))
+}
+
+#[derive(Debug, Serialize)]
+struct GetGameResponse {
+    game: shared::game::GameView,
+}
+
+async fn get_game_view(
+    req: actix_web::HttpRequest,
+    server_addr: web::Data<Addr<GameServer>>,
+) -> actix_web::Result<HttpResponse> {
+    let room_id = req.match_info().get("id").unwrap().parse().unwrap();
+
+    let resp = server_addr.send(server::GetAdminView { room_id }).await?;
+
+    let view = match resp {
+        Ok(view) => view,
+        Err(_) => return Ok(HttpResponse::BadRequest().body("Game fetch error")),
+    };
+
+    Ok(HttpResponse::Ok().json(GetGameResponse { game: view }))
+}
+
+#[derive(Debug, Serialize)]
+enum GameState {
+    Play,
+    Done,
+}
+
+#[derive(Debug, Serialize)]
+struct TeamResult {
+    score: f32,
+    resigned: bool,
+}
+
+#[derive(Debug, Serialize)]
+struct GetGameResultResponse {
+    state: GameState,
+    teams: Option<Vec<TeamResult>>,
+    winner: Option<usize>,
+}
+
+async fn get_game_result(
+    req: actix_web::HttpRequest,
+    server_addr: web::Data<Addr<GameServer>>,
+) -> actix_web::Result<HttpResponse> {
+    use shared::game::GameStateView;
+
+    let room_id = req.match_info().get("id").unwrap().parse().unwrap();
+
+    let resp = server_addr.send(server::GetAdminView { room_id }).await?;
+
+    let view = match resp {
+        Ok(view) => view,
+        Err(_) => return Ok(HttpResponse::BadRequest().body("Game fetch error")),
+    };
+
+    let response = match &view.state {
+        GameStateView::Done(scoring) => {
+            let mut teams: Vec<_> = scoring
+                .scores
+                .iter()
+                .map(|&s| TeamResult {
+                    score: s as f32 / 2.0,
+                    resigned: false,
+                })
+                .collect();
+            for seat in &view.seats {
+                teams[seat.team.as_usize() - 1].resigned |= seat.resigned;
+            }
+            let mut winner = (0, 0.0);
+            for (idx, team) in teams.iter().enumerate() {
+                if team.resigned {
+                    continue;
+                }
+                if team.score > winner.1 {
+                    winner = (idx + 1, team.score);
+                }
+            }
+            GetGameResultResponse {
+                state: GameState::Done,
+                teams: Some(teams),
+                winner: Some(winner.0),
+            }
+        }
+        _ => GetGameResultResponse {
+            state: GameState::Play,
+            teams: None,
+            winner: None,
+        },
+    };
+
+    Ok(HttpResponse::Ok().json(response))
+}
+
 #[actix_rt::main]
 async fn main() -> std::io::Result<()> {
     std::env::set_var("RUST_LOG", "actix_server=info,actix_web=info");
     env_logger::init();
 
     let server = GameServer::default().start();
+    let db = SyncArbiter::start(1, db::DbActor::default);
 
     HttpServer::new(move || {
         App::new()
             // enable logger
             .wrap(middleware::Logger::default())
             .data(server.clone())
+            .data(db.clone())
             // websocket route
             .service(web::resource("/ws/").route(web::get().to(ws_index)))
+            .service(web::resource("/api/game/create").route(web::post().to(create_game)))
+            .service(web::resource("/api/game/{id}").route(web::get().to(get_game_view)))
+            .service(web::resource("/api/game/{id}/result").route(web::get().to(get_game_result)))
     })
     .bind("0.0.0.0:8088")?
     .run()

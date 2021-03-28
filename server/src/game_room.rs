@@ -46,6 +46,15 @@ impl actix::Message for GameAction {
     type Result = Result<(), message::Error>;
 }
 
+pub struct GameActionAsUser {
+    pub user_id: u64,
+    pub action: message::GameAction,
+}
+
+impl actix::Message for GameActionAsUser {
+    type Result = Result<(), message::Error>;
+}
+
 // User lifecycle /////////////////////////////////////////////////////////////
 
 #[derive(Message)]
@@ -67,6 +76,12 @@ pub struct Join {
 #[derive(Message)]
 #[rtype(result = "()")]
 pub struct Unload;
+
+pub struct GetAdminView;
+
+impl actix::Message for GetAdminView {
+    type Result = Result<game::GameView, message::Error>;
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 //                                   Actor                                   //
@@ -107,6 +122,120 @@ impl GameRoom {
                 .collect(),
             view: self.game.get_view(user_id),
         }
+    }
+
+    fn make_action(
+        &mut self,
+        user_id: u64,
+        action: message::GameAction,
+        addr: Option<Recipient<Message>>,
+    ) -> Result<(), message::Error> {
+        use message::Error;
+
+        let current_time = Millisecond(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as i128,
+        );
+
+        self.last_action = Instant::now();
+        let res = match action {
+            message::GameAction::Place(x, y) => self
+                .game
+                .make_action(user_id, game::ActionKind::Place(x, y), current_time)
+                .map_err(Into::into),
+            message::GameAction::Pass => self
+                .game
+                .make_action(user_id, game::ActionKind::Pass, current_time)
+                .map_err(Into::into),
+            message::GameAction::Cancel => self
+                .game
+                .make_action(user_id, game::ActionKind::Cancel, current_time)
+                .map_err(Into::into),
+            message::GameAction::Resign => self
+                .game
+                .make_action(user_id, game::ActionKind::Resign, current_time)
+                .map_err(Into::into),
+            message::GameAction::TakeSeat(seat_id) => {
+                if self.kicked_players.contains(&user_id) {
+                    return Err(Error::other("Kicked from game"));
+                }
+                self.game
+                    .take_seat(user_id, seat_id as _)
+                    .map_err(Into::into)
+            }
+            message::GameAction::LeaveSeat(seat_id) => self
+                .game
+                .leave_seat(user_id, seat_id as _)
+                .map_err(Into::into),
+            message::GameAction::BoardAt(start, end) => {
+                let addr = addr.expect("Address needed to get board position");
+                if start > end {
+                    return Ok(());
+                }
+                // Prevent asking for a ridiculous amount.
+                if end as usize > self.game.shared.board_history.len() + 20 {
+                    return Ok(());
+                }
+                for turn in (start..=end).rev() {
+                    let view = self.game.get_view_at(user_id, turn);
+                    if let Some(view) = view {
+                        let _ = addr.do_send(Message::BoardAt {
+                            room_id: self.room_id,
+                            view,
+                        });
+                    }
+                }
+                return Ok(());
+            }
+            message::GameAction::RequestSGF => {
+                let addr = addr.expect("Address needed to get SGF");
+                let game_done = matches!(self.game.state, game::GameState::Done(_));
+                if !game_done {
+                    return Err(Error::other("Game not finished"));
+                }
+                let sgf = game::export::sgf_export(&self.game);
+                let _ = addr.do_send(Message::SGF {
+                    room_id: self.room_id,
+                    sgf,
+                });
+                return Ok(());
+            }
+            message::GameAction::KickPlayer(kick_player_id) => {
+                if self.owner != Some(user_id) {
+                    return Err(Error::other("Not room owner"));
+                }
+
+                for (idx, seat) in self.game.shared.seats.clone().into_iter().enumerate() {
+                    if seat.player == Some(kick_player_id) {
+                        let _ = self.game.leave_seat(kick_player_id, idx);
+                    }
+                }
+                if self.users.contains(&kick_player_id) {
+                    self.kicked_players.insert(kick_player_id);
+                }
+                Ok(())
+            }
+        };
+
+        if let Err(err) = res {
+            return Err(Error::Game {
+                room_id: self.room_id,
+                error: err,
+            });
+        }
+
+        self.db.do_send(db::StoreGame {
+            id: Some(self.room_id as _),
+            name: self.name.clone(),
+            replay: Some(self.game.dump()),
+            owner: self.owner,
+        });
+
+        self.send_room_messages(|user_id| self.view_for_user(user_id));
+
+        Ok(())
     }
 }
 
@@ -176,109 +305,23 @@ impl Handler<GameAction> for GameRoom {
             Some(x) => x,
             None => return MessageResult(Err(Error::other("No session"))),
         };
+        let addr = addr.clone();
 
-        let current_time = Millisecond(
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_millis() as i128,
-        );
+        MessageResult(self.make_action(user_id, action, Some(addr)))
+    }
+}
 
-        self.last_action = Instant::now();
-        let res = match action {
-            message::GameAction::Place(x, y) => self
-                .game
-                .make_action(user_id, game::ActionKind::Place(x, y), current_time)
-                .map_err(Into::into),
-            message::GameAction::Pass => self
-                .game
-                .make_action(user_id, game::ActionKind::Pass, current_time)
-                .map_err(Into::into),
-            message::GameAction::Cancel => self
-                .game
-                .make_action(user_id, game::ActionKind::Cancel, current_time)
-                .map_err(Into::into),
-            message::GameAction::Resign => self
-                .game
-                .make_action(user_id, game::ActionKind::Resign, current_time)
-                .map_err(Into::into),
-            message::GameAction::TakeSeat(seat_id) => {
-                if self.kicked_players.contains(&user_id) {
-                    return MessageResult(Err(Error::other("Kicked from game")));
-                }
-                self.game
-                    .take_seat(user_id, seat_id as _)
-                    .map_err(Into::into)
-            }
-            message::GameAction::LeaveSeat(seat_id) => self
-                .game
-                .leave_seat(user_id, seat_id as _)
-                .map_err(Into::into),
-            message::GameAction::BoardAt(start, end) => {
-                if start > end {
-                    return MessageResult(Ok(()));
-                }
-                // Prevent asking for a ridiculous amount.
-                if end as usize > self.game.shared.board_history.len() + 20 {
-                    return MessageResult(Ok(()));
-                }
-                for turn in (start..=end).rev() {
-                    let view = self.game.get_view_at(user_id, turn);
-                    if let Some(view) = view {
-                        let _ = addr.do_send(Message::BoardAt {
-                            room_id: self.room_id,
-                            view,
-                        });
-                    }
-                }
-                return MessageResult(Ok(()));
-            }
-            message::GameAction::RequestSGF => {
-                let game_done = matches!(self.game.state, game::GameState::Done(_));
-                if !game_done {
-                    return MessageResult(Err(Error::other("Game not finished")));
-                }
-                let sgf = game::export::sgf_export(&self.game);
-                let _ = addr.do_send(Message::SGF {
-                    room_id: self.room_id,
-                    sgf,
-                });
-                return MessageResult(Ok(()));
-            }
-            message::GameAction::KickPlayer(kick_player_id) => {
-                if self.owner != Some(user_id) {
-                    return MessageResult(Err(Error::other("Not room owner")));
-                }
+impl Handler<GameActionAsUser> for GameRoom {
+    type Result = MessageResult<GameActionAsUser>;
 
-                for (idx, seat) in self.game.shared.seats.clone().into_iter().enumerate() {
-                    if seat.player == Some(kick_player_id) {
-                        let _ = self.game.leave_seat(kick_player_id, idx);
-                    }
-                }
-                if self.users.contains(&kick_player_id) {
-                    self.kicked_players.insert(kick_player_id);
-                }
-                Ok(())
-            }
-        };
+    fn handle(
+        &mut self,
+        msg: GameActionAsUser,
+        _: &mut Context<Self>,
+    ) -> MessageResult<GameActionAsUser> {
+        let GameActionAsUser { user_id, action } = msg;
 
-        if let Err(err) = res {
-            return MessageResult(Err(Error::Game {
-                room_id: self.room_id,
-                error: err,
-            }));
-        }
-
-        self.db.do_send(db::StoreGame {
-            id: Some(self.room_id as _),
-            name: self.name.clone(),
-            replay: Some(self.game.dump()),
-            owner: self.owner,
-        });
-
-        self.send_room_messages(|user_id| self.view_for_user(user_id));
-
-        MessageResult(Ok(()))
+        MessageResult(self.make_action(user_id, action, None))
     }
 }
 
@@ -287,5 +330,13 @@ impl Handler<Unload> for GameRoom {
 
     fn handle(&mut self, _: Unload, ctx: &mut Self::Context) -> Self::Result {
         ctx.stop();
+    }
+}
+
+impl Handler<GetAdminView> for GameRoom {
+    type Result = <GetAdminView as actix::Message>::Result;
+
+    fn handle(&mut self, _: GetAdminView, _ctx: &mut Self::Context) -> Self::Result {
+        Ok(self.game.get_view(0))
     }
 }

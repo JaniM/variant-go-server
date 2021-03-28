@@ -88,7 +88,7 @@ pub struct CreateRoom {
 }
 
 impl actix::Message for CreateRoom {
-    type Result = Result<(u32, Addr<GameRoom>), message::Error>;
+    type Result = Result<(u32, Option<Addr<GameRoom>>), message::Error>;
 }
 
 // User management ////////////////////////////////////////////////////////////
@@ -109,6 +109,14 @@ pub struct QueryProfile {
 
 impl actix::Message for QueryProfile {
     type Result = Result<Profile, ()>;
+}
+
+pub struct GetAdminView {
+    pub room_id: u32,
+}
+
+impl actix::Message for GetAdminView {
+    type Result = Result<game::GameView, ()>;
 }
 
 // Admin //////////////////////////////////////////////////////////////////////
@@ -479,7 +487,7 @@ impl Handler<LeaveRoom> for GameServer {
 
 /// Create room, announce to users
 impl Handler<CreateRoom> for GameServer {
-    type Result = ActorResponse<Self, (u32, Addr<GameRoom>), message::Error>;
+    type Result = ActorResponse<Self, (u32, Option<Addr<GameRoom>>), message::Error>;
 
     fn handle(&mut self, msg: CreateRoom, _: &mut Context<Self>) -> Self::Result {
         use message::Error;
@@ -500,29 +508,23 @@ impl Handler<CreateRoom> for GameServer {
             return ActorResponse::reply(Err(Error::other("Name too long")));
         }
 
-        let session = match self.sessions.get(&id) {
-            Some(x) => x,
-            None => return ActorResponse::reply(Err(Error::other("No session"))),
-        };
-
-        let user_id = match session.user_id {
-            Some(x) => x,
-            None => return ActorResponse::reply(Err(Error::other("Not identified"))),
-        };
-
-        let profile = self
-            .profiles
-            .get_mut(&user_id)
-            .expect("User id exists without session");
-
-        if let Some(time) = profile.last_game_time {
-            // Only allow creating a game once every two minutes.
-            let diff = Instant::now() - time;
-            let target = Duration::from_secs(60 * 2);
-            if diff < target {
-                return ActorResponse::reply(Err(Error::GameStartTimer((target - diff).as_secs())));
+        let session = if id == 0 {
+            None
+        } else {
+            match self.sessions.get(&id) {
+                Some(x) => Some(x),
+                None => return ActorResponse::reply(Err(Error::other("No session"))),
             }
-        }
+        };
+
+        let user_id = if let Some(session) = session {
+            match session.user_id {
+                Some(x) => x,
+                None => return ActorResponse::reply(Err(Error::other("Not identified"))),
+            }
+        } else {
+            0
+        };
 
         let komis = komis.as_slice().into();
         let seed = self.rng.next_u64();
@@ -531,9 +533,29 @@ impl Handler<CreateRoom> for GameServer {
             None => return ActorResponse::reply(Err(Error::other("Rules not accepted"))),
         };
 
-        profile.last_game_time = Some(Instant::now());
+        if user_id != 0 {
+            let profile = self
+                .profiles
+                .get_mut(&user_id)
+                .expect("User id exists without session");
+
+            if let Some(time) = profile.last_game_time {
+                // Only allow creating a game once every two minutes.
+                let diff = Instant::now() - time;
+                let target = Duration::from_secs(60 * 2);
+                if diff < target {
+                    return ActorResponse::reply(Err(Error::GameStartTimer(
+                        (target - diff).as_secs(),
+                    )));
+                }
+            }
+
+            profile.last_game_time = Some(Instant::now());
+        }
 
         let cloned_name = name.clone();
+
+        let owner = if user_id != 0 { Some(user_id) } else { None };
 
         let after_leave = if leave_previous {
             fut::Either::Left(self.leave_room(msg.id, None))
@@ -547,7 +569,7 @@ impl Handler<CreateRoom> for GameServer {
                         id: None,
                         replay: None,
                         name: cloned_name,
-                        owner: Some(user_id),
+                        owner,
                     })
                     .into_actor(act)
             })
@@ -563,7 +585,7 @@ impl Handler<CreateRoom> for GameServer {
 
                 let room = GameRoom {
                     room_id,
-                    owner: Some(user_id),
+                    owner,
                     sessions: HashMap::new(),
                     users: HashSet::new(),
                     name: name.clone(),
@@ -586,10 +608,14 @@ impl Handler<CreateRoom> for GameServer {
 
                 act.send_global_message(Message::AnnounceRoom(room_id, name));
 
-                fut::Either::Right(
-                    act.join_room(id, room_id)
-                        .then(move |(), _, _| fut::ready(Ok((room_id, addr)))),
-                )
+                fut::Either::Right(if user_id == 0 {
+                    fut::Either::Left(fut::ready(Ok((room_id, Some(addr)))))
+                } else {
+                    fut::Either::Right(
+                        act.join_room(id, room_id)
+                            .then(move |(), _, _| fut::ready(Ok((room_id, Some(addr))))),
+                    )
+                })
             });
 
         ActorResponse::r#async(result)
@@ -749,5 +775,30 @@ impl Handler<AdminMessage> for GameServer {
         }
 
         MessageResult(())
+    }
+}
+
+impl Handler<GetAdminView> for GameServer {
+    type Result = ActorResponse<Self, game::GameView, ()>;
+
+    fn handle(&mut self, msg: GetAdminView, _ctx: &mut Self::Context) -> Self::Result {
+        let GetAdminView { room_id } = msg;
+
+        let room = match self.rooms.get(&room_id) {
+            Some(x) => x,
+            None => return ActorResponse::reply(Err(())),
+        };
+        let fut = room.addr.send(game_room::GetAdminView);
+
+        let fut = fut.into_actor(self).then(move |res, _act, _| {
+            let view = match res {
+                Ok(Ok(v)) => v,
+                _ => return fut::err(()),
+            };
+
+            fut::ok(view)
+        });
+
+        ActorResponse::r#async(fut)
     }
 }

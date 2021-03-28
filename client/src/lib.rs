@@ -355,6 +355,8 @@ impl Component for GameApp {
             .unwrap_or("");
         let nick_enter = self.link.callback(Msg::ChangeNick);
 
+        let user_id = self.user.as_ref().map(|x| x.user_id).unwrap_or(0);
+
         let gameview = if let Some(game) = &self.game {
             html!(
                 <GamePane
@@ -476,7 +478,9 @@ impl Component for GameApp {
                     {"Nickname: "}
                     <TextInput value=nick onsubmit=nick_enter />
                 </div>
-                {"Games live: "}{self.games.len()}
+                <div>
+                    {"User id: "}{user_id}
+                </div>
                 <ul>
                     {list}
                 </ul>

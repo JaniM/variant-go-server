@@ -77,7 +77,7 @@ impl From<u8> for Color {
 
 // Seat ///////////////////////////////////////////////////////////////////////
 
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize)]
 pub struct Seat {
     pub player: Option<u64>,
     pub team: Color,
@@ -359,7 +359,7 @@ impl From<GameState> for GameStateView {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct GameView {
     // TODO: we need a separate state view since we have hidden information
     // currently players can cheat :F
@@ -367,7 +367,7 @@ pub struct GameView {
     pub seats: GroupVec<Seat>,
     pub turn: u32,
     pub board: Vec<Color>,
-    pub board_visibility: Option<Vec<Visibility>>,
+    pub board_visibility: Option<Vec<u16>>,
     pub hidden_stones_left: u32,
     pub size: (u8, u8),
     pub mods: GameModifier,
@@ -797,7 +797,7 @@ impl Game {
             seats: shared.seats.clone(),
             turn: shared.turn as _,
             board,
-            board_visibility,
+            board_visibility: board_visibility.map(|b| b.iter().map(|x| x.into_value()).collect()),
             hidden_stones_left,
             size: (shared.board.width as u8, shared.board.height as u8),
             mods: shared.mods.clone(),
