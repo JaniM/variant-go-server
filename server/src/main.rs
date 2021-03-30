@@ -455,7 +455,7 @@ async fn create_game(
     println!("POST /game/create: {:?}", body);
 
     let token = match catch! {
-        let header = req.headers().get("Bearer")?;
+        let header = req.headers().get("Authentication")?;
         header.to_str().ok()?.to_owned()
     } {
         Some(x) => x,
