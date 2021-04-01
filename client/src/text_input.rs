@@ -41,14 +41,12 @@ impl Component for TextInput {
 
     fn change(&mut self, props: Self::Properties) -> ShouldRender {
         if self.props.value != props.value || self.text.is_empty() {
-            self.text = self.props.value.clone();
+            self.text = props.value.clone();
         }
         if self.props != props {
             self.props = props;
-            true
-        } else {
-            false
         }
+        true
     }
 
     fn view(&self) -> Html {
