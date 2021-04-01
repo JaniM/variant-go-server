@@ -40,9 +40,11 @@ impl Component for TextInput {
     }
 
     fn change(&mut self, props: Self::Properties) -> ShouldRender {
+        if self.props.value != props.value {
+            self.text = self.props.value.clone();
+        }
         if self.props != props {
             self.props = props;
-            self.text = self.props.value.clone();
             true
         } else {
             false

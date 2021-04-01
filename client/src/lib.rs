@@ -82,6 +82,11 @@ struct GameApp {
     #[allow(dead_code)]
     game_store: game_store::GameStore,
     time_adjustment: i128,
+    callbacks: Callbacks,
+}
+
+struct Callbacks {
+    nick_change: Callback<String>,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -203,6 +208,10 @@ impl Component for GameApp {
         let hash = utils::get_hash();
         let game_loaded = hash.starts_with('#') && hash[1..].parse::<u32>().is_ok();
 
+        let callbacks = Callbacks {
+            nick_change: link.callback(Msg::ChangeNick),
+        };
+
         GameApp {
             link,
             games: vec![],
@@ -220,6 +229,7 @@ impl Component for GameApp {
             error: None,
             game_store,
             time_adjustment: 0,
+            callbacks,
         }
     }
 
@@ -353,7 +363,7 @@ impl Component for GameApp {
             .and_then(|x| x.nick.as_ref())
             .map(|x| &**x)
             .unwrap_or("");
-        let nick_enter = self.link.callback(Msg::ChangeNick);
+        let nick_enter = &self.callbacks.nick_change;
 
         let user_id = self.user.as_ref().map(|x| x.user_id).unwrap_or(0);
 
