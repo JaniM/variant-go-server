@@ -438,7 +438,7 @@ impl ClientWebSocket {
 struct CreateGameBody {
     game: message::StartGame,
     #[serde(default)]
-    players: Option<Vec<u64>>,
+    players: Option<Vec<Option<u64>>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -487,10 +487,12 @@ async fn create_game(
     };
 
     for (idx, &user_id) in players.iter().flatten().enumerate() {
-        addr.do_send(game_room::GameActionAsUser {
-            user_id,
-            action: message::GameAction::TakeSeat(idx as _),
-        });
+        if let Some(user_id) = user_id {
+            addr.do_send(game_room::GameActionAsUser {
+                user_id,
+                action: message::GameAction::TakeSeat(idx as _),
+            });
+        }
     }
 
     Ok(HttpResponse::Ok().json(CreateGameResponse { id }))
