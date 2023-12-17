@@ -35,16 +35,13 @@ cargo run -p server
 
 ### Client
 
-The client uses wasm-pack, see installation instructions at <https://rustwasm.github.io/wasm-pack/installer/>.
+The client uses Dioxus CLI, install it with `cargo install dioxus-cli`.
 
 Build & run the client with
 
 ``` sh
 cd client
-wasm-pack build --dev -- --features local
-cd www
-npm i
-npm run start
+dx serve --hot-reload
 ```
 
 ## Testing

@@ -1,0 +1,20 @@
+[package]
+name = "client"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+dioxus = "0.4.3"
+dioxus-signals = "0.4.3"
+dioxus-web = "0.4.3"
+futures = "0.3.29"
+gloo-net = "0.5.0"
+gloo-storage = "0.3.0"
+gloo-timers = { version = "0.3.0", features = ["futures"] }
+log = "0.4.20"
+serde_cbor = "0.11.2"
+
+shared = { path = "../shared" }
+wasm-logger = "0.2.0"

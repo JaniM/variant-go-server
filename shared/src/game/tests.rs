@@ -7,6 +7,7 @@ fn seats() {
         GroupVec::from(&[0, 15][..]),
         (9, 9),
         GameModifier::default(),
+        0
     )
     .unwrap();
 
