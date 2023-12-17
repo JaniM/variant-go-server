@@ -60,31 +60,29 @@ async fn connection_loop(
     loop {
         select! {
             msg = ws_recv.next() => {
-                if let Some(Ok(msg)) = msg {
-                    let msg: ServerMessage = match msg {
-                        Message::Text(text) => {
-                            log::warn!("Received text message: {}", text);
-                            serde_cbor::from_slice(text.as_bytes()).unwrap()
-                        }
-                        Message::Bytes(bytes) => {
-                            serde_cbor::from_slice(&bytes).unwrap()
-                        }
-                    };
-                    receive(msg);
-                } else {
+                let Some(Ok(msg)) = msg else {
                     log::info!("{:?}", msg);
                     log::warn!("WebSocket closed");
                     return LoopFlow::Reconnect;
-                }
+                };
+                let msg: ServerMessage = match msg {
+                    Message::Text(text) => {
+                        log::warn!("Received text message: {}", text);
+                        serde_cbor::from_slice(text.as_bytes()).unwrap()
+                    }
+                    Message::Bytes(bytes) => {
+                        serde_cbor::from_slice(&bytes).unwrap()
+                    }
+                };
+                receive(msg);
             }
             msg = rx.next() => {
-                if let Some(msg) = msg {
-                    log::debug!("Sending: {:?}", msg);
-                    ws_sender.send(pack(msg)).await.unwrap();
-                } else {
+                let Some(msg) = msg else {
                     log::error!("Client message channel closed");
                     return LoopFlow::Exit;
-                }
+                };
+                log::debug!("Sending: {:?}", msg);
+                ws_sender.send(pack(msg)).await.unwrap();
             }
         }
     }
