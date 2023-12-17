@@ -1,4 +1,6 @@
-table! {
+// @generated automatically by Diesel CLI.
+
+diesel::table! {
     games (id) {
         id -> Int8,
         name -> Text,
@@ -7,7 +9,7 @@ table! {
     }
 }
 
-table! {
+diesel::table! {
     users (id) {
         id -> Int8,
         auth_token -> Text,
@@ -16,6 +18,9 @@ table! {
     }
 }
 
-joinable!(games -> users (owner));
+diesel::joinable!(games -> users (owner));
 
-allow_tables_to_appear_in_same_query!(games, users,);
+diesel::allow_tables_to_appear_in_same_query!(
+    games,
+    users,
+);
