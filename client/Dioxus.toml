@@ -1,0 +1,31 @@
+
+[application]
+
+# App (Project) Name
+name = "client"
+default_platform = "web"
+out_dir = "dist"
+asset_dir = "public"
+
+[web.app]
+
+title = "Variant Go Server"
+
+[web.watcher]
+
+reload_html = true
+watch_path = ["src", "public"]
+
+[web.resource]
+
+# CSS style file
+style = []
+
+# Javascript code file
+script = []
+
+[web.resource.dev]
+
+# Javascript code file
+# serve: [dev-server] only
+script = []
