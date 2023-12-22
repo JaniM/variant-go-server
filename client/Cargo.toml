@@ -10,11 +10,15 @@ dioxus = "0.4.3"
 dioxus-signals = "0.4.3"
 dioxus-web = "0.4.3"
 futures = "0.3.29"
+futures-channel = "0.3.29"
+gloo-events = "0.2.0"
 gloo-net = "0.5.0"
 gloo-storage = "0.3.0"
 gloo-timers = { version = "0.3.0", features = ["futures"] }
+gloo-utils = "0.2.0"
 log = "0.4.20"
 serde_cbor = "0.11.2"
 
 shared = { path = "../shared" }
+sir = { version = "0.4.0", features = ["dioxus"] }
 wasm-logger = "0.2.0"
