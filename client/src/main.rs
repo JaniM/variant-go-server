@@ -5,43 +5,82 @@ mod state;
 mod window;
 
 use dioxus::prelude::*;
+use dioxus_router::prelude::*;
 use dioxus_signals::Signal;
 use shared::message::Profile;
 use state::GameRoom;
 
 use crate::networking::use_websocket;
 
+#[derive(Routable, Clone)]
+enum Route {
+    #[route("/")]
+    #[redirect("/:.._segments", |_segments: Vec<String>| Route::Home {})]
+    Home {},
+    #[route("/game/:id")]
+    GameRoute { id: u32 },
+}
+
 fn main() {
     wasm_logger::init(wasm_logger::Config::default());
     dioxus_web::launch(App);
 }
+
 fn App(cx: Scope) -> Element {
-    let state = state::use_state_provider(&cx);
     global_style();
-
+    state::use_state_provider(&cx);
     window::use_window_size_provider(cx);
-    let mode = window::use_display_mode(cx);
-
-    #[rustfmt::skip]
-    let class = sir::css!("
-        height: 100%;
-        overflow: hidden;
-        background: var(--bg-color);
-        color: var(--text-color);
-
-        &.desktop {
-            display: grid;
-            grid-template-columns: 300px 1fr 100px;
-        }
-
-        &.mobile {
-        }
-    ");
     cx.render(rsx! {
         sir::AppStyle {},
+        Router::<Route> {},
+    })
+}
+
+#[component]
+fn Home(cx: Scope) -> Element {
+    let state = state::use_state(cx);
+    let mode = window::use_display_mode(cx);
+
+    cx.render(rsx! {
         div {
-            class: "{class} {mode.class()}",
+            class: "root {mode.class()}",
             RoomList { rooms: state.read().rooms },
+        }
+    })
+}
+
+#[component]
+fn GameRoute(cx: Scope, id: u32) -> Element {
+    let send = use_websocket(cx);
+    let state = state::use_state(cx);
+    let mode = window::use_display_mode(cx);
+
+    let _ = use_memo(cx, (id,), move |(id,)| {
+        send(state::join_room(id));
+    });
+
+    match mode {
+        window::DisplayMode::Desktop => cx.render(rsx! {
+            div {
+                class: "root {mode.class()}",
+                RoomList { rooms: state.read().rooms },
+                GamePanel { id: *id }
+            }
+        }),
+        window::DisplayMode::Mobile => cx.render(rsx! {
+            div {
+                class: "root {mode.class()}",
+                GamePanel { id: *id }
+            }
+        }),
+    }
+}
+
+#[component]
+fn GamePanel(cx: Scope, id: u32) -> Element {
+    cx.render(rsx! {
+        div {
+            "Game {id}"
         }
     })
 }
@@ -60,6 +99,20 @@ fn global_style() {
             height: 100vh;
             overflow: hidden;
         }
+        .root {
+            height: 100%;
+            overflow: hidden;
+            background: var(--bg-color);
+            color: var(--text-color);
+
+            &.desktop {
+                display: grid;
+                grid-template-columns: 300px 1fr 100px;
+            }
+
+            &.mobile {
+            }
+        }
     ");
 }
 
@@ -72,11 +125,13 @@ fn RoomList(cx: Scope, rooms: Signal<Vec<GameRoom>>) -> Element {
         height: 100%;
         overflow-y: scroll;
 
-        li {
+        a {
             display: flex;
             padding: 2px;
             background: #242424;
             cursor: pointer;
+            color: var(--text-color);
+            text-decoration: none;
 
             .mobile & {
                 padding: 10px;
@@ -98,7 +153,8 @@ fn RoomList(cx: Scope, rooms: Signal<Vec<GameRoom>>) -> Element {
         ul {
             class: "{class} {mode.class()}",
             for room in rooms.iter() {
-                li {
+                Link {
+                    to: Route::GameRoute { id: room.id },
                     key: "{room.id}",
                     div { "{room.id}" },
                     div { "{room.name}" },

@@ -13,7 +13,7 @@ fn window_size() -> (i32, i32) {
     (width, height)
 }
 
-pub(crate) fn use_window_size_provider(cx: &ScopeState) -> (i32, i32) {
+pub(crate) fn use_window_size_provider(cx: &ScopeState) {
     let size = *use_context_provider(cx, || Signal::new(WindowSize(window_size())));
     cx.use_hook(move || {
         let window = gloo_utils::window();
@@ -21,9 +21,6 @@ pub(crate) fn use_window_size_provider(cx: &ScopeState) -> (i32, i32) {
             size.write().0 = window_size();
         })
     });
-    // For some reason this doesn't compile without an assignment.
-    let x = size.read().0;
-    x
 }
 
 pub(crate) fn use_window_size(cx: &ScopeState) -> (i32, i32) {

@@ -3,7 +3,7 @@ use std::{collections::HashMap, rc::Rc};
 use crate::networking::use_websocket_provider;
 use dioxus::prelude::*;
 use dioxus_signals::Signal;
-use futures::{select, FutureExt, StreamExt};
+use futures::StreamExt;
 use gloo_storage::Storage as _;
 use gloo_timers::future::TimeoutFuture;
 use shared::message::{ClientMessage, Profile, ServerMessage};
@@ -76,7 +76,7 @@ fn use_debouncer<T: 'static>(
 pub(crate) fn use_state_provider(cx: &ScopeState) -> Signal<ClientState> {
     let state = *use_context_provider(cx, || Signal::new(ClientState::new()));
 
-    let room_debouncer = use_debouncer(cx, 10, move |events| {
+    let room_debouncer = use_debouncer(cx, 100, move |events| {
         let rooms = state.read().rooms;
         let mut rooms = rooms.write();
         for event in events {
@@ -118,6 +118,10 @@ pub(crate) fn use_state_provider(cx: &ScopeState) -> Signal<ClientState> {
     state
 }
 
+pub(crate) fn use_state(cx: &ScopeState) -> Signal<ClientState> {
+    *use_context(cx).expect("state not provided")
+}
+
 fn apply_room_event(event: RoomEvent, rooms: &mut Vec<GameRoom>) {
     match event {
         RoomEvent::Announce(room) => match rooms.binary_search_by(|r| room.id.cmp(&r.id)) {
@@ -155,4 +159,8 @@ pub(crate) fn set_nick(nick: &str) -> ClientMessage {
         token: get_token(),
         nick: Some(nick.to_owned()),
     }
+}
+
+pub(crate) fn join_room(id: u32) -> ClientMessage {
+    ClientMessage::JoinGame(id)
 }
