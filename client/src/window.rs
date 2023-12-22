@@ -2,16 +2,18 @@ use dioxus::prelude::*;
 use dioxus_signals::*;
 
 #[derive(Clone, Default)]
-struct WindowSize((f64, f64));
+struct WindowSize((i32, i32));
 
-fn window_size() -> (f64, f64) {
+fn window_size() -> (i32, i32) {
     let window = gloo_utils::window();
-    let width = window.inner_width().unwrap().as_f64().unwrap();
-    let height = window.inner_height().unwrap().as_f64().unwrap();
+    let document = window.document().unwrap();
+    let element = document.document_element().unwrap();
+    let width = element.client_width();
+    let height = element.client_height();
     (width, height)
 }
 
-pub(crate) fn use_window_size_provider(cx: &ScopeState) -> (f64, f64) {
+pub(crate) fn use_window_size_provider(cx: &ScopeState) -> (i32, i32) {
     let size = *use_context_provider(cx, || Signal::new(WindowSize(window_size())));
     cx.use_hook(move || {
         let window = gloo_utils::window();
@@ -24,7 +26,7 @@ pub(crate) fn use_window_size_provider(cx: &ScopeState) -> (f64, f64) {
     x
 }
 
-pub(crate) fn use_window_size(cx: &ScopeState) -> (f64, f64) {
+pub(crate) fn use_window_size(cx: &ScopeState) -> (i32, i32) {
     let size = use_context::<Signal<WindowSize>>(cx).expect("WindowSize not set up");
     size.read().0
 }
@@ -46,7 +48,7 @@ impl DisplayMode {
 
 pub(crate) fn use_display_mode(cx: &ScopeState) -> DisplayMode {
     let (width, _) = use_window_size(cx);
-    if width < 1200.0 {
+    if width < 1200 {
         DisplayMode::Mobile
     } else {
         DisplayMode::Desktop
