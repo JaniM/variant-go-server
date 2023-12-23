@@ -4,11 +4,14 @@ mod networking;
 mod state;
 mod window;
 
-use dioxus::prelude::*;
+use std::rc::Rc;
+
+use dioxus::{html::geometry::euclid::Size2D, prelude::*};
 use dioxus_router::prelude::*;
-use dioxus_signals::Signal;
+use dioxus_signals::{use_selector, use_signal, ReadOnlySignal, Signal};
 use shared::message::Profile;
 use state::GameRoom;
+use web_sys::wasm_bindgen::JsCast;
 
 use crate::networking::use_websocket;
 
@@ -59,30 +62,107 @@ fn GameRoute(cx: Scope, id: u32) -> Element {
         send(state::join_room(id));
     });
 
-    match mode {
-        window::DisplayMode::Desktop => cx.render(rsx! {
-            div {
-                class: "root {mode.class()}",
-                RoomList { rooms: state.read().rooms },
-                GamePanel { id: *id }
+    cx.render(rsx! {
+        div {
+            class: "root {mode.class()}",
+            if mode.is_desktop() {
+                rsx!(RoomList { rooms: state.read().rooms })
             }
-        }),
-        window::DisplayMode::Mobile => cx.render(rsx! {
-            div {
-                class: "root {mode.class()}",
-                GamePanel { id: *id }
+            GamePanel { room: state.read().active_room() }
+            if mode.is_desktop() {
+                rsx!(div { style: "background: #242424;" })
             }
-        }),
-    }
+        }
+    })
 }
 
 #[component]
-fn GamePanel(cx: Scope, id: u32) -> Element {
+fn GamePanel(cx: Scope, room: ReadOnlySignal<Option<state::ActiveRoom>>) -> Element {
+    let outer_div = use_signal(cx, || None::<Rc<MountedData>>);
+    let canvas_element = use_signal(cx, || None::<Rc<MountedData>>);
+    let size = use_signal(cx, Size2D::default);
+    let set_size = move || async move {
+        let Some(data) = outer_div.read().clone() else {
+            return;
+        };
+        let rect = data.get_client_rect().await.unwrap_or_default();
+        let mut div_size = rect.size;
+        div_size.width = f64::min(div_size.width, div_size.height);
+        div_size.height = f64::min(div_size.width, div_size.height);
+
+        // Resize the canvas instantly to allow rendering
+        let canvas = get_canvas();
+        canvas.set_width(div_size.width as u32);
+        canvas.set_height(div_size.height as u32);
+
+        size.set(div_size);
+    };
+    let onmounted = move |e: MountedEvent| {
+        let data = e.inner().clone();
+        outer_div.set(Some(data));
+        cx.spawn(set_size());
+    };
+    let window_size = window::use_window_size(cx);
+    use_effect(cx, (&window_size,), move |_| set_size());
+
+    let room = *room;
+    let view =
+        dioxus_signals::use_selector(cx, move || room.read().as_ref().map(|r| r.view.clone()));
+
+    dioxus_signals::use_effect(cx, move || {
+        // Subacribe to size changes
+        let _ = size.read();
+        let Some(mount_data) = canvas_element.read().clone() else {
+            return;
+        };
+        let canvas = get_canvas();
+        let context = canvas
+            .get_context("2d")
+            .unwrap()
+            .unwrap()
+            .dyn_into::<web_sys::CanvasRenderingContext2d>()
+            .unwrap();
+
+        context.begin_path();
+
+        // Draw the outer circle.
+        context
+            .arc(75.0, 75.0, 50.0, 0.0, std::f64::consts::PI * 2.0)
+            .unwrap();
+
+        context.stroke();
+    });
+
+    #[rustfmt::skip]
+    let class = sir::css!("
+        width: 100%;
+        height: 100%;
+        canvas {
+            position: absolute;
+        }
+    ");
     cx.render(rsx! {
         div {
-            "Game {id}"
+            class: "{class}",
+            onmounted: onmounted,
+            canvas {
+                onmounted: move |e| {
+                    canvas_element.set(Some(e.inner().clone()));
+                },
+                id: "game-canvas",
+            }
         }
     })
+}
+
+fn get_canvas() -> web_sys::HtmlCanvasElement {
+    let canvas = gloo_utils::document()
+        .get_element_by_id("game-canvas")
+        .unwrap();
+    canvas
+        .dyn_into::<web_sys::HtmlCanvasElement>()
+        .map_err(|_| ())
+        .unwrap()
 }
 
 fn global_style() {
@@ -105,9 +185,14 @@ fn global_style() {
             background: var(--bg-color);
             color: var(--text-color);
 
-            &.desktop {
+            &.desktop.large {
                 display: grid;
-                grid-template-columns: 300px 1fr 100px;
+                grid-template-columns: 300px 1fr 300px;
+            }
+
+            &.desktop.small {
+                display: grid;
+                grid-template-columns: 0 1fr 300px;
             }
 
             &.mobile {

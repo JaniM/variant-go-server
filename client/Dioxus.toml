@@ -14,6 +14,7 @@ title = "Variant Go Server"
 [web.watcher]
 
 reload_html = true
+index_on_404 = true
 watch_path = ["src", "public"]
 
 [web.resource]
