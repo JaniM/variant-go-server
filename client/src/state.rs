@@ -63,6 +63,14 @@ pub(crate) struct GameView {
     pub(crate) clock: Option<game::clock::GameClock>,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct GameHistory {
+    pub(crate) board: Vec<game::Color>,
+    pub(crate) board_visibility: Option<Vec<u16>>,
+    pub(crate) last_stone: Option<game::GroupVec<(u32, u32)>>,
+    pub(crate) move_number: u32,
+}
+
 fn on_connect() -> Vec<ClientMessage> {
     vec![
         ClientMessage::Identify {

@@ -1,6 +1,8 @@
 #![allow(non_snake_case)]
+mod board;
 mod config;
 mod networking;
+mod palette;
 mod state;
 mod window;
 
@@ -13,7 +15,7 @@ use shared::message::Profile;
 use state::GameRoom;
 use web_sys::wasm_bindgen::JsCast;
 
-use crate::networking::use_websocket;
+use crate::{board::Board, networking::use_websocket};
 
 #[derive(Routable, Clone)]
 enum Route {
@@ -92,8 +94,19 @@ fn GamePanel(cx: Scope, room: ReadOnlySignal<Option<state::ActiveRoom>>) -> Elem
 
         // Resize the canvas instantly to allow rendering
         let canvas = get_canvas();
-        canvas.set_width(div_size.width as u32);
-        canvas.set_height(div_size.height as u32);
+        let pixel_ratio = gloo_utils::window().device_pixel_ratio();
+        let unscaled = div_size.width as u32;
+        let scaled = (div_size.width * pixel_ratio) as u32;
+        canvas.set_width(scaled);
+        canvas.set_height(scaled);
+        canvas
+            .style()
+            .set_property("width", &format!("{}px", unscaled))
+            .unwrap();
+        canvas
+            .style()
+            .set_property("height", &format!("{}px", unscaled))
+            .unwrap();
 
         size.set(div_size);
     };
@@ -115,22 +128,19 @@ fn GamePanel(cx: Scope, room: ReadOnlySignal<Option<state::ActiveRoom>>) -> Elem
         let Some(mount_data) = canvas_element.read().clone() else {
             return;
         };
+        let Some(view) = view.read().clone() else {
+            return;
+        };
         let canvas = get_canvas();
-        let context = canvas
-            .get_context("2d")
-            .unwrap()
-            .unwrap()
-            .dyn_into::<web_sys::CanvasRenderingContext2d>()
-            .unwrap();
-
-        context.begin_path();
-
-        // Draw the outer circle.
-        context
-            .arc(75.0, 75.0, 50.0, 0.0, std::f64::consts::PI * 2.0)
-            .unwrap();
-
-        context.stroke();
+        let board = Board {
+            palette: palette::PaletteOption::get().to_palette(),
+            toroidal_edge_size: if view.mods.toroidal.is_some() { 3 } else { 0 },
+            board_displacement: (0, 0),
+            selection_pos: None,
+            input: board::Input::None,
+            show_hidden: false,
+        };
+        board.render_gl(&canvas, &*view, None).unwrap();
     });
 
     #[rustfmt::skip]
