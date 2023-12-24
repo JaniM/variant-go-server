@@ -194,7 +194,7 @@ pub(crate) fn use_state_provider(cx: &ScopeState) -> Signal<ClientState> {
                     members,
                 };
                 *state.active_room.write() = Some(room);
-                log::debug!("{:?}", state.active_room.read());
+                log::debug!("{:?}", &*state.active_room.read());
             }
             _ => {}
         }

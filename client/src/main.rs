@@ -6,14 +6,17 @@ mod palette;
 mod state;
 mod window;
 
-use std::rc::Rc;
+use std::{collections::HashMap, rc::Rc};
 
 use dioxus::{html::geometry::euclid::Size2D, prelude::*};
 use dioxus_router::prelude::*;
-use dioxus_signals::{use_selector, use_signal, ReadOnlySignal, Signal};
-use shared::message::Profile;
+use dioxus_signals::{
+    use_selector, use_selector_with_dependencies, use_signal, ReadOnlySignal, Signal,
+};
+use shared::{game::Seat, message::Profile};
 use state::GameRoom;
 use web_sys::wasm_bindgen::JsCast;
+use window::DisplayMode;
 
 use crate::{board::Board, networking::use_websocket};
 
@@ -70,10 +73,30 @@ fn GameRoute(cx: Scope, id: u32) -> Element {
             if mode.is_desktop() {
                 rsx!(RoomList { rooms: state.read().rooms })
             }
-            GamePanel { room: state.read().active_room() }
-            if mode.is_desktop() {
-                rsx!(div { style: "background: #242424;" })
+            div {
+                class: "center-stack",
+                if mode.is_mobile() {
+                    rsx!(SeatCards {})
+                }
+                GamePanel { room: state.read().active_room() }
             }
+            if mode.is_desktop() {
+                rsx!(RightPanel {})
+            }
+        }
+    })
+}
+
+#[component]
+fn RightPanel(cx: Scope) -> Element {
+    #[rustfmt::skip]
+    let class = sir::css!("
+        background: #242424;
+    ");
+    cx.render(rsx! {
+        div {
+            class: "{class}",
+            SeatCards {}
         }
     })
 }
@@ -165,6 +188,85 @@ fn GamePanel(cx: Scope, room: ReadOnlySignal<Option<state::ActiveRoom>>) -> Elem
     })
 }
 
+#[component]
+fn SeatCards(cx: Scope) -> Element {
+    let state = state::use_state(cx);
+    let mode = window::use_display_mode(cx);
+    let room = state.read().active_room();
+    let seats = use_selector(cx, move || Some(room.read().as_ref()?.view.seats.clone()));
+
+    #[rustfmt::skip]
+    let class = sir::css!("
+        &.desktop {
+            display: grid;
+        }
+        &.mobile {
+            display: grid;
+        }
+    ");
+
+    let columns = match mode {
+        DisplayMode::Mobile => format!(
+            "grid-template-columns:repeat({}, 1fr);",
+            seats.read().iter().flatten().count()
+        ),
+        DisplayMode::Desktop(_) => "grid-template-columns:1fr;".to_owned(),
+    };
+
+    cx.render(rsx! {
+        div {
+            class: "{class} {mode.class()}",
+            style: "{columns}",
+            for seat in seats.read().iter().flatten() {
+                SeatCard {
+                    seat: seat.clone()
+                }
+            }
+        }
+    })
+}
+
+#[component]
+fn SeatCard(cx: Scope, seat: Seat) -> Element {
+    let state = state::use_state(cx);
+    let profiles = state.read().profiles;
+    // TODO: Switch to this when the selector escape bug is fixed
+    // let profile = use_selector_with_dependencies(cx, seat, {
+    //     move |seat| profiles.read().get(&seat.player?).cloned()
+    // });
+    let profile = {
+        let profiles = profiles.read();
+        seat.player.and_then(|p| profiles.get(&p)).cloned()
+    };
+
+    let nick = profile
+        .as_ref()
+        .map(|p| p.nick.as_deref().unwrap_or("Unknown"));
+
+    let palette = palette::PaletteOption::get().to_palette();
+    let bg_color = palette.stone_colors[seat.team.as_usize() - 1];
+    let fg_color = palette.dead_mark_color[seat.team.as_usize() - 1];
+
+    #[rustfmt::skip]
+    let class = sir::css!("
+        padding: 10px;
+    ");
+
+    cx.render(rsx! {
+        div {
+            class: "{class}",
+            style: "background: {bg_color}; color: {fg_color};",
+            div {
+                if let Some(nick) = nick {
+                    rsx!("{nick}")
+                } else if seat.player.is_none() {
+                    rsx!("<empty>")
+                }
+            }
+        }
+    })
+}
+
 fn get_canvas() -> web_sys::HtmlCanvasElement {
     let canvas = gloo_utils::document()
         .get_element_by_id("game-canvas")
@@ -205,7 +307,19 @@ fn global_style() {
                 grid-template-columns: 0 1fr 300px;
             }
 
+            &.desktop .center-stack {
+                height: 100%;
+                display: grid;
+                grid-template-rows: 1fr;
+            }
+
             &.mobile {
+            }
+
+            &.mobile .center-stack {
+                height: 100%;
+                display: grid;
+                grid-template-rows: auto 1fr;
             }
         }
     ");

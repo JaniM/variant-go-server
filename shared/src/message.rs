@@ -78,7 +78,7 @@ impl std::convert::From<GameAction> for ClientMessage {
 //                              Server messages                              //
 ///////////////////////////////////////////////////////////////////////////////
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct Profile {
     pub user_id: u64,
     pub nick: Option<String>,
