@@ -51,8 +51,10 @@ fn Home(cx: Scope) -> Element {
 
     cx.render(rsx! {
         div {
-            class: "root {mode.class()}",
+            class: "root {mode.class()} in-list",
             RoomList { rooms: state.read().rooms },
+            div {},
+            div {}
         }
     })
 }
@@ -69,12 +71,13 @@ fn GameRoute(cx: Scope, id: u32) -> Element {
 
     cx.render(rsx! {
         div {
-            class: "root {mode.class()}",
+            class: "root {mode.class()} in-game",
             if mode.is_desktop() {
                 rsx!(RoomList { rooms: state.read().rooms })
             }
             div {
                 class: "center-stack",
+                GameNavBar {},
                 if mode.is_mobile() {
                     rsx!(SeatCards {})
                 }
@@ -170,6 +173,8 @@ fn GamePanel(cx: Scope, room: ReadOnlySignal<Option<state::ActiveRoom>>) -> Elem
     let class = sir::css!("
         width: 100%;
         height: 100%;
+        display: flex;
+        justify-content: center;
         canvas {
             position: absolute;
         }
@@ -183,6 +188,51 @@ fn GamePanel(cx: Scope, room: ReadOnlySignal<Option<state::ActiveRoom>>) -> Elem
                     canvas_element.set(Some(e.inner().clone()));
                 },
                 id: "game-canvas",
+            }
+        }
+    })
+}
+
+#[component]
+fn GameNavBar(cx: Scope) -> Element {
+    let mode = window::use_display_mode(cx);
+
+    #[rustfmt::skip]
+    let class = sir::css!("
+        display: flex;
+
+        a {
+            display: flex;
+            background: #242424;
+            cursor: pointer;
+            color: var(--text-color);
+            text-decoration: none;
+
+            flex-grow: 0;
+
+            padding: 10px;
+
+            &:not(:last-child) {
+                border-right: 1px solid var(--text-color);
+            }
+
+            &:hover {
+                background: #282828;
+            }
+        }
+    ");
+
+    cx.render(rsx! {
+        div {
+            class: "{class}",
+            if !mode.is_large_desktop() {
+                rsx!(Link {
+                    to: Route::Home {},
+                    "↩ Game List"
+                })
+            }
+            a {
+                "wow"
             }
         }
     })
@@ -231,6 +281,7 @@ fn SeatCard(cx: Scope, seat: Seat) -> Element {
     let state = state::use_state(cx);
     let profiles = state.read().profiles;
     // TODO: Switch to this when the selector escape bug is fixed
+    // See https://github.com/DioxusLabs/dioxus/issues/1745
     // let profile = use_selector_with_dependencies(cx, seat, {
     //     move |seat| profiles.read().get(&seat.player?).cloned()
     // });
@@ -302,15 +353,20 @@ fn global_style() {
                 grid-template-columns: 300px 1fr 300px;
             }
 
-            &.desktop.small {
+            &.desktop.small.in-game {
                 display: grid;
                 grid-template-columns: 0 1fr 300px;
+            }
+
+            &.desktop.small.in-list {
+                display: grid;
+                grid-template-columns: 300px 1fr 0;
             }
 
             &.desktop .center-stack {
                 height: 100%;
                 display: grid;
-                grid-template-rows: 1fr;
+                grid-template-rows: auto 1fr;
             }
 
             &.mobile {
@@ -319,7 +375,7 @@ fn global_style() {
             &.mobile .center-stack {
                 height: 100%;
                 display: grid;
-                grid-template-rows: auto 1fr;
+                grid-template-rows: auto auto 1fr;
             }
         }
     ");
@@ -347,7 +403,7 @@ fn RoomList(cx: Scope, rooms: Signal<Vec<GameRoom>>) -> Element {
                 border-bottom: 1px solid var(--text-color);
             }
 
-            &:hover {
+            &:hover, &:focus {
                 background: #282828;
             }
 

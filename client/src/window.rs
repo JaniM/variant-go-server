@@ -53,6 +53,10 @@ impl DisplayMode {
         matches!(self, Self::Desktop(_))
     }
 
+    pub(crate) fn is_large_desktop(self) -> bool {
+        matches!(self, Self::Desktop(false))
+    }
+
     pub(crate) fn is_small_desktop(self) -> bool {
         matches!(self, Self::Desktop(true))
     }
