@@ -93,7 +93,7 @@ fn pack(msg: ClientMessage) -> gloo_net::websocket::Message {
     gloo_net::websocket::Message::Bytes(bytes)
 }
 
-pub(crate) fn use_websocket<'a>(cx: &'a ScopeState) -> impl Fn(ClientMessage) + 'a {
+pub(crate) fn use_websocket<'a>(cx: &'a ScopeState) -> impl Fn(ClientMessage) + Copy + 'a {
     let handle =
         use_coroutine_handle(cx).expect("use_websocket called outside of websocket provider");
     move |msg| handle.send(msg)

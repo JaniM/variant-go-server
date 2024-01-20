@@ -249,3 +249,7 @@ pub(crate) fn set_nick(nick: &str) -> ClientMessage {
 pub(crate) fn join_room(id: u32) -> ClientMessage {
     ClientMessage::JoinGame(id)
 }
+
+pub(crate) fn leave_all_rooms() -> ClientMessage {
+    ClientMessage::LeaveGame(None)
+}

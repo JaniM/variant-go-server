@@ -27,6 +27,8 @@ enum Route {
     Home {},
     #[route("/game/:id")]
     GameRoute { id: u32 },
+    #[route("/create")]
+    CreateRoute {},
 }
 
 fn main() {
@@ -86,6 +88,45 @@ fn GameRoute(cx: Scope, id: u32) -> Element {
             if mode.is_desktop() {
                 rsx!(RightPanel {})
             }
+        }
+    })
+}
+
+#[component]
+fn CreateRoute(cx: Scope) -> Element {
+    let send = use_websocket(cx);
+    let state = state::use_state(cx);
+    let mode = window::use_display_mode(cx);
+
+    // We only care about room events if GameRoute is active.
+    use_on_create(cx, move || {
+        send(state::leave_all_rooms());
+        async {}
+    });
+
+    cx.render(rsx! {
+        div {
+            class: "root {mode.class()} in-game",
+            if mode.is_desktop() {
+                rsx!(RoomList { rooms: state.read().rooms })
+            }
+            div {
+                class: "center-stack",
+                GameNavBar {},
+                CreateGamePanel { }
+            }
+            if mode.is_desktop() {
+                rsx!(RightPanel {})
+            }
+        }
+    })
+}
+
+#[component]
+fn CreateGamePanel(cx: Scope) -> Element {
+    cx.render(rsx! {
+        div {
+            "wow"
         }
     })
 }
@@ -390,6 +431,11 @@ fn RoomList(cx: Scope, rooms: Signal<Vec<GameRoom>>) -> Element {
         height: 100%;
         overflow-y: scroll;
 
+        .actions {
+            mzrgin-bottom: 10px;
+            a { padding: 10px; }
+        }
+
         a {
             display: flex;
             padding: 2px;
@@ -398,7 +444,7 @@ fn RoomList(cx: Scope, rooms: Signal<Vec<GameRoom>>) -> Element {
             color: var(--text-color);
             text-decoration: none;
 
-            .mobile & {
+            .mobile &.game {
                 padding: 10px;
                 border-bottom: 1px solid var(--text-color);
             }
@@ -407,7 +453,7 @@ fn RoomList(cx: Scope, rooms: Signal<Vec<GameRoom>>) -> Element {
                 background: #282828;
             }
 
-            div:first-child {
+            &.game div:first-child {
                 width: 50px;
                 flex-shrink: 0;
                 padding-right: 2px;
@@ -415,14 +461,24 @@ fn RoomList(cx: Scope, rooms: Signal<Vec<GameRoom>>) -> Element {
         }
     ");
     cx.render(rsx! {
-        ul {
+        div {
             class: "{class} {mode.class()}",
-            for room in rooms.iter() {
+            div {
+                class: "actions",
                 Link {
-                    to: Route::GameRoute { id: room.id },
-                    key: "{room.id}",
-                    div { "{room.id}" },
-                    div { "{room.name}" },
+                    to: Route::CreateRoute {},
+                    div { "Create Game" },
+                }
+            }
+            ul {
+                for room in rooms.iter() {
+                    Link {
+                        class: "game",
+                        to: Route::GameRoute { id: room.id },
+                        key: "{room.id}",
+                        div { "{room.id}" },
+                        div { "{room.name}" },
+                    }
                 }
             }
         }
