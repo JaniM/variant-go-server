@@ -4,6 +4,7 @@ mod config;
 mod networking;
 mod palette;
 mod state;
+mod views;
 mod window;
 
 use std::{collections::HashMap, rc::Rc};
@@ -113,20 +114,11 @@ fn CreateRoute(cx: Scope) -> Element {
             div {
                 class: "center-stack",
                 GameNavBar {},
-                CreateGamePanel { }
+                views::CreateGamePanel { }
             }
             if mode.is_desktop() {
                 rsx!(RightPanel {})
             }
-        }
-    })
-}
-
-#[component]
-fn CreateGamePanel(cx: Scope) -> Element {
-    cx.render(rsx! {
-        div {
-            "wow"
         }
     })
 }
@@ -378,6 +370,7 @@ fn global_style() {
         }
         body, #main {
             --bg-color: #222;
+            --bg-h-color: #444;
             --text-color: #eee;
             width: 100vw;
             height: 100vh;

@@ -253,3 +253,10 @@ pub(crate) fn join_room(id: u32) -> ClientMessage {
 pub(crate) fn leave_all_rooms() -> ClientMessage {
     ClientMessage::LeaveGame(None)
 }
+
+pub(crate) fn username(profile: &Profile) -> String {
+    profile
+        .nick
+        .as_ref()
+        .map_or_else(|| "Unknown".to_string(), |n| n.clone())
+}
