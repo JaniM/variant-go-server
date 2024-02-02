@@ -412,6 +412,35 @@ fn global_style() {
                 grid-template-rows: auto auto 1fr;
             }
         }
+
+        .tooltip {
+            position: relative;
+            border-bottom: 1px dotted var(--text-color);
+
+            /* Tooltip text */
+            .tooltip-text {
+                visibility: hidden;
+                width: 25em;
+                background-color: #363532;
+                color: #dedede;
+                text-align: center;
+                padding: 5px 5px;
+                border-radius: 6px;
+
+                position: absolute;
+                z-index: 1;
+
+                top: -4px; left: 105%;
+                opacity: 0;
+                transition: opacity 0.5s;
+            }
+
+            &:hover .tooltip-text {
+                visibility: visible;
+                opacity: 1;
+            }
+
+        }
     ");
 }
 
