@@ -4,6 +4,40 @@ use dioxus_signals::*;
 use crate::state;
 use shared::game::GameModifier;
 
+macro_rules! simple_modifier {
+    ($name:ident, $modifiers:ident => $select:expr, $flip:expr, $text:expr, $tooltip:expr) => {
+        #[component]
+        fn $name(cx: Scope, modifiers: Signal<GameModifier>) -> Element {
+            let flip = move || {
+                let mut $modifiers = modifiers.write();
+                $flip;
+            };
+
+            cx.render(rsx! {
+                li {
+                    input {
+                        r#type: "checkbox",
+                        checked: {
+                            let $modifiers = modifiers.read();
+                            $select
+                        },
+                        onclick: move |_| flip(),
+                    }
+                    label {
+                        class: "tooltip",
+                        onclick: move |_| flip(),
+                        $text
+                        span {
+                            class: "tooltip-text",
+                            $tooltip
+                        }
+                    }
+                }
+            })
+        }
+    };
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Preset {
     Standard,
@@ -75,40 +109,122 @@ fn ModifierSelectors(cx: Scope, modifiers: Signal<GameModifier>) -> Element {
         ul {
             class: class,
             HiddenMoveGo { modifiers: modifiers }
+            PixelGo { modifiers: modifiers }
+            ZenGo { modifiers: modifiers }
             OneColorGo { modifiers: modifiers }
+            NoHistory { modifiers: modifiers }
+            TetrisGo { modifiers: modifiers }
+            ToroidalGo { modifiers: modifiers }
+            PhantomGo { modifiers: modifiers }
+            CapturesGivePoints { modifiers: modifiers }
+            Observable { modifiers: modifiers }
+            NoUndo { modifiers: modifiers }
         }
     })
 }
 
-#[component]
-fn OneColorGo(cx: Scope, modifiers: Signal<GameModifier>) -> Element {
-    let flip_one_color = move || {
-        let mut modifiers = modifiers.write();
-        modifiers.visibility_mode = match modifiers.visibility_mode {
-            Some(_) => None,
-            None => Some(shared::game::VisibilityMode::OneColor),
-        };
-    };
+// TODO: N+1
+// TODO: Traitor go Traitor stones:
+// TODO: Ponnuki is: points (can be negative)
 
-    cx.render(rsx! {
-        li {
-            input {
-                r#type: "checkbox",
-                checked: modifiers.read().visibility_mode.is_some(),
-                onclick: move |_| flip_one_color(),
-            }
-            label {
-                class: "tooltip",
-                onclick: move |_| flip_one_color(),
-                "One color go"
-                span {
-                    class: "tooltip-text",
-                    "Everyone sees the stones as same color. Confusion ensues."
-                }
-            }
-        }
-    })
-}
+simple_modifier!(
+    OneColorGo,
+    modifiers => modifiers.visibility_mode.is_some(),
+    modifiers.visibility_mode = match modifiers.visibility_mode {
+        Some(_) => None,
+        None => Some(shared::game::VisibilityMode::OneColor),
+    },
+    "One color go",
+    "Everyone sees the stones as same color. Confusion ensues."
+);
+
+simple_modifier!(
+    PixelGo,
+    modifiers => modifiers.pixel,
+    modifiers.pixel = !modifiers.pixel,
+    "Pixel go",
+    "You place 2x2 blobs. Overlapping stones are ignored."
+);
+
+// TODO: Ensure zen go receives the correct color count from the preset
+simple_modifier!(
+    ZenGo,
+    modifiers => modifiers.zen_go.is_some(),
+    modifiers.zen_go = match modifiers.zen_go {
+        Some(_) => None,
+        None => Some(shared::game::ZenGo::default()),
+    },
+    "Zen go",
+    "One extra player. You get a different color on every turn. There are no winners."
+);
+
+simple_modifier!(
+    NoHistory,
+    modifiers => modifiers.no_history,
+    modifiers.no_history = !modifiers.no_history,
+    "No history (good for one color)",
+    "No one can browse the past moves during the game."
+);
+
+simple_modifier!(
+    TetrisGo,
+    modifiers => modifiers.tetris.is_some(),
+    modifiers.tetris = match modifiers.tetris {
+        Some(_) => None,
+        None => Some(shared::game::TetrisGo {}),
+    },
+    "Tetris go",
+    "You can't play a group of exactly 4 stones. Diagonals don't form a group."
+);
+
+simple_modifier!(
+    ToroidalGo,
+    modifiers => modifiers.toroidal.is_some(),
+    modifiers.toroidal = match modifiers.toroidal {
+        Some(_) => None,
+        None => Some(shared::game::ToroidalGo {}),
+    },
+    "Toroidal go",
+    "Opposing edges are connected. First line doesn't exist. Click on the borders, shift click on a point or use WASD or 8462 to move the view. Use < and > or + and - to adjust the extended view."
+);
+
+simple_modifier!(
+    PhantomGo,
+    modifiers => modifiers.phantom.is_some(),
+    modifiers.phantom = match modifiers.phantom {
+        Some(_) => None,
+        None => Some(shared::game::PhantomGo {}),
+    },
+    "Phantom go",
+    "All stones are invisible when placed. They become visible when they affect the game (like hidden move go). Atari also reveals."
+);
+
+simple_modifier!(
+    CapturesGivePoints,
+    modifiers => modifiers.captures_give_points.is_some(),
+    modifiers.captures_give_points = match modifiers.captures_give_points {
+        Some(_) => None,
+        None => Some(shared::game::CapturesGivePoints {}),
+    },
+    "Captures give points",
+    "Only the one to remove stones from the board gets the points. Promotes aggressive play. You only get points for removed stones, not dead stones in your territory."
+);
+
+simple_modifier!(
+    Observable,
+    modifiers => modifiers.observable,
+    modifiers.observable = !modifiers.observable,
+    "Observable",
+    "All users who are not holding a seat can see all hidden stones and the true color of stones if one color go is enabled."
+);
+
+simple_modifier!(
+    NoUndo,
+    modifiers => modifiers.no_undo,
+    modifiers.no_undo = !modifiers.no_undo,
+    "Undo not allowed",
+    "Disables undo for all players."
+);
 
 #[component]
 fn HiddenMoveGo(cx: Scope, modifiers: Signal<GameModifier>) -> Element {
