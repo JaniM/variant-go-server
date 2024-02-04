@@ -113,6 +113,7 @@ fn ModifierSelectors(cx: Scope, modifiers: Signal<GameModifier>) -> Element {
             ZenGo { modifiers: modifiers }
             OneColorGo { modifiers: modifiers }
             NoHistory { modifiers: modifiers }
+            NPlusOne { modifiers: modifiers }
             TetrisGo { modifiers: modifiers }
             ToroidalGo { modifiers: modifiers }
             PhantomGo { modifiers: modifiers }
@@ -123,7 +124,6 @@ fn ModifierSelectors(cx: Scope, modifiers: Signal<GameModifier>) -> Element {
     })
 }
 
-// TODO: N+1
 // TODO: Traitor go Traitor stones:
 // TODO: Ponnuki is: points (can be negative)
 
@@ -268,6 +268,49 @@ If two players pick the same point, neither one gets a stone there, but they sti
                     r#type: "number",
                     value: "{hidden_move_placement_count}",
                     onchange: move |e| hidden_move_placement_count.set(e.inner().value.parse().unwrap())
+                }
+            }
+        }
+    })
+}
+
+#[component(no_case_check)]
+fn NPlusOne(cx: Scope, modifiers: Signal<GameModifier>) -> Element {
+    let stone_count = use_signal(cx, || 4);
+
+    let flip = move || {
+        let mut modifiers = modifiers.write();
+        modifiers.n_plus_one = match modifiers.n_plus_one {
+            Some(_) => None,
+            None => Some(shared::game::NPlusOne {
+                length: *stone_count.read(),
+            }),
+        };
+    };
+
+    cx.render(rsx! {
+        li {
+            input {
+                r#type: "checkbox",
+                checked: modifiers.read().n_plus_one.is_some(),
+                onclick: move |_| flip(),
+            }
+            label {
+                class: "tooltip",
+                onclick: move |_| flip(),
+                "N+1"
+                span {
+                    class: "tooltip-text",
+                    "You get an extra turn when you make a row of exactly N stones horizontally, vertically or diagonally."
+                }
+            }
+            span {
+                class: "adjust",
+                ", with N = "
+                input {
+                    r#type: "number",
+                    value: "{stone_count}",
+                    onchange: move |e| stone_count.set(e.inner().value.parse().unwrap())
                 }
             }
         }
