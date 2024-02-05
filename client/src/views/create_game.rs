@@ -90,6 +90,10 @@ pub fn CreateGamePanel(cx: Scope) -> Element {
 fn ModifierSelectors(cx: Scope, modifiers: Signal<GameModifier>) -> Element {
     let modifiers = *modifiers;
 
+    dioxus_signals::use_effect(cx, move || {
+        log::info!("{:?}", &*modifiers.read());
+    });
+
     #[rustfmt::skip]
     let class = sir::css!("
         padding: 10px;
@@ -117,7 +121,9 @@ fn ModifierSelectors(cx: Scope, modifiers: Signal<GameModifier>) -> Element {
             TetrisGo { modifiers: modifiers }
             ToroidalGo { modifiers: modifiers }
             PhantomGo { modifiers: modifiers }
+            TraitorGo { modifiers: modifiers }
             CapturesGivePoints { modifiers: modifiers }
+            PonnukiIsPoints { modifiers: modifiers }
             Observable { modifiers: modifiers }
             NoUndo { modifiers: modifiers }
         }
@@ -228,14 +234,22 @@ simple_modifier!(
 
 #[component]
 fn HiddenMoveGo(cx: Scope, modifiers: Signal<GameModifier>) -> Element {
-    let hidden_move_placement_count = use_signal(cx, || 3);
+    let modifiers = *modifiers;
+    let stone_count = use_signal(cx, || 4);
+
+    dioxus_signals::use_effect(cx, move || {
+        let count = *stone_count.read();
+        if let Some(mode) = &mut modifiers.write().hidden_move {
+            mode.placement_count = count;
+        }
+    });
 
     let flip_hidden_move = move || {
         let mut modifiers = modifiers.write();
         modifiers.hidden_move = match modifiers.hidden_move {
             Some(_) => None,
             None => Some(shared::game::HiddenMoveGo {
-                placement_count: *hidden_move_placement_count.read(),
+                placement_count: *stone_count.read(),
                 teams_share_stones: true,
             }),
         };
@@ -266,8 +280,8 @@ If two players pick the same point, neither one gets a stone there, but they sti
                 "Placement stones: "
                 input {
                     r#type: "number",
-                    value: "{hidden_move_placement_count}",
-                    onchange: move |e| hidden_move_placement_count.set(e.inner().value.parse().unwrap())
+                    value: "{stone_count}",
+                    onchange: move |e| stone_count.set(e.inner().value.parse().unwrap())
                 }
             }
         }
@@ -276,7 +290,15 @@ If two players pick the same point, neither one gets a stone there, but they sti
 
 #[component(no_case_check)]
 fn NPlusOne(cx: Scope, modifiers: Signal<GameModifier>) -> Element {
+    let modifiers = *modifiers;
     let stone_count = use_signal(cx, || 4);
+
+    dioxus_signals::use_effect(cx, move || {
+        let count = *stone_count.read();
+        if let Some(mode) = &mut modifiers.write().n_plus_one {
+            mode.length = count;
+        }
+    });
 
     let flip = move || {
         let mut modifiers = modifiers.write();
@@ -312,6 +334,106 @@ fn NPlusOne(cx: Scope, modifiers: Signal<GameModifier>) -> Element {
                     value: "{stone_count}",
                     onchange: move |e| stone_count.set(e.inner().value.parse().unwrap())
                 }
+            }
+        }
+    })
+}
+
+#[component]
+fn TraitorGo(cx: Scope, modifiers: Signal<GameModifier>) -> Element {
+    let modifiers = *modifiers;
+    let stone_count = use_signal(cx, || 4);
+
+    dioxus_signals::use_effect(cx, move || {
+        let count = *stone_count.read();
+        if let Some(mode) = &mut modifiers.write().traitor {
+            mode.traitor_count = count;
+        }
+    });
+
+    let flip = move || {
+        let mut modifiers = modifiers.write();
+        modifiers.traitor = match modifiers.traitor {
+            Some(_) => None,
+            None => Some(shared::game::TraitorGo {
+                traitor_count: *stone_count.read(),
+            }),
+        };
+    };
+
+    cx.render(rsx! {
+        li {
+            input {
+                r#type: "checkbox",
+                checked: modifiers.read().traitor.is_some(),
+                onclick: move |_| flip(),
+            }
+            label {
+                class: "tooltip",
+                onclick: move |_| flip(),
+                "Traitor Go"
+                span {
+                    class: "tooltip-text",
+                    "N of your stones are of the wrong color."
+                }
+            }
+            span {
+                class: "adjust",
+                ", traitor count: "
+                input {
+                    r#type: "number",
+                    value: "{stone_count}",
+                    onchange: move |e| stone_count.set(e.inner().value.parse().unwrap())
+                }
+            }
+        }
+    })
+}
+
+#[component]
+fn PonnukiIsPoints(cx: Scope, modifiers: Signal<GameModifier>) -> Element {
+    let modifiers = *modifiers;
+    let stone_count = use_signal(cx, || 4);
+
+    dioxus_signals::use_effect(cx, move || {
+        let count = *stone_count.read();
+        if let Some(mode) = &mut modifiers.write().ponnuki_is_points {
+            *mode = count;
+        }
+    });
+
+    let flip = move || {
+        let mut modifiers = modifiers.write();
+        modifiers.ponnuki_is_points = match modifiers.ponnuki_is_points {
+            Some(_) => None,
+            None => Some(*stone_count.read()),
+        };
+    };
+
+    cx.render(rsx! {
+        li {
+            input {
+                r#type: "checkbox",
+                checked: modifiers.read().ponnuki_is_points.is_some(),
+                onclick: move |_| flip(),
+            }
+            label {
+                class: "tooltip",
+                onclick: move |_| flip(),
+                "Ponnuki ia: "
+                span {
+                    class: "tooltip-text",
+                    "Ponnuki requires a capture and all diagonals must be empty or different color"
+                }
+            }
+            span {
+                class: "adjust",
+                input {
+                    r#type: "number",
+                    value: "{stone_count}",
+                    onchange: move |e| stone_count.set(e.inner().value.parse().unwrap())
+                }
+                " points (can be negative)"
             }
         }
     })
