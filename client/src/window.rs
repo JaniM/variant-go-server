@@ -67,7 +67,7 @@ pub(crate) fn use_display_mode(cx: &ScopeState) -> DisplayMode {
     let sidebar_size = config::SIDEBAR_SIZE;
     if width < height + sidebar_size {
         DisplayMode::Mobile
-    } else if width < height + sidebar_size * 2 {
+    } else if width < height + sidebar_size * 2 - sidebar_size / 2 {
         DisplayMode::Desktop(true)
     } else {
         DisplayMode::Desktop(false)
