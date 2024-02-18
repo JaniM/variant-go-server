@@ -21,7 +21,7 @@ pub enum GameAction {
     RequestSGF,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct StartGame {
     pub name: String,
     pub seats: Vec<u8>,
