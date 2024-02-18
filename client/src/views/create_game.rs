@@ -1,8 +1,11 @@
 use dioxus::prelude::*;
 use dioxus_signals::*;
 
-use crate::state;
-use shared::game::GameModifier;
+use crate::{networking, state};
+use shared::{
+    game::GameModifier,
+    message::{self, ClientMessage},
+};
 
 macro_rules! simple_modifier {
     ($name:ident, $modifiers:ident => $select:expr, $flip:expr, $text:expr, $tooltip:expr) => {
@@ -68,6 +71,33 @@ pub fn CreateGamePanel(cx: Scope) -> Element {
     let chosen_preset = use_signal(cx, || Preset::Standard);
     let modifiers = use_signal(cx, GameModifier::default);
 
+    let start = dioxus_signals::use_selector(cx, move || {
+        let preset = chosen_preset.read().clone();
+        let seats = match preset {
+            Preset::Standard => vec![1, 2],
+            Preset::Rengo => vec![1, 2, 1, 2],
+            Preset::ThreeColor => vec![1, 2, 3],
+            Preset::FourColor => vec![1, 2, 3, 4],
+            Preset::ThreeColorRengo => vec![1, 2, 3, 1, 2, 3],
+        };
+
+        let komis = match preset {
+            Preset::Standard => vec![0, 15],
+            Preset::Rengo => vec![0, 15],
+            Preset::ThreeColor => vec![0, 0, 0],
+            Preset::FourColor => vec![0, 0, 0, 0],
+            Preset::ThreeColorRengo => vec![0, 0, 0],
+        };
+
+        message::StartGame {
+            name: game_name.read().clone(),
+            seats,
+            komis,
+            size: (19, 19),
+            mods: modifiers.read().clone(),
+        }
+    });
+
     #[rustfmt::skip]
     let class = sir::css!("
         display: grid;
@@ -81,9 +111,31 @@ pub fn CreateGamePanel(cx: Scope) -> Element {
                 NameInput { name: game_name }
                 PresetSelectors { chosen_preset: chosen_preset }
                 ModifierSelectors { modifiers: modifiers }
+                CreateGameButton { start: start }
             }
         }
     })
+}
+
+#[component]
+fn CreateGameButton(cx: Scope, start: ReadOnlySignal<message::StartGame>) -> Element {
+    let start = *start;
+
+    let send = networking::use_websocket(cx);
+
+    cx.render(rsx! {
+        div {
+            button {
+                onclick: move |_| start_game(start.read().clone(), send),
+                "Start Game"
+            }
+        }
+    })
+}
+
+fn start_game(start: message::StartGame, send: impl Fn(ClientMessage)) {
+    let msg = ClientMessage::StartGame(start);
+    send(msg);
 }
 
 #[component]
