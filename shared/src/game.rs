@@ -77,7 +77,7 @@ impl From<u8> for Color {
 
 // Seat ///////////////////////////////////////////////////////////////////////
 
-#[derive(Debug, Clone, PartialEq, Default, Serialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Default, Serialize)]
 pub struct Seat {
     pub player: Option<u64>,
     pub team: Color,

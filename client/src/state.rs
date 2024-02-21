@@ -254,6 +254,20 @@ pub(crate) fn leave_all_rooms() -> ClientMessage {
     ClientMessage::LeaveGame(None)
 }
 
+pub(crate) fn take_seat(id: u32) -> ClientMessage {
+    ClientMessage::GameAction {
+        room_id: None,
+        action: shared::message::GameAction::TakeSeat(id),
+    }
+}
+
+pub(crate) fn leave_seat(id: u32) -> ClientMessage {
+    ClientMessage::GameAction {
+        room_id: None,
+        action: shared::message::GameAction::LeaveSeat(id),
+    }
+}
+
 pub(crate) fn username(profile: &Profile) -> String {
     profile
         .nick

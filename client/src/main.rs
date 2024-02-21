@@ -298,9 +298,10 @@ fn SeatCards(cx: Scope) -> Element {
         div {
             class: "{class} {mode.class()}",
             style: "{columns}",
-            for seat in seats.read().iter().flatten() {
+            for (id, seat) in seats.read().iter().flatten().enumerate() {
                 SeatCard {
-                    seat: seat.clone()
+                    seat: seat.clone(),
+                    seat_id: id as u32,
                 }
             }
         }
@@ -308,9 +309,14 @@ fn SeatCards(cx: Scope) -> Element {
 }
 
 #[component]
-fn SeatCard(cx: Scope, seat: Seat) -> Element {
+fn SeatCard(cx: Scope, seat: Seat, seat_id: u32) -> Element {
+    let seat = *seat;
+    let seat_id = *seat_id;
+    let send = use_websocket(cx);
+
     let state = state::use_state(cx);
     let profiles = state.read().profiles;
+
     // TODO: Switch to this when the selector escape bug is fixed
     // See https://github.com/DioxusLabs/dioxus/issues/1745
     // let profile = use_selector_with_dependencies(cx, seat, {
@@ -325,25 +331,73 @@ fn SeatCard(cx: Scope, seat: Seat) -> Element {
         .as_ref()
         .map(|p| p.nick.as_deref().unwrap_or("Unknown"));
 
+    let held_hy_self = seat
+        .player
+        .map_or(false, |p| p == state.read().user.read().user_id);
+
     let palette = palette::PaletteOption::get().to_palette();
     let bg_color = palette.stone_colors[seat.team.as_usize() - 1];
     let fg_color = palette.dead_mark_color[seat.team.as_usize() - 1];
 
     #[rustfmt::skip]
     let class = sir::css!("
-        padding: 10px;
+        background: var(--bg-color);
+        color: var(--fg-color);
+
+        display: grid;
+        grid-template-columns: 1fr auto;
+
+        div {
+            padding: 10px;
+            display: flex;
+            align-items: center;
+        }
+
+        button {
+            height: 100%;
+            padding: 10px;
+            background: var(--bg-color);
+            filter: brightness(80%);
+            color: var(--fg-color);
+            border: 1px solid var(--highlight-color);
+
+            cursor: pointer;
+
+            &:hover {
+                filter: brightness(100%);
+            }
+        }
     ");
+
+    let take_seat = move || {
+        send(state::take_seat(seat_id));
+    };
+
+    let leave_seat = move || {
+        send(state::leave_seat(seat_id));
+    };
 
     cx.render(rsx! {
         div {
             class: "{class}",
-            style: "background: {bg_color}; color: {fg_color};",
+            style: "--bg-color: {bg_color}; --fg-color: {fg_color};",
             div {
                 if let Some(nick) = nick {
                     rsx!("{nick}")
                 } else if seat.player.is_none() {
                     rsx!("<empty>")
                 }
+            }
+            if seat.player.is_none() {
+                rsx!(button {
+                    onclick: move |_| take_seat(),
+                    "Take Seat"
+                })
+            } else if held_hy_self {
+                rsx!(button {
+                    onclick: move |_| leave_seat(),
+                    "Leave Seat"
+                })
             }
         }
     })
