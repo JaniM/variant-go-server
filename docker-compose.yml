@@ -1,0 +1,33 @@
+services:
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile.dev
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./client:/usr/src/app
+      - ./shared:/usr/src/shared
+    environment:
+      WS_URL: ws://localhost:8088/ws/
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile.dev
+    ports:
+      - "8088:8088"
+    volumes:
+      - ./server:/usr/src/app
+      - ./shared:/usr/src/shared
+    environment:
+      - DATABASE_URL=postgres://postgres:localpw@go-postgres/postgres
+    depends_on:
+      - go-postgres
+  go-postgres:
+    image: postgres
+    environment:
+      POSTGRES_PASSWORD: localpw
+    ports:
+      - 5432
+    volumes:
+      - /var/lib/postgresql/data
