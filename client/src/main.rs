@@ -99,7 +99,7 @@ fn CreateRoute(cx: Scope) -> Element {
 
     // We only care about room events if GameRoute is active.
     use_on_create(cx, move || {
-        send(state::leave_all_rooms());
+        send(state::leave_all_rooms(state));
         async {}
     });
 

@@ -250,7 +250,9 @@ pub(crate) fn join_room(id: u32) -> ClientMessage {
     ClientMessage::JoinGame(id)
 }
 
-pub(crate) fn leave_all_rooms() -> ClientMessage {
+pub(crate) fn leave_all_rooms(state: Signal<ClientState>) -> ClientMessage {
+    let active_room = state.read().active_room;
+    *active_room.write() = None;
     ClientMessage::LeaveGame(None)
 }
 
