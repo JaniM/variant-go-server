@@ -10,6 +10,7 @@ use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 use actix::prelude::*;
+use actix_web::web::Data;
 use actix_web::{middleware, web, App, Error, HttpRequest, HttpResponse, HttpServer};
 use actix_web_actors::ws;
 
@@ -462,7 +463,7 @@ async fn create_game(
         None => return Ok(HttpResponse::BadRequest().body("Bearer token required")),
     };
 
-    let user = match db_addr.send(db::GetUserByToken(token)).await? {
+    let user = match db_addr.send(db::GetUserByToken(token)).await.unwrap() {
         Ok(x) => x,
         Err(_) => return Ok(HttpResponse::BadRequest().body("Invalid token")),
     };
@@ -479,7 +480,7 @@ async fn create_game(
             room: game,
             leave_previous: false,
         })
-        .await?;
+        .await.unwrap();
 
     let (id, addr) = match resp {
         Ok((id, Some(addr))) => (id, addr),
@@ -509,7 +510,7 @@ async fn get_game_view(
 ) -> actix_web::Result<HttpResponse> {
     let room_id = req.match_info().get("id").unwrap().parse().unwrap();
 
-    let resp = server_addr.send(server::GetAdminView { room_id }).await?;
+    let resp = server_addr.send(server::GetAdminView { room_id }).await.unwrap();
 
     let view = match resp {
         Ok(view) => view,
@@ -546,7 +547,7 @@ async fn get_game_result(
 
     let room_id = req.match_info().get("id").unwrap().parse().unwrap();
 
-    let resp = server_addr.send(server::GetAdminView { room_id }).await?;
+    let resp = server_addr.send(server::GetAdminView { room_id }).await.unwrap();
 
     let view = match resp {
         Ok(view) => view,
@@ -603,8 +604,8 @@ async fn main() -> std::io::Result<()> {
         App::new()
             // enable logger
             .wrap(middleware::Logger::default())
-            .data(server.clone())
-            .data(db.clone())
+            .app_data(Data::new(server.clone()))
+            .app_data(Data::new(db.clone()))
             // websocket route
             .service(web::resource("/ws/").route(web::get().to(ws_index)))
             .service(web::resource("/api/game/create").route(web::post().to(create_game)))

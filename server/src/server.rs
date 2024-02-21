@@ -9,6 +9,8 @@ use crate::game_room::{self, GameRoom};
 use shared::game;
 use shared::message::{self, AdminAction};
 
+use futures_util::future::Either;
+
 macro_rules! catch {
     ($($code:tt)+) => {
         (|| Some({ $($code)+ }))()
@@ -226,7 +228,7 @@ impl GameServer {
         &mut self,
         session_id: usize,
         room_id: Option<u32>,
-    ) -> impl ActorFuture<Output = (), Actor = Self> {
+    ) -> impl ActorFuture<Self, Output = ()> {
         let session = self
             .sessions
             .get_mut(&session_id)
@@ -257,7 +259,7 @@ impl GameServer {
         &mut self,
         session_id: usize,
         room_id: u32,
-    ) -> impl ActorFuture<Output = (), Actor = Self> {
+    ) -> impl ActorFuture<Self, Output = ()> {
         let session = self
             .sessions
             .get_mut(&session_id)
@@ -268,9 +270,9 @@ impl GameServer {
 
         let prefetch = if let Some(room_addr) = room_addr {
             session.room_ids.push(room_id);
-            fut::Either::Right(async move { Ok::<_, ()>(room_addr) }.into_actor(self))
+            Either::Right(async move { Ok::<_, ()>(room_addr) }.into_actor(self))
         } else {
-            fut::Either::Left(
+            Either::Left(
                 self.db
                     .send(db::GetGame(room_id as _))
                     .into_actor(self)
@@ -427,7 +429,7 @@ impl Handler<ListRooms> for GameServer {
 
 /// Join room, send disconnect message to old room
 impl Handler<Join> for GameServer {
-    type Result = ActorResponse<Self, Addr<GameRoom>, ()>;
+    type Result = ActorResponse<Self, Result<Addr<GameRoom>, ()>>;
 
     fn handle(&mut self, msg: Join, _ctx: &mut Context<Self>) -> Self::Result {
         let Join {
@@ -447,9 +449,9 @@ impl Handler<Join> for GameServer {
         };
 
         let after_leave = if leave_previous {
-            fut::Either::Left(self.leave_room(msg.id, None))
+            Either::Left(self.leave_room(msg.id, None))
         } else {
-            fut::Either::Right(async {}.into_actor(self))
+            Either::Right(async {}.into_actor(self))
         };
 
         let result = after_leave
@@ -487,7 +489,7 @@ impl Handler<LeaveRoom> for GameServer {
 
 /// Create room, announce to users
 impl Handler<CreateRoom> for GameServer {
-    type Result = ActorResponse<Self, (u32, Option<Addr<GameRoom>>), message::Error>;
+    type Result = ActorResponse<Self, Result<(u32, Option<Addr<GameRoom>>), message::Error>>;
 
     fn handle(&mut self, msg: CreateRoom, _: &mut Context<Self>) -> Self::Result {
         use message::Error;
@@ -558,9 +560,9 @@ impl Handler<CreateRoom> for GameServer {
         let owner = if user_id != 0 { Some(user_id) } else { None };
 
         let after_leave = if leave_previous {
-            fut::Either::Left(self.leave_room(msg.id, None))
+            Either::Left(self.leave_room(msg.id, None))
         } else {
-            fut::Either::Right(async {}.into_actor(self))
+            Either::Right(async {}.into_actor(self))
         };
         let result = after_leave
             .then(move |(), act, _| {
@@ -577,7 +579,7 @@ impl Handler<CreateRoom> for GameServer {
                 let room_id = match res {
                     Ok(Ok(g)) => g.id as _,
                     _ => {
-                        return fut::Either::Left(
+                        return Either::Left(
                             async { Err(Error::other("Internal error")) }.into_actor(act),
                         )
                     }
@@ -608,10 +610,10 @@ impl Handler<CreateRoom> for GameServer {
 
                 act.send_global_message(Message::AnnounceRoom(room_id, name));
 
-                fut::Either::Right(if user_id == 0 {
-                    fut::Either::Left(fut::ready(Ok((room_id, Some(addr)))))
+                Either::Right(if user_id == 0 {
+                    Either::Left(fut::ready(Ok((room_id, Some(addr)))))
                 } else {
-                    fut::Either::Right(
+                    Either::Right(
                         act.join_room(id, room_id)
                             .then(move |(), _, _| fut::ready(Ok((room_id, Some(addr))))),
                     )
@@ -623,7 +625,7 @@ impl Handler<CreateRoom> for GameServer {
 }
 
 impl Handler<IdentifyAs> for GameServer {
-    type Result = ActorResponse<Self, Profile, message::Error>;
+    type Result = ActorResponse<Self, Result<Profile, message::Error>>;
 
     fn handle(&mut self, msg: IdentifyAs, _ctx: &mut Self::Context) -> Self::Result {
         use message::Error;
@@ -706,7 +708,7 @@ impl Handler<IdentifyAs> for GameServer {
 }
 
 impl Handler<QueryProfile> for GameServer {
-    type Result = ActorResponse<Self, Profile, ()>;
+    type Result = ActorResponse<Self, Result<Profile, ()>>;
 
     fn handle(&mut self, msg: QueryProfile, _ctx: &mut Self::Context) -> Self::Result {
         let QueryProfile { user_id } = msg;
@@ -779,7 +781,7 @@ impl Handler<AdminMessage> for GameServer {
 }
 
 impl Handler<GetAdminView> for GameServer {
-    type Result = ActorResponse<Self, game::GameView, ()>;
+    type Result = ActorResponse<Self, Result<game::GameView, ()>>;
 
     fn handle(&mut self, msg: GetAdminView, _ctx: &mut Self::Context) -> Self::Result {
         let GetAdminView { room_id } = msg;
