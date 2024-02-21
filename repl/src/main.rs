@@ -26,7 +26,7 @@ fn pack(msg: ClientMessage) -> Vec<u8> {
     serde_cbor::to_vec(&msg).unwrap()
 }
 
-#[tokio::main]
+#[tokio::main(flavor = "current_thread")]
 async fn main() {
     dotenv::dotenv().ok();
 
