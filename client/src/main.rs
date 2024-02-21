@@ -7,13 +7,11 @@ mod state;
 mod views;
 mod window;
 
-use std::{collections::HashMap, rc::Rc};
+use std::rc::Rc;
 
 use dioxus::{html::geometry::euclid::Size2D, prelude::*};
 use dioxus_router::prelude::*;
-use dioxus_signals::{
-    use_selector, use_selector_with_dependencies, use_signal, ReadOnlySignal, Signal,
-};
+use dioxus_signals::{use_selector, use_signal, ReadOnlySignal, Signal};
 use shared::{game::Seat, message::Profile};
 use state::GameRoom;
 use web_sys::wasm_bindgen::JsCast;
@@ -184,7 +182,7 @@ fn GamePanel(cx: Scope, room: ReadOnlySignal<Option<state::ActiveRoom>>) -> Elem
     dioxus_signals::use_effect(cx, move || {
         // Subacribe to size changes
         let _ = size.read();
-        let Some(mount_data) = canvas_element.read().clone() else {
+        let Some(_mount_data) = canvas_element.read().clone() else {
             return;
         };
         let Some(view) = view.read().clone() else {
