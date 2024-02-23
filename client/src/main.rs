@@ -17,7 +17,7 @@ use state::GameRoom;
 use web_sys::wasm_bindgen::JsCast;
 use window::DisplayMode;
 
-use crate::{board::Board, networking::use_websocket};
+use crate::{board::Board, state::ActionSender};
 
 #[derive(Routable, Clone)]
 enum Route {
@@ -62,12 +62,12 @@ fn Home(cx: Scope) -> Element {
 
 #[component]
 fn GameRoute(cx: Scope, id: u32) -> Element {
-    let send = use_websocket(cx);
+    let action = ActionSender::new(cx);
     let state = state::use_state(cx);
     let mode = window::use_display_mode(cx);
 
     let _ = use_memo(cx, (id,), move |(id,)| {
-        send(state::join_room(id));
+        action.join_room(id);
     });
 
     cx.render(rsx! {
@@ -93,13 +93,13 @@ fn GameRoute(cx: Scope, id: u32) -> Element {
 
 #[component]
 fn CreateRoute(cx: Scope) -> Element {
-    let send = use_websocket(cx);
+    let action = ActionSender::new(cx);
     let state = state::use_state(cx);
     let mode = window::use_display_mode(cx);
 
     // We only care about room events if GameRoute is active.
     use_on_create(cx, move || {
-        send(state::leave_all_rooms(state));
+        action.leave_all_rooms();
         async {}
     });
 
@@ -312,7 +312,7 @@ fn SeatCards(cx: Scope) -> Element {
 fn SeatCard(cx: Scope, seat: Seat, seat_id: u32) -> Element {
     let seat = *seat;
     let seat_id = *seat_id;
-    let send = use_websocket(cx);
+    let action = ActionSender::new(cx);
 
     let state = state::use_state(cx);
     let profiles = state.read().profiles;
@@ -370,11 +370,11 @@ fn SeatCard(cx: Scope, seat: Seat, seat_id: u32) -> Element {
     ");
 
     let take_seat = move || {
-        send(state::take_seat(seat_id));
+        action.take_seat(seat_id);
     };
 
     let leave_seat = move || {
-        send(state::leave_seat(seat_id));
+        action.leave_seat(seat_id);
     };
 
     cx.render(rsx! {
@@ -561,11 +561,12 @@ fn RoomList(cx: Scope, rooms: Signal<Vec<GameRoom>>) -> Element {
 
 #[component]
 fn NickInput(cx: Scope, profile: Signal<Profile>) -> Element {
-    let send = use_websocket(cx);
+    let action = ActionSender::new(cx);
     let profile = profile.read();
     let nick = profile.nick.as_deref().unwrap_or("");
     let on_change = move |e: FormEvent| {
-        send(state::set_nick(&e.inner().value));
+        let nick = &e.inner().value;
+        action.set_nick(nick);
     };
     cx.render(rsx! {
         input {

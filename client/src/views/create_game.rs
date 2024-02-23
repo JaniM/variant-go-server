@@ -1,11 +1,8 @@
 use dioxus::prelude::*;
 use dioxus_signals::*;
 
-use crate::{networking, state};
-use shared::{
-    game::GameModifier,
-    message::{self, ClientMessage},
-};
+use crate::state::{self, ActionSender};
+use shared::{game::GameModifier, message};
 
 macro_rules! simple_modifier {
     ($name:ident, $modifiers:ident => $select:expr, $flip:expr, $text:expr, $tooltip:expr) => {
@@ -121,21 +118,16 @@ pub fn CreateGamePanel(cx: Scope) -> Element {
 fn CreateGameButton(cx: Scope, start: ReadOnlySignal<message::StartGame>) -> Element {
     let start = *start;
 
-    let send = networking::use_websocket(cx);
+    let action = ActionSender::new(cx);
 
     cx.render(rsx! {
         div {
             button {
-                onclick: move |_| start_game(start.read().clone(), send),
+                onclick: move |_| action.start_game(start.read().clone()),
                 "Start Game"
             }
         }
     })
-}
-
-fn start_game(start: message::StartGame, send: impl Fn(ClientMessage)) {
-    let msg = ClientMessage::StartGame(start);
-    send(msg);
 }
 
 #[component]

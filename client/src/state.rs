@@ -7,8 +7,8 @@ use futures::StreamExt;
 use gloo_storage::Storage as _;
 use gloo_timers::future::TimeoutFuture;
 use shared::{
-    game::{self},
-    message::{ClientMessage, Profile, ServerMessage},
+    game,
+    message::{self, ClientMessage, Profile, ServerMessage},
 };
 
 #[derive(Clone, Copy)]
@@ -239,34 +239,58 @@ fn set_token(token: &str) {
     gloo_storage::LocalStorage::set("token", token).unwrap();
 }
 
-pub(crate) fn set_nick(nick: &str) -> ClientMessage {
-    ClientMessage::Identify {
-        token: get_token(),
-        nick: Some(nick.to_owned()),
+#[derive(Clone, Copy)]
+pub(crate) struct ActionSender<'a> {
+    state: Signal<ClientState>,
+    handle: &'a Coroutine<ClientMessage>,
+}
+
+impl<'a> ActionSender<'a> {
+    pub(crate) fn new(cx: &'a ScopeState) -> Self {
+        let state = use_state(cx);
+        let handle =
+            use_coroutine_handle(cx).expect("use_websocket called outside of websocket provider");
+        Self { state, handle }
     }
-}
 
-pub(crate) fn join_room(id: u32) -> ClientMessage {
-    ClientMessage::JoinGame(id)
-}
-
-pub(crate) fn leave_all_rooms(state: Signal<ClientState>) -> ClientMessage {
-    let active_room = state.read().active_room;
-    *active_room.write() = None;
-    ClientMessage::LeaveGame(None)
-}
-
-pub(crate) fn take_seat(id: u32) -> ClientMessage {
-    ClientMessage::GameAction {
-        room_id: None,
-        action: shared::message::GameAction::TakeSeat(id),
+    fn send(&self, msg: ClientMessage) {
+        self.handle.send(msg);
     }
-}
 
-pub(crate) fn leave_seat(id: u32) -> ClientMessage {
-    ClientMessage::GameAction {
-        room_id: None,
-        action: shared::message::GameAction::LeaveSeat(id),
+    pub(crate) fn set_nick(&self, nick: &str) {
+        self.send(ClientMessage::Identify {
+            token: get_token(),
+            nick: Some(nick.to_owned()),
+        });
+    }
+
+    pub(crate) fn join_room(&self, id: u32) {
+        self.send(ClientMessage::JoinGame(id));
+    }
+
+    pub(crate) fn leave_all_rooms(&self) {
+        let active_room = self.state.read().active_room;
+        *active_room.write() = None;
+        self.send(ClientMessage::LeaveGame(None))
+    }
+
+    pub(crate) fn take_seat(&self, id: u32) {
+        self.send(ClientMessage::GameAction {
+            room_id: None,
+            action: shared::message::GameAction::TakeSeat(id),
+        })
+    }
+
+    pub(crate) fn leave_seat(&self, id: u32) {
+        self.send(ClientMessage::GameAction {
+            room_id: None,
+            action: shared::message::GameAction::LeaveSeat(id),
+        })
+    }
+
+    pub(crate) fn start_game(&self, start: message::StartGame) {
+        let msg = ClientMessage::StartGame(start);
+        self.send(msg);
     }
 }
 
