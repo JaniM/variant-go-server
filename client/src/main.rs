@@ -103,6 +103,8 @@ fn CreateRoute(cx: Scope) -> Element {
         async {}
     });
 
+    use_game_switcher(cx);
+
     cx.render(rsx! {
         div {
             class: "root {mode.class()} in-game",
@@ -119,6 +121,28 @@ fn CreateRoute(cx: Scope) -> Element {
             }
         }
     })
+}
+
+/// Switches to a room automatically if the active room changes.
+/// This is necessary as we don't know which room to switch to when we create a game.
+/// Regrets with the protocol, I have a few.
+fn use_game_switcher(cx: &ScopeState) {
+    let state = state::use_state(cx);
+    let navigator = use_navigator(cx);
+    let room_previous = use_signal(cx, || None::<u32>);
+    let room_current = dioxus_signals::use_selector(cx, move || {
+        let state = state.read();
+        state.active_room().read().as_ref().map(|r| r.id)
+    });
+
+    if let Some(room) = *room_current.read() {
+        if Some(room) != *room_previous.read() {
+            navigator.push(Route::GameRoute { id: room });
+        }
+        room_previous.set(Some(room));
+    } else if room_previous.read().is_some() {
+        room_previous.set(None);
+    };
 }
 
 #[component]
