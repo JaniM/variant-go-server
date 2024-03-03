@@ -292,6 +292,13 @@ impl<'a> ActionSender<'a> {
         let msg = ClientMessage::StartGame(start);
         self.send(msg);
     }
+
+    pub(crate) fn place_stone(&self, x: u32, y: u32) {
+        self.send(ClientMessage::GameAction {
+            room_id: None,
+            action: shared::message::GameAction::Place(x, y),
+        })
+    }
 }
 
 pub(crate) fn username(profile: &Profile) -> String {

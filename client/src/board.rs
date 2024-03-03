@@ -1,5 +1,6 @@
 use shared::game::{GameStateView, Visibility};
 use web_sys::wasm_bindgen::JsCast;
+use web_sys::DomRect;
 use web_sys::{wasm_bindgen::JsValue, HtmlCanvasElement};
 
 use crate::palette::Palette;
@@ -29,11 +30,68 @@ pub(crate) struct Board {
     pub(crate) selection_pos: Option<(u32, u32)>,
     pub(crate) input: Input,
     pub(crate) show_hidden: bool,
+    pub(crate) edge_size: f64,
+}
+
+impl Input {
+    pub(crate) fn from_pointer(
+        board: &Board,
+        game: &state::GameView,
+        mut p: (f64, f64),
+        bounding: DomRect,
+        clicked: bool,
+    ) -> Input {
+        let pixel_ratio = gloo_utils::window().device_pixel_ratio();
+        let edge_size = board.edge_size as f64 / pixel_ratio;
+        let width = bounding.width() - (2.0 * edge_size);
+        let height = bounding.height() - (2.0 * edge_size);
+        let is_scoring = matches!(game.state, GameStateView::Scoring(_));
+
+        // Adjust the coordinates for canvas position
+        p.0 -= bounding.left();
+        p.1 -= bounding.top();
+
+        if p.0 < edge_size {
+            return Input::Move(Direction::Left, clicked);
+        }
+        if p.1 < edge_size {
+            return Input::Move(Direction::Up, clicked);
+        }
+        if p.0 > width + edge_size {
+            return Input::Move(Direction::Right, clicked);
+        }
+        if p.1 > height + edge_size {
+            return Input::Move(Direction::Down, clicked);
+        }
+
+        p.0 -= edge_size;
+        p.1 -= edge_size;
+        let size = (game.size.0 as i32 + 2 * board.toroidal_edge_size) as f64;
+        let pos = match game.mods.pixel && !is_scoring {
+            true => (
+                (p.0 / (width / size) + 0.5) as i32,
+                (p.1 / (height / size) + 0.5) as i32,
+            ),
+            false => (
+                (p.0 / (width / size)) as i32,
+                (p.1 / (height / size)) as i32,
+            ),
+        };
+
+        Input::Place((pos.0 as u32, pos.1 as u32), clicked)
+    }
+
+    pub(crate) fn into_selection(self) -> Option<(u32, u32)> {
+        match self {
+            Input::Place(p, _) => Some(p),
+            _ => None,
+        }
+    }
 }
 
 impl Board {
     pub(crate) fn render_gl(
-        self,
+        &self,
         canvas: &HtmlCanvasElement,
         game: &state::GameView,
         history: Option<&GameHistory>,
@@ -48,7 +106,7 @@ impl Board {
         let border_colors = palette.border_colors;
         let dead_mark_color = palette.dead_mark_color;
 
-        let edge_size = 40.0f64;
+        let edge_size = self.edge_size;
 
         // Setup //////////////////////////////////////////////////////////////
 

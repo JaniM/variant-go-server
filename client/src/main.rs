@@ -9,7 +9,10 @@ mod window;
 
 use std::rc::Rc;
 
-use dioxus::{html::geometry::euclid::Size2D, prelude::*};
+use dioxus::{
+    html::{geometry::euclid::Size2D, input_data::MouseButton},
+    prelude::*,
+};
 use dioxus_router::prelude::*;
 use dioxus_signals::{use_selector, use_signal, ReadOnlySignal, Signal};
 use shared::{game::Seat, message::Profile};
@@ -202,6 +205,15 @@ fn GamePanel(cx: Scope, room: ReadOnlySignal<Option<state::ActiveRoom>>) -> Elem
     let room = *room;
     let view =
         dioxus_signals::use_selector(cx, move || room.read().as_ref().map(|r| r.view.clone()));
+    let board = dioxus_signals::use_signal(cx, || Board {
+        palette: palette::PaletteOption::get().to_palette(),
+        toroidal_edge_size: 0, // TODO: Implement toroidal edges
+        board_displacement: (0, 0),
+        selection_pos: None,
+        input: board::Input::None,
+        show_hidden: false,
+        edge_size: 40.0,
+    });
 
     dioxus_signals::use_effect(cx, move || {
         // Subacribe to size changes
@@ -213,16 +225,34 @@ fn GamePanel(cx: Scope, room: ReadOnlySignal<Option<state::ActiveRoom>>) -> Elem
             return;
         };
         let canvas = get_canvas();
-        let board = Board {
-            palette: palette::PaletteOption::get().to_palette(),
-            toroidal_edge_size: if view.mods.toroidal.is_some() { 3 } else { 0 },
-            board_displacement: (0, 0),
-            selection_pos: None,
-            input: board::Input::None,
-            show_hidden: false,
-        };
+        let board = board.read();
         board.render_gl(&canvas, &*view, None).unwrap();
     });
+
+    let action = ActionSender::new(cx);
+
+    let update_mouse = move |e: MouseEvent, clicked: bool| {
+        let Some(view) = view.read().clone() else {
+            return;
+        };
+        let canvas = get_canvas();
+        let coord = e.client_coordinates();
+        let bounding_rect = canvas.get_bounding_client_rect();
+        let mut board = board.write();
+        let input =
+            board::Input::from_pointer(&board, &view, coord.to_tuple(), bounding_rect, clicked);
+        board.input = input;
+        board.selection_pos = input.into_selection();
+
+        if let board::Input::Place(pos, true) = input {
+            action.place_stone(pos.0, pos.1);
+        }
+    };
+
+    let on_click = move |e: MouseEvent| {
+        let clicked = e.held_buttons().contains(MouseButton::Primary);
+        update_mouse(e, clicked);
+    };
 
     #[rustfmt::skip]
     let class = sir::css!("
@@ -242,6 +272,8 @@ fn GamePanel(cx: Scope, room: ReadOnlySignal<Option<state::ActiveRoom>>) -> Elem
                 onmounted: move |e| {
                     canvas_element.set(Some(e.inner().clone()));
                 },
+                onmousemove: move |e| update_mouse(e, false),
+                onmousedown: move |e| on_click(e),
                 id: "game-canvas",
             }
         }
