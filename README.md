@@ -4,36 +4,13 @@ A highly unfinished server for Go variants implemented in full-stack Rust.
 
 ## Development
 
-### Database
-The server needs a postgres database to store user info & games in. I recommend running a simple instance with docker: 
-
-``` sh
-docker run --name go-postgres -e POSTGRES_PASSWORD=localpw -p 127.0.0.1:5432:5432 -d postgres
-```
-
-You can then either add the following in your environment variables (adjusting for your own names), or add a `.env` file to the project root.
-
-```
-DATABASE_URL=postgres://postgres:localpw@localhost/postgres
-```
-
-To create the necessary tables run:
-
-```
-cargo install diesel_cli --no-default-features --features postgres
-cd server/
-diesel migration run
-```
-
-### Server
-
-Execute the server with
-
-``` sh
-cargo run -p server
-```
+The whole app can be spun up with `docker compose up --build`.
+After that, the client should be accessible at http://localhost:8080/
 
 ### Client
+
+While you can just use the docker image, builds on Mac OS can be very slow.
+If that ends up being an issue, try this.
 
 The client uses Dioxus CLI, install it with `cargo install dioxus-cli`.
 
