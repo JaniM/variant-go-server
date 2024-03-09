@@ -369,11 +369,13 @@ fn GameNavBar(cx: Scope, room: ReadOnlySignal<Option<state::ActiveRoom>>) -> Ele
     struct Info {
         is_own_turn: bool,
         is_play: bool,
+        is_scoring: bool,
     }
 
     let Info {
         is_own_turn,
         is_play,
+        is_scoring,
     } = *dioxus_signals::use_selector(cx, move || {
         let view = view.read();
         let Some(view) = view.as_ref() else {
@@ -384,6 +386,7 @@ fn GameNavBar(cx: Scope, room: ReadOnlySignal<Option<state::ActiveRoom>>) -> Ele
         Info {
             is_own_turn: seat.player == Some(me),
             is_play: matches!(view.state, shared::game::GameStateView::Play(_)),
+            is_scoring: matches!(view.state, shared::game::GameStateView::Scoring(_)),
         }
     })
     .read();
@@ -410,6 +413,18 @@ fn GameNavBar(cx: Scope, room: ReadOnlySignal<Option<state::ActiveRoom>>) -> Ele
                 rsx!(a {
                     onclick: move |_| action.pass(),
                     "Pass"
+                })
+            }
+            if is_own_turn && is_play {
+                rsx!(a {
+                    onclick: move |_| action.resign(),
+                    "Resign"
+                })
+            }
+            if is_scoring {
+                rsx!(a {
+                    onclick: move |_| action.pass(),
+                    "Accept"
                 })
             }
         }
@@ -447,7 +462,7 @@ fn SeatCards(cx: Scope) -> Element {
             style: "{columns}",
             for (id, seat) in seats.read().iter().flatten().enumerate() {
                 SeatCard {
-                    seat: seat.clone(),
+                    seat: *seat,
                     seat_id: id as u32,
                 }
             }
@@ -494,7 +509,8 @@ fn SeatCard(cx: Scope, seat: Seat, seat_id: u32) -> Element {
         display: grid;
         grid-template-columns: 1fr auto;
 
-        div {
+        .nick {
+            height: 20px;
             padding: 10px;
             display: flex;
             align-items: center;
@@ -514,6 +530,15 @@ fn SeatCard(cx: Scope, seat: Seat, seat_id: u32) -> Element {
                 filter: brightness(100%);
             }
         }
+
+        .scoring {
+            grid-column: span 2;
+            height: 20px;
+            padding: 10px;
+            display: flex;
+            align-items: center;
+            border-top: 1px solid var(--bg-h-color);
+        }
     ");
 
     let take_seat = move || {
@@ -524,28 +549,82 @@ fn SeatCard(cx: Scope, seat: Seat, seat_id: u32) -> Element {
         action.leave_seat(seat_id);
     };
 
+    let view = state.read().active_room().read().as_ref()?.view.clone();
+
+    let play = match &view.state {
+        shared::game::GameStateView::Play(play) => Some(play.clone()),
+        _ => None,
+    };
+
+    let scoring = match &view.state {
+        shared::game::GameStateView::Scoring(scoring) => Some(scoring.clone()),
+        _ => None,
+    };
+
+    let done = match &view.state {
+        shared::game::GameStateView::Done(done) => Some(done.clone()),
+        _ => None,
+    };
+
+    let scoring_div = if let Some(scoring) = &scoring {
+        let score = scoring.scores[seat.team.as_usize() - 1] as f32 / 2.0;
+        let accepted = scoring.players_accepted[seat_id as usize];
+        rsx!(div {
+            class: "scoring",
+            "Score: {score}",
+            if accepted {
+                " - (accepted)"
+            } else {
+                ""
+            }
+
+        })
+    } else if let Some(done) = &done {
+        let score = done.scores[seat.team.as_usize() - 1] as f32 / 2.0;
+        rsx!(div {
+            class: "scoring",
+            "Score: {score}"
+        })
+    } else if let Some(play) = &play {
+        let passed = play.players_passed[seat.team.as_usize() - 1];
+        rsx!(div {
+            class: "scoring",
+            if passed {
+                "Passed"
+            } else {
+                ""
+            }
+        })
+    } else {
+        rsx!(div {})
+    };
+
+    let can_take_seat = scoring.is_none() && done.is_none();
+
     cx.render(rsx! {
         div {
             class: "{class}",
             style: "--bg-color: {bg_color}; --fg-color: {fg_color};",
             div {
+                class: "nick",
                 if let Some(nick) = nick {
                     rsx!("{nick}")
                 } else if seat.player.is_none() {
                     rsx!("<empty>")
                 }
             }
-            if seat.player.is_none() {
+            if seat.player.is_none() && can_take_seat {
                 rsx!(button {
                     onclick: move |_| take_seat(),
                     "Take Seat"
                 })
-            } else if held_hy_self {
+            } else if held_hy_self && can_take_seat {
                 rsx!(button {
                     onclick: move |_| leave_seat(),
                     "Leave Seat"
                 })
             }
+            scoring_div
         }
     })
 }
