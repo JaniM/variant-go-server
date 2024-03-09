@@ -31,6 +31,8 @@ enum Route {
     GameRoute { id: u32 },
     #[route("/create")]
     CreateRoute {},
+    #[route("/profile")]
+    ProfileRoute {},
 }
 
 fn main() {
@@ -59,6 +61,46 @@ fn Home(cx: Scope) -> Element {
             RoomList { rooms: state.read().rooms },
             div {},
             div {}
+        }
+    })
+}
+
+#[component]
+fn ProfileRoute(cx: Scope) -> Element {
+    let state = state::use_state(cx);
+    let mode = window::use_display_mode(cx);
+
+    #[rustfmt::skip]
+    let class = sir::css!("
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        padding: 10px;
+    ");
+
+    let profile_view = rsx! {
+        div {
+            class: "{class}",
+            NickInput { profile: state.read().user }
+        }
+    };
+
+    cx.render(rsx! {
+        div {
+            class: "root {mode.class()} in-game",
+            if mode.is_desktop() {
+                rsx!(RoomList { rooms: state.read().rooms })
+            }
+            div {
+                class: "center-stack",
+                CreateGameNavBar {},
+                profile_view,
+            }
+            if mode.is_desktop() {
+                rsx!(RightPanel {})
+            }
         }
     })
 }
@@ -742,8 +784,10 @@ fn RoomList(cx: Scope, rooms: Signal<Vec<GameRoom>>) -> Element {
         overflow-y: scroll;
 
         .actions {
+            display: flex;
+            flex-direction: row;
             mzrgin-bottom: 10px;
-            a { padding: 10px; }
+            a, .info { padding: 10px; }
         }
 
         a {
@@ -760,7 +804,7 @@ fn RoomList(cx: Scope, rooms: Signal<Vec<GameRoom>>) -> Element {
             }
 
             &:hover, &:focus {
-                background: #282828;
+                background: var(--bg-h-color);
             }
 
             &.game div:first-child {
@@ -770,6 +814,12 @@ fn RoomList(cx: Scope, rooms: Signal<Vec<GameRoom>>) -> Element {
             }
         }
     ");
+
+    let state = state::use_state(cx);
+    let user = state.read().user.read().clone();
+    let user_id = user.user_id;
+    let user_name = user.nick.clone();
+
     cx.render(rsx! {
         div {
             class: "{class} {mode.class()}",
@@ -778,6 +828,14 @@ fn RoomList(cx: Scope, rooms: Signal<Vec<GameRoom>>) -> Element {
                 Link {
                     to: Route::CreateRoute {},
                     div { "Create Game" },
+                }
+                Link {
+                    to: Route::ProfileRoute {},
+                    if let Some(user_name) = user_name.as_deref() {
+                        format!("{user_name} (id: {user_id})")
+                    } else {
+                        "Choose a name".to_string()
+                    }
                 }
             }
             ul {
@@ -805,6 +863,9 @@ fn NickInput(cx: Scope, profile: Signal<Profile>) -> Element {
         action.set_nick(nick);
     };
     cx.render(rsx! {
+        label {
+            "Choose a name:",
+        }
         input {
             value: "{nick}",
             onchange: on_change,
