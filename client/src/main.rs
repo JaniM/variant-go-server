@@ -365,15 +365,28 @@ fn GameNavBar(cx: Scope, room: ReadOnlySignal<Option<state::ActiveRoom>>) -> Ele
         }
     ");
 
-    let can_undo = dioxus_signals::use_selector(cx, move || {
+    #[derive(Copy, Clone, Default, PartialEq)]
+    struct Info {
+        is_own_turn: bool,
+        is_play: bool,
+    }
+
+    let Info {
+        is_own_turn,
+        is_play,
+    } = *dioxus_signals::use_selector(cx, move || {
         let view = view.read();
         let Some(view) = view.as_ref() else {
-            return false;
+            return Info::default();
         };
         let me = state.read().user.read().user_id;
         let seat = &view.seats[view.turn as usize];
-        seat.player == Some(me)
-    });
+        Info {
+            is_own_turn: seat.player == Some(me),
+            is_play: matches!(view.state, shared::game::GameStateView::Play(_)),
+        }
+    })
+    .read();
 
     let action = ActionSender::new(cx);
 
@@ -387,10 +400,16 @@ fn GameNavBar(cx: Scope, room: ReadOnlySignal<Option<state::ActiveRoom>>) -> Ele
                 })
             }
             div { class: "pad" }
-            if *can_undo.read() {
+            if is_own_turn && is_play {
                 rsx!(a {
                     onclick: move |_| action.undo(),
                     "Undo"
+                })
+            }
+            if is_own_turn && is_play {
+                rsx!(a {
+                    onclick: move |_| action.pass(),
+                    "Pass"
                 })
             }
         }

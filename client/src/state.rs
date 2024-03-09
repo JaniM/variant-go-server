@@ -306,6 +306,13 @@ impl<'a> ActionSender<'a> {
             action: shared::message::GameAction::Cancel,
         })
     }
+
+    pub(crate) fn pass(&self) {
+        self.send(ClientMessage::GameAction {
+            room_id: None,
+            action: shared::message::GameAction::Pass,
+        })
+    }
 }
 
 pub(crate) fn username(profile: &Profile) -> String {
