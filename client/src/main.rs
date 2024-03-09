@@ -388,6 +388,7 @@ fn GameNavBar(cx: Scope, room: ReadOnlySignal<Option<state::ActiveRoom>>) -> Ele
             cursor: pointer;
             color: var(--text-color);
             text-decoration: none;
+            user-select: none;
 
             flex-grow: 0;
 
@@ -543,25 +544,22 @@ fn SeatCard(cx: Scope, seat: Seat, seat_id: u32) -> Element {
         color: var(--fg-color);
 
         display: grid;
-        grid-template-columns: 1fr auto;
-        z-index: 1; /* Above the board */
+        grid-template-columns: 1fr;
+        grid-template-rows: 40px 40px;
+        height: 80px;
 
         &.is-turn {
             border: 2px solid #9ecaed;
-            outline: none;
             box-shadow: 0 0 10px #9ecaed;
-        }
-
-        .nick {
-            height: 20px;
-            padding: 10px;
-            display: flex;
-            align-items: center;
+            margin: -2px;
+            z-index: 1; /* Above the board and other cards */
         }
 
         button {
-            height: 100%;
-            padding: 10px;
+            overflow: hidden;
+            outline: none;
+            padding: 5px;
+            text-align: center;
             background: var(--bg-color);
             filter: brightness(80%);
             color: var(--fg-color);
@@ -572,11 +570,13 @@ fn SeatCard(cx: Scope, seat: Seat, seat_id: u32) -> Element {
             &:hover {
                 filter: brightness(100%);
             }
+
+            &.empty {
+                box-shadow: inset 0 0 10px #ca8f00;
+            }
         }
 
         .scoring {
-            grid-column: span 2;
-            height: 20px;
             padding: 10px;
             display: flex;
             align-items: center;
@@ -655,23 +655,20 @@ fn SeatCard(cx: Scope, seat: Seat, seat_id: u32) -> Element {
         div {
             class: "{class}",
             style: "--bg-color: {bg_color}; --fg-color: {fg_color};",
-            div {
-                class: "nick",
-                if let Some(nick) = nick {
-                    rsx!("{nick}")
-                } else if seat.player.is_none() {
-                    rsx!("<empty>")
-                }
-            }
             if seat.player.is_none() && can_take_seat {
                 rsx!(button {
+                    class: "empty",
                     onclick: move |_| take_seat(),
                     "Take Seat"
                 })
-            } else if held_hy_self && can_take_seat {
+            } else {
                 rsx!(button {
-                    onclick: move |_| leave_seat(),
-                    "Leave Seat"
+                    onclick: move |_| if held_hy_self && can_take_seat { leave_seat() },
+                    if let Some(nick) = nick {
+                        rsx!("{nick}")
+                    } else if seat.player.is_none() {
+                        rsx!("<empty>")
+                    }
                 })
             }
             scoring_div
