@@ -781,7 +781,7 @@ fn RoomList(cx: Scope, rooms: Signal<Vec<GameRoom>>) -> Element {
     #[rustfmt::skip]
     let class = sir::css!("
         height: 100%;
-        overflow-y: scroll;
+        overflow: hidden;
 
         .actions {
             display: flex;
@@ -794,6 +794,11 @@ fn RoomList(cx: Scope, rooms: Signal<Vec<GameRoom>>) -> Element {
                     border-right: 1px solid var(--text-color);
                 }
             }
+        }
+
+        .rooms {
+            height: 100%;
+            overflow-y: scroll;
         }
 
         a {
@@ -844,14 +849,17 @@ fn RoomList(cx: Scope, rooms: Signal<Vec<GameRoom>>) -> Element {
                     }
                 }
             }
-            ul {
-                for room in rooms.iter() {
-                    Link {
-                        class: "game",
-                        to: Route::GameRoute { id: room.id },
-                        key: "{room.id}",
-                        div { "{room.id}" },
-                        div { "{room.name}" },
+            div {
+                class: "rooms",
+                ul {
+                    for room in rooms.iter() {
+                        Link {
+                            class: "game",
+                            to: Route::GameRoute { id: room.id },
+                            key: "{room.id}",
+                            div { "{room.id}" },
+                            div { "{room.name}" },
+                        }
                     }
                 }
             }
