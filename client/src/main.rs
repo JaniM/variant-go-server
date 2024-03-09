@@ -787,7 +787,13 @@ fn RoomList(cx: Scope, rooms: Signal<Vec<GameRoom>>) -> Element {
             display: flex;
             flex-direction: row;
             mzrgin-bottom: 10px;
-            a, .info { padding: 10px; }
+            border-bottom: 1px solid var(--text-color);
+            a {
+                padding: 10px;
+                &:not(:last-child) {
+                    border-right: 1px solid var(--text-color);
+                }
+            }
         }
 
         a {
