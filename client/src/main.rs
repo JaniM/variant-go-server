@@ -415,12 +415,6 @@ fn GameNavBar(cx: Scope, room: ReadOnlySignal<Option<state::ActiveRoom>>) -> Ele
                     "Pass"
                 })
             }
-            if is_own_turn && is_play {
-                rsx!(a {
-                    onclick: move |_| action.resign(),
-                    "Resign"
-                })
-            }
             if is_scoring {
                 rsx!(a {
                     onclick: move |_| action.pass(),
@@ -508,6 +502,13 @@ fn SeatCard(cx: Scope, seat: Seat, seat_id: u32) -> Element {
 
         display: grid;
         grid-template-columns: 1fr auto;
+        z-index: 1; /* Above the board */
+
+        &.is-turn {
+            border: 2px solid #9ecaed;
+            outline: none;
+            box-shadow: 0 0 10px #9ecaed;
+        }
 
         .nick {
             height: 20px;
@@ -600,6 +601,13 @@ fn SeatCard(cx: Scope, seat: Seat, seat_id: u32) -> Element {
     };
 
     let can_take_seat = scoring.is_none() && done.is_none();
+
+    let is_turn = view.turn == seat_id && play.is_some();
+    let class = if is_turn {
+        format!("{} is-turn", class)
+    } else {
+        class.to_string()
+    };
 
     cx.render(rsx! {
         div {
