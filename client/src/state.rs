@@ -299,6 +299,13 @@ impl<'a> ActionSender<'a> {
             action: shared::message::GameAction::Place(x, y),
         })
     }
+
+    pub(crate) fn undo(&self) {
+        self.send(ClientMessage::GameAction {
+            room_id: None,
+            action: shared::message::GameAction::Cancel,
+        })
+    }
 }
 
 pub(crate) fn username(profile: &Profile) -> String {

@@ -81,7 +81,7 @@ fn GameRoute(cx: Scope, id: u32) -> Element {
             }
             div {
                 class: "center-stack",
-                GameNavBar {},
+                GameNavBar { room: state.read().active_room() },
                 if mode.is_mobile() {
                     rsx!(SeatCards {})
                 }
@@ -116,7 +116,7 @@ fn CreateRoute(cx: Scope) -> Element {
             }
             div {
                 class: "center-stack",
-                GameNavBar {},
+                CreateGameNavBar {},
                 views::CreateGamePanel { }
             }
             if mode.is_desktop() {
@@ -281,7 +281,7 @@ fn GamePanel(cx: Scope, room: ReadOnlySignal<Option<state::ActiveRoom>>) -> Elem
 }
 
 #[component]
-fn GameNavBar(cx: Scope) -> Element {
+fn CreateGameNavBar(cx: Scope) -> Element {
     let mode = window::use_display_mode(cx);
 
     #[rustfmt::skip]
@@ -318,8 +318,80 @@ fn GameNavBar(cx: Scope) -> Element {
                     "↩ Game List"
                 })
             }
-            a {
-                "wow"
+        }
+    })
+}
+
+#[component]
+fn GameNavBar(cx: Scope, room: ReadOnlySignal<Option<state::ActiveRoom>>) -> Element {
+    let mode = window::use_display_mode(cx);
+    let state = state::use_state(cx);
+    let room = *room;
+    let view =
+        dioxus_signals::use_selector(cx, move || room.read().as_ref().map(|r| r.view.clone()));
+
+    #[rustfmt::skip]
+    let class = sir::css!("
+        display: flex;
+        height: 40px;
+        
+        &.desktop {
+            padding-left: 10px;
+            padding-right: 10px;
+        }
+
+        a {
+            display: flex;
+            background: #242424;
+            cursor: pointer;
+            color: var(--text-color);
+            text-decoration: none;
+
+            flex-grow: 0;
+
+            padding: 10px;
+
+            &:not(:last-child) {
+                border-right: 1px solid var(--text-color);
+            }
+
+            &:hover {
+                background: #282828;
+            }
+        }
+
+        .pad {
+            flex-grow: 1;
+        }
+    ");
+
+    let can_undo = dioxus_signals::use_selector(cx, move || {
+        let view = view.read();
+        let Some(view) = view.as_ref() else {
+            return false;
+        };
+        let me = state.read().user.read().user_id;
+        let seat = &view.seats[view.turn as usize];
+        seat.player == Some(me)
+    });
+
+    let action = ActionSender::new(cx);
+
+    cx.render(rsx! {
+        div {
+            class: "{class} {mode.class()}",
+            if !mode.is_large_desktop() {
+                rsx!(Link {
+                    to: Route::Home {},
+                    "↩ Game List"
+                })
+            }
+            div { class: "pad" }
+            if *can_undo.read() {
+                rsx!(a {
+                    onclick: move |_| action.undo(),
+                    "Undo"
+                })
             }
         }
     })
