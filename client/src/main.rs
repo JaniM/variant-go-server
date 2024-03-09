@@ -719,6 +719,8 @@ fn global_style() {
                 top: -4px; left: 105%;
                 opacity: 0;
                 transition: opacity 0.5s;
+
+                .mobile & { top: 105%; left: 0; }
             }
 
             &:hover .tooltip-text {

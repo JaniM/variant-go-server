@@ -1,7 +1,10 @@
 use dioxus::prelude::*;
 use dioxus_signals::*;
 
-use crate::state::{self, ActionSender};
+use crate::{
+    state::{self, ActionSender},
+    window,
+};
 use shared::{game::GameModifier, message};
 
 macro_rules! simple_modifier {
@@ -61,6 +64,7 @@ impl Preset {
 
 #[component]
 pub fn CreateGamePanel(cx: Scope) -> Element {
+    let mode = window::use_display_mode(cx);
     let state = state::use_state(cx);
     let game_name = use_signal(cx, || {
         format!("{}'s game", state::username(&state.read().user.read()))
@@ -97,18 +101,38 @@ pub fn CreateGamePanel(cx: Scope) -> Element {
 
     #[rustfmt::skip]
     let class = sir::css!("
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        padding: 20px;
+        overflow: scroll;
+
+        .sections {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            padding: 20px;
+        }
+
+        &.mobile .sections {
+            grid-template-columns: 1fr;
+        }
+
+        input[type='number'] {
+            width: 50px;
+        }
     ");
     cx.render(rsx! {
         div {
-            class: class,
+            class: "{class} {mode.class()}",
             div {
-                NameInput { name: game_name }
-                PresetSelectors { chosen_preset: chosen_preset }
-                ModifierSelectors { modifiers: modifiers }
-                CreateGameButton { start: start }
+                class: "sections",
+                div {
+                    NameInput { name: game_name }
+                    PresetSelectors { chosen_preset: chosen_preset }
+                    ModifierSelectors { modifiers: modifiers }
+                    CreateGameButton { start: start }
+
+                    // Hack to get mobile usable for now
+                    div {
+                        style: "height: 50px;"
+                    }
+                }
             }
         }
     })
