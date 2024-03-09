@@ -7,6 +7,12 @@ RUN apk --no-cache -U add python3 && \
     apk upgrade --no-cache -U -a  
 # Patch OpenSSL vulnerability^
 
+RUN addgroup -S servergrp && \
+    adduser -S server -G servergrp && \
+    chown -R server:servergrp /serve
+
+USER server
+
 COPY ./dist /serve
 COPY ./serve.py /bin/serve.py
 
